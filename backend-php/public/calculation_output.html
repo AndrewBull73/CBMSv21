@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Calculation Stub Output - Transaction 1</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; background: #f5f7fa; line-height: 1.6; }
+    h1, h2 { color: #2c3e50; }
+    table { width: 100%; border-collapse: collapse; margin: 30px 0; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+    th, td { padding: 14px 16px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+    th { background: #3498db; color: white; font-weight: bold; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    .value { font-family: Consolas, monospace; background: #ecf0f1; padding: 4px 8px; border-radius: 4px; }
+    .success { color: #27ae60; font-weight: bold; }
+    .error { color: #e74c3c; font-weight: bold; }
+    .summary { background: #e8f4f8; padding: 20px; border-radius: 8px; margin-top: 30px; }
+  </style>
+</head>
+<body>
+
+<h1>Calculation Stub Output - Transaction ID: 1</h1>
+
+<div class="summary">
+  <strong>Calculation:</strong> WAGES (ID: 2)<br>
+  <strong>UOM:</strong> APS1<br>
+  <strong>Cost Centre:</strong> CC001<br>
+  <strong>Total Cached (BP1–BP12 sum):</strong> <span class="success">37500</span><br>
+  <strong>Redis Base Key:</strong> <code>calculations:calc:BUDGET-FY26:2026:1:CC001:wages</code>
+</div>
+
+<h2>Transaction Input Data (key fields)</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>FiscalYearID</td><td>2026</td></tr>
+  <tr><td>VersionID</td><td>1</td></tr>
+  <tr><td>DataObjectCode</td><td>CC001</td></tr>
+  <tr><td>TransactionTypeCode</td><td>ESAL</td></tr>
+  <tr><td>UOMCodeInpC</td><td>APS1</td></tr>
+</table>
+
+<h2>Monthly Calculations (BP1 to BP12)</h2>
+<table>
+  <tr>
+    <th>Period</th>
+    <th>Original Formula</th>
+    <th>Substituted Formula</th>
+    <th>Evaluated Value</th>
+    <th>Status</th>
+  </tr>  <tr>
+    <td>BP1</td>
+    <td class="value">@BP1UOMRate@ * @BP1InpN@</td>
+    <td class="value">1.500000 * 8333.330000</td>
+    <td class="value success">12500</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP2</td>
+    <td class="value">@BP2UOMRate@ * @BP2InpN@</td>
+    <td class="value">1.500000 * 8333.330000</td>
+    <td class="value success">12500</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP3</td>
+    <td class="value">@BP3UOMRate@ * @BP3InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP4</td>
+    <td class="value">@BP4UOMRate@ * @BP4InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP5</td>
+    <td class="value">@BP5UOMRate@ * @BP5InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP6</td>
+    <td class="value">@BP6UOMRate@ * @BP6InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP7</td>
+    <td class="value">@BP7UOMRate@ * @BP7InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP8</td>
+    <td class="value">@BP8UOMRate@ * @BP8InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP9</td>
+    <td class="value">@BP9UOMRate@ * @BP9InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP10</td>
+    <td class="value">@BP10UOMRate@ * @BP10InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP11</td>
+    <td class="value">@BP11UOMRate@ * @BP11InpN@</td>
+    <td class="value">0 * 8333.330000</td>
+    <td class="value success">0</td>
+    <td class="success">Success</td>
+  </tr>  <tr>
+    <td>BP12</td>
+    <td class="value">@BP12UOMRate@ * @BP12InpN@</td>
+    <td class="value">1.500000 * 8333.330000</td>
+    <td class="value success">12500</td>
+    <td class="success">Success</td>
+  </tr></table>
+
+<h2>Redis Cache Summary</h2>
+<table>
+  <tr><th>Key</th><th>Value</th></tr>
+  <tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:total</td><td class="success">37500</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp1</td><td class="success">12500</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp2</td><td class="success">12500</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp3</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp4</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp5</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp6</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp7</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp8</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp9</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp10</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp11</td><td class="success">0</td></tr><tr><td>calculations:calc:BUDGET-FY26:2026:1:CC001:wages:bp12</td><td class="success">12500</td></tr></table>
+
+<p style="margin-top: 40px; color: #7f8c8d;">
+  <strong>Tip:</strong> Change BPxInpN or BPxUOMRate in your test transaction row → re-run → refresh this page to see updates.
+</p>
+
+</body>
+</html>

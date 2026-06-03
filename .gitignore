@@ -1,0 +1,43 @@
+# Secrets and environment-specific config
+backend-php/.env
+backend-php/.env.*
+!.env.example
+
+# PHP / Composer dependencies
+/vendor/
+
+# Node dependencies
+/backend-php/node_modules/
+
+# Logs and runtime output
+/logs/
+/backend-php/logs/
+/backend-php/storage/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary and scratch files in repo root
+/tmp_*.html
+/tmp_*.txt
+/tmp_*.php
+/.tmp_*.php
+/composer
+/backend-php/app)
+
+# Ad-hoc local dumps and backups
+*.bak
+*.tmp
+*.temp
+*.sql.tmp
+
+# Build / test artifacts
+/scenario-engine/**/bin/
+/scenario-engine/**/obj/
+/scenario-engine/TestResults/
+
+# Local caches
+/.vs/

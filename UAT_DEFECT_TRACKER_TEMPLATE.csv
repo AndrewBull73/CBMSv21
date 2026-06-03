@@ -1,0 +1,10 @@
+Area,Screen,ScenarioID,ScenarioTitle,Tester,TestDate,RoleUsed,BaselineContext,RecordReference,ExpectedResult,ActualResult,Status,Severity,DefectReference,RetestStatus,RetestDate,Notes
+Workflow Engine,Workflow Inquiry,UAT-WF-001,Open workflow inquiry and review baseline results,,,,FY2026/V6,,,,Not Run,,,,
+Strategy,Projects Register,UAT-ST-001,Open projects register and verify standard layout,,,,FY2026/V6,,,,Not Run,,,,
+Strategy,Project Usage,UAT-ST-002,Open one project usage inquiry and verify sections load,,,,FY2026/V6,,,,Not Run,,,,
+Strategy Fiscal,Resource Envelope,UAT-SF-001,Open resource envelope and verify totals and register,,,,FY2026/V6,,,,Not Run,,,,
+Strategy Fiscal,Sector Ceilings,UAT-SF-002,Open sector ceilings and verify chart and register,,,,FY2026/V6,,,,Not Run,,,,
+Reporting,MTFF,UAT-RP-001,Open MTFF report and verify filter and matrix load,,,,FY2026/V6,,,,Not Run,,,,
+Execution,Commitments,UAT-BE-001,Open commitments register and verify workflow panel appears,,,,FY2026/V6,,,,Not Run,,,,
+Execution,Warrants,UAT-BE-002,Open warrants register and verify workflow panel appears,,,,FY2026/V6,,,,Not Run,,,,
+Execution,Reservations,UAT-BE-003,Open reservations register and verify workflow panel appears,,,,FY2026/V6,,,,Not Run,,,,

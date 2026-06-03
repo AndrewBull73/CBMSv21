@@ -1,0 +1,180 @@
+<?php
+declare(strict_types=1);
+/** @var array $submissions */
+/** @var array $contextLabels */
+/** @var bool $workflowInstalled */
+/** @var string $pageTitle */
+/** @var string $pageSubtitle */
+if (!function_exists('h')) {
+    function h(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('funding_submission_status_label')) {
+    function funding_submission_status_label(string $status): string
+    {
+        return match (strtoupper(trim($status))) {
+            'DRAFT' => 'Draft Lodgement',
+            'LODGED' => 'Lodged',
+            'PENDING' => 'Submitted for Review',
+            'REVIEWED' => 'Reviewed - Awaiting Approval',
+            'APPROVED' => 'Approved',
+            'PARTIAL' => 'Partially Approved',
+            'REJECTED' => 'Rejected',
+            'FUNDED' => 'Funded / Published',
+            default => $status,
+        };
+    }
+}
+if (!function_exists('funding_submission_status_badge_class')) {
+    function funding_submission_status_badge_class(string $status): string
+    {
+        return match (strtoupper(trim($status))) {
+            'APPROVED', 'FUNDED' => 'text-bg-success',
+            'REVIEWED' => 'text-bg-info',
+            'PENDING', 'LODGED', 'PARTIAL' => 'text-bg-warning',
+            'REJECTED' => 'text-bg-danger',
+            default => 'text-bg-secondary',
+        };
+    }
+}
+?>
+<div class="container-fluid py-3">
+  <style>
+    .container-fluid.py-3 {
+      font-size: .95rem;
+    }
+    .funding-list-shell {
+      background: linear-gradient(180deg, #f7fafc 0%, #ffffff 100%);
+    }
+    .funding-list-hero {
+      background: linear-gradient(135deg, #f3f9ff 0%, #ffffff 100%);
+      border: 1px solid #dce8f3;
+      border-radius: 1.2rem;
+      padding: 1.25rem 1.35rem;
+      box-shadow: 0 .45rem 1.35rem rgba(43, 63, 87, 0.06);
+    }
+    .funding-list-eyebrow {
+      font-size: .72rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #6c757d;
+      font-weight: 700;
+      margin-bottom: .45rem;
+    }
+    .funding-list-title {
+      font-size: 1.45rem;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+    }
+    .funding-list-subtext {
+      font-size: .9rem;
+      max-width: 52rem;
+    }
+    .funding-list-panel {
+      background: #fff;
+      border: 1px solid #e4ebf2;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 .35rem 1rem rgba(43, 63, 87, 0.05);
+    }
+    .funding-list-table thead th {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: #6f7f90;
+    }
+    .funding-list-table td,
+    .funding-list-table th {
+      padding: .85rem 1rem;
+      font-size: .89rem;
+      vertical-align: top;
+    }
+  </style>
+  <div class="funding-list-shell rounded-4 p-1 mb-3">
+    <div class="funding-list-hero d-flex justify-content-between align-items-start gap-3 flex-wrap">
+      <div>
+        <div class="funding-list-eyebrow">Funding Submission Workspace</div>
+        <h1 class="funding-list-title mb-2"><?= h((string) ($pageTitle ?? 'Funding Submissions')) ?></h1>
+        <div class="text-muted funding-list-subtext">
+        <?= h((string) ($pageSubtitle ?? 'Funding lodgements and formal submissions across the workflow.')) ?>
+        For <?= h((string) ($contextLabels['YearLabel'] ?? '')) ?> / <?= h((string) ($contextLabels['VersionLabel'] ?? '')) ?>.
+        </div>
+      </div>
+      <a href="index.php?route=strategy-submissions/form" class="btn btn-primary btn-sm">New Lodgement</a>
+    </div>
+  </div>
+
+  <?php if (!$workflowInstalled): ?>
+    <div class="alert alert-warning">Run <code>create_tblSbFundingSubmission.sql</code> to enable funding submissions.</div>
+  <?php endif; ?>
+
+  <div class="funding-list-panel">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 funding-list-table">
+          <thead class="table-light">
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Assessment</th>
+              <th>DataScope</th>
+              <th>Status</th>
+              <th class="text-end">Lines</th>
+              <th class="text-end">Requested</th>
+              <th class="text-end">Approved</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if ($submissions === []): ?>
+              <tr><td colspan="10" class="text-center text-muted py-4">No funding submissions yet.</td></tr>
+            <?php else: ?>
+              <?php foreach ($submissions as $row): ?>
+                <tr>
+                  <td><?= (int) ($row['StrategicFundingSubmissionID'] ?? 0) ?></td>
+                  <td>
+                    <div class="fw-semibold"><?= h((string) ($row['RequestTitle'] ?? '')) ?></div>
+                    <div class="small text-muted"><?= h((string) ($row['SubmissionTypeCode'] ?? '')) ?></div>
+                  </td>
+                  <td>
+                    <?php if (!empty($row['AssessmentGrade']) || !empty($row['ReviewerRecommendation'])): ?>
+                      <?php if (!empty($row['AssessmentGrade'])): ?>
+                        <div class="fw-semibold"><?= h((string) ($row['AssessmentGrade'] ?? '')) ?></div>
+                      <?php endif; ?>
+                      <?php if (!empty($row['ReviewerRecommendation'])): ?>
+                        <div class="small text-muted"><?= h((string) ($row['ReviewerRecommendation'] ?? '')) ?></div>
+                      <?php endif; ?>
+                    <?php else: ?>
+                      <span class="text-muted small">Not assessed</span>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <div class="fw-semibold"><?= h((string) ($row['DataObjectCode'] ?? '')) ?></div>
+                    <?php if (!empty($row['DataObjectName']) || !empty($row['OrgUnitName'])): ?>
+                      <div class="small text-muted"><?= h((string) ($row['DataObjectName'] ?? $row['OrgUnitName'] ?? '')) ?></div>
+                    <?php endif; ?>
+                    <?php if (!empty($row['DataObjectWorkflowStatus'])): ?>
+                      <div class="small text-muted">Status: <?= h((string) ($row['DataObjectWorkflowStatus'] ?? '')) ?></div>
+                    <?php endif; ?>
+                  </td>
+                  <td><span class="badge <?= h(funding_submission_status_badge_class((string) ($row['SubmissionStatusCode'] ?? 'DRAFT'))) ?>"><?= h(funding_submission_status_label((string) ($row['SubmissionStatusCode'] ?? 'DRAFT'))) ?></span></td>
+                  <td class="text-end"><?= (int) ($row['LineCount'] ?? 0) ?></td>
+                  <td class="text-end"><?= h(number_format((float) ($row['TotalRequestedAmount'] ?? 0), 0)) ?></td>
+                  <td class="text-end"><?= h(number_format((float) ($row['TotalApprovedAmount'] ?? 0), 0)) ?></td>
+                  <td><?= h((string) ($row['UpdatedDate'] ?? $row['CreatedDate'] ?? '')) ?></td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary" href="index.php?route=strategy-submissions/view&id=<?= (int) ($row['StrategicFundingSubmissionID'] ?? 0) ?>">Open</a>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
