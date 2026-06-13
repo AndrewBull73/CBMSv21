@@ -970,7 +970,7 @@ final class ScreenTestCatalog
                     'This smoke script is non-destructive unless a deliberate setup correction is being performed.',
                 ],
                 'verification_queries' => [
-                    "SELECT SegmentID, SegmentCode, SegmentName, StartPoint, EndPoint, CBMSDimension, SegmentGroup, UsedInFinancialAccount, UsedInStrategicPlanning\nFROM dbo.tblSegments\nORDER BY SegmentID;",
+                    "SELECT SegmentID, SegmentCode, SegmentName, StartPoint, EndPoint, CBMSDimension, SegmentGroup, UsedInFinancialAccount, UsedInStrategicPlanning, UsedInOrgStructure\nFROM dbo.tblSegments\nORDER BY SegmentID;",
                 ],
                 'reset_scripts' => [],
             ],

@@ -18,6 +18,7 @@ $returnTo = 'index.php?route=segment-values/list';
 if (!empty($filters)) {
     $returnTo .= '&' . http_build_query($filters);
 }
+$exportUrl = 'index.php?' . http_build_query(array_merge(['route' => 'segment-values/exportExcel'], $filters));
 ?>
 <div class="container mt-4">
   <div class="card shadow-sm">
@@ -28,6 +29,7 @@ if (!empty($filters)) {
       </div>
       <div class="d-inline-flex gap-2">
         <a href="index.php?route=segment-values/downloadTemplate" class="btn btn-sm btn-outline-primary"><i class="bi bi-download me-1"></i>Template</a>
+        <a href="<?= h($exportUrl) ?>" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</a>
         <a href="index.php?route=segment-values/upload" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload</a>
         <a id="segment-values-create-btn" href="index.php?route=segment-values/form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Segment Value</a>
       </div>
@@ -55,7 +57,6 @@ if (!empty($filters)) {
         </div>
         <div class="col-md-2">
           <select name="segment_no" class="form-select">
-            <option value="">All segments</option>
             <?php foreach ($segments as $segment): ?>
               <?php $segmentNo = (string) ($segment['SegmentNo'] ?? ''); ?>
               <option value="<?= h($segmentNo) ?>" <?= (($filters['segment_no'] ?? '') === $segmentNo) ? 'selected' : '' ?>>

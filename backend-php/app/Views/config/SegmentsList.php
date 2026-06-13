@@ -109,6 +109,9 @@ $_csrf = $_csrf ?? csrf_token();
                       if ((int) ($row['UsedInStrategicPlanning'] ?? 0) === 1) {
                           $usage[] = 'Strategic';
                       }
+                      if ((int) ($row['UsedInOrgStructure'] ?? 0) === 1) {
+                          $usage[] = 'Org Structure';
+                      }
                     ?>
                     <?= h($usage !== [] ? implode(' / ', $usage) : '') ?>
                   </td>

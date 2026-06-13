@@ -139,6 +139,7 @@ BEGIN
         SegmentGroup NVARCHAR(100) NULL,
         UsedInFinancialAccount BIT NOT NULL CONSTRAINT DF_tblSegments_UsedInFinancialAccount DEFAULT (0),
         UsedInStrategicPlanning BIT NOT NULL CONSTRAINT DF_tblSegments_UsedInStrategicPlanning DEFAULT (0),
+        UsedInOrgStructure BIT NOT NULL CONSTRAINT DF_tblSegments_UsedInOrgStructure DEFAULT (0),
         DisplayOrder INT NULL,
         Delimiter NVARCHAR(10) NULL,
         ParentSegmentNoDefault INT NULL,

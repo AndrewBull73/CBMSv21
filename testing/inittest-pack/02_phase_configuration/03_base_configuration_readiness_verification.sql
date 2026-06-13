@@ -407,21 +407,41 @@ SELECT
     s.SegmentGroup,
     s.UsedInFinancialAccount,
     s.UsedInStrategicPlanning,
+    s.UsedInOrgStructure,
     s.ParentRequired
 FROM dbo.tblSegments AS s
 WHERE NULLIF(LTRIM(RTRIM(ISNULL(s.SegmentCode, N''))), N'') IS NULL
    OR NULLIF(LTRIM(RTRIM(ISNULL(s.SegmentName, N''))), N'') IS NULL
-   OR s.StartPoint IS NULL
-   OR s.EndPoint IS NULL
-   OR s.StartPoint <= 0
-   OR s.EndPoint < s.StartPoint
+   OR (s.StartPoint IS NOT NULL AND s.StartPoint <= 0)
+   OR (s.EndPoint IS NOT NULL AND s.EndPoint <= 0)
+   OR (s.StartPoint IS NOT NULL AND s.EndPoint IS NOT NULL AND s.EndPoint < s.StartPoint)
    OR (s.MinLength IS NOT NULL AND s.MaxLength IS NOT NULL AND s.MinLength > s.MaxLength)
    OR NULLIF(LTRIM(RTRIM(ISNULL(s.CBMSDimension, N''))), N'') IS NULL
    OR NULLIF(LTRIM(RTRIM(ISNULL(s.SegmentGroup, N''))), N'') IS NULL
-   OR (ISNULL(s.UsedInFinancialAccount, 0) = 0 AND ISNULL(s.UsedInStrategicPlanning, 0) = 0)
+   OR (
+        ISNULL(s.UsedInFinancialAccount, 0) = 0
+        AND ISNULL(s.UsedInStrategicPlanning, 0) = 0
+        AND ISNULL(s.UsedInOrgStructure, 0) = 0
+   )
 ORDER BY s.SegmentID;
 
-PRINT '11. Segment values with duplicate active keys';
+PRINT '11. Configured segments missing active current-year values';
+
+SELECT
+    s.SegmentID,
+    s.SegmentCode,
+    s.SegmentName
+FROM dbo.tblSegments AS s
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM dbo.tblSegmentValues AS sv
+    WHERE sv.FiscalYearID = @FiscalYearID
+      AND sv.ActiveFlag = 1
+      AND sv.SegmentNo = s.SegmentID
+)
+ORDER BY s.SegmentID;
+
+PRINT '12. Segment values with duplicate active keys';
 
 SELECT
     sv.FiscalYearID,
@@ -443,7 +463,7 @@ ORDER BY
     sv.SegmentCode,
     sv.DataObjectCode;
 
-PRINT '12. Parent-required segment values missing parent coverage';
+PRINT '13. Parent-required segment values missing parent coverage';
 
 SELECT
     sv.SegmentValueID,

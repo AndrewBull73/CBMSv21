@@ -152,6 +152,12 @@ return [
     'workflow-engine/archive-action' => 'WorkflowEngineAdminController@archiveAction',
     'workflow-engine/diagnostics' => 'WorkflowEngineAdminController@diagnostics',
     'workflow-engine/inquiry' => 'WorkflowEngineAdminController@inquiry',
+    'version-types/list' => 'VersionTypesController@list',
+    'version-types/form' => 'VersionTypesController@form',
+    'version-types/save' => 'VersionTypesController@save',
+    'dataobject-types/list' => 'DataObjectTypesController@list',
+    'dataobject-types/form' => 'DataObjectTypesController@form',
+    'dataobject-types/save' => 'DataObjectTypesController@save',
 
     // DataObject scope picker + setter
     'dataobjects/picker'   => 'DataObjectsController@picker',
@@ -229,6 +235,8 @@ return [
     'dataobjectcodes/exportPdf' => 'DataObjectCodesController@exportPdf',
     'dataobjectcodes/uploadProcess' => 'DataObjectCodesController@uploadProcess',
     'dataobjectcodes/downloadTemplate' => 'DataObjectCodesController@downloadTemplate',
+    'dataobjectcodes/rebuildHierarchy' => 'DataObjectCodesController@rebuildHierarchy',
+    'dataobjectcodes/hierarchy' => 'DataObjectCodesController@hierarchy',
 
 
     // API (JSON)
@@ -249,6 +257,9 @@ return [
     'help/show' => 'HelpController@show',
 
     // DataObject Workflow Status
+    'dataobjectworkflow/statuses' => 'DataObjectWorkflowController@index',
+    'dataobjectworkflow/buildStatuses' => 'DataObjectWorkflowController@buildStatuses',
+    'dataobjectworkflow/saveStatuses' => 'DataObjectWorkflowController@saveStatuses',
     'dataobjectworkflow/getStatus' => 'DataObjectWorkflowController@getStatus',
     'dataobjectworkflow/setStatus' => 'DataObjectWorkflowController@setStatus',
 
@@ -475,6 +486,8 @@ return [
     // Transaction Input
     'transaction-input/editor' => 'TransactionInputController@editor',
     'transaction-input/list'   => 'TransactionInputController@list',
+    'transaction-input/download-template' => 'TransactionInputController@downloadTemplate',
+    'transaction-input/upload-process' => 'TransactionInputController@uploadProcess',
     'transaction-input/stub'   => 'TransactionInputController@stub',
     'transaction-input/batch-runner' => 'TransactionInputController@batchRunner',
     'transaction-input/single-save-load-test' => 'TransactionInputController@singleSaveLoadTest',
@@ -490,6 +503,7 @@ return [
     'segment-values/archive' => 'SegmentValuesController@archive',
     'segment-values/uploadProcess' => 'SegmentValuesController@uploadProcess',
     'segment-values/downloadTemplate' => 'SegmentValuesController@downloadTemplate',
+    'segment-values/exportExcel' => 'SegmentValuesController@exportExcel',
     'fiscal-years/list' => 'FiscalYearsController@list',
     'fiscal-years/form' => 'FiscalYearsController@form',
     'fiscal-years/save' => 'FiscalYearsController@save',

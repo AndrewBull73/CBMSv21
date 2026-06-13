@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "bmewburn.vscode-intelephense-client",
+    "felixfbecker.php-debug",
+    "junstyle.php-cs-fixer",
+    "ikappas.vscode-composer",
+    "ms-dotnettools.csharp",
+    "ms-vscode.vscode-dotnet-runtime",
+    "ms-mssql.mssql",
+    "mtxr.sqltools",
+    "eamodio.gitlens",
+    "ms-vscode-remote.remote-containers"
+  ]
+}

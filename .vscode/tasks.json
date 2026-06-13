@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "composer: install",
+      "type": "shell",
+      "command": "composer install",
+      "group": "build",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "composer: test",
+      "type": "shell",
+      "command": "composer test",
+      "group": "test",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "dotnet: build",
+      "type": "shell",
+      "command": "dotnet build ${workspaceFolder}/Application",
+      "group": "build",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dotnet: test",
+      "type": "shell",
+      "command": "dotnet test ${workspaceFolder}/Application",
+      "group": "test",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run current SQL file (sqlcmd)",
+      "type": "shell",
+      "command": "sqlcmd -S localhost -U <USER> -P <PASSWORD> -i \"${file}\"",
+      "presentation": { "reveal": "always" },
+      "problemMatcher": []
+    }
+  ]
+}

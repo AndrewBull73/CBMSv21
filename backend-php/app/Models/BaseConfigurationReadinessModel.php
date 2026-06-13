@@ -27,17 +27,17 @@ final class BaseConfigurationReadinessModel
         $checks[] = $this->checkVersionIntegrity();
         $checks[] = $this->checkCurrencyRates();
 
-        $checks[] = $this->checkDataObjectTypes();
-        $checks[] = $this->checkDataObjectCodes($fiscalYearId);
-        $checks[] = $this->checkDataObjectTree($fiscalYearId);
-        $checks[] = $this->checkDataObjectWorkflowStatus($fiscalYearId, $versionId);
-
         $checks[] = $this->checkSegments();
         $checks[] = $this->checkSegmentDefinitionHealth();
         $checks[] = $this->checkSegmentValues($fiscalYearId);
         $checks[] = $this->checkSegmentValueDuplicates($fiscalYearId);
         $checks[] = $this->checkSegmentHierarchySupport();
         $checks[] = $this->checkMissingRequiredSegmentParents($fiscalYearId);
+
+        $checks[] = $this->checkDataObjectTypes();
+        $checks[] = $this->checkDataObjectCodes($fiscalYearId);
+        $checks[] = $this->checkDataObjectTree($fiscalYearId);
+        $checks[] = $this->checkDataObjectWorkflowStatus($fiscalYearId, $versionId);
 
         $checks[] = $this->checkPermissionsCatalog();
         $checks[] = $this->checkRoles();
@@ -223,8 +223,8 @@ final class BaseConfigurationReadinessModel
                 'Fiscal Context',
                 'Version Types Configured',
                 'The version types table is missing.',
-                'index.php?route=versions/list',
-                'Versions',
+                'index.php?route=version-types/list',
+                'Version Types',
                 'Create the version types table and seed the active version-type catalogue before maintaining versions.'
             );
         }
@@ -242,8 +242,8 @@ final class BaseConfigurationReadinessModel
                 1,
                 'critical',
                 'No version types are configured.',
-                'index.php?route=versions/list',
-                'Versions',
+                'index.php?route=version-types/list',
+                'Version Types',
                 'Seed the core version types first so every version can be classified consistently.'
             );
         }
@@ -256,8 +256,8 @@ final class BaseConfigurationReadinessModel
                 $totalCount,
                 'critical',
                 'Version type rows exist, but none are active.',
-                'index.php?route=versions/list',
-                'Versions',
+                'index.php?route=version-types/list',
+                'Version Types',
                 'Activate at least one version type so version rows can be created and maintained against a valid type catalogue.'
             );
         }
@@ -269,8 +269,8 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             $activeCount . ' active version type row(s) are available.',
-            'index.php?route=versions/list',
-            'Versions',
+            'index.php?route=version-types/list',
+            'Version Types',
             ''
         );
     }
@@ -542,8 +542,8 @@ final class BaseConfigurationReadinessModel
                 'Organisation Structure',
                 'Data Object Types Configured',
                 'The data object types table is missing.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobject-types/list',
+                'Data Object Types',
                 'Create the data object types table and define the core organisational type records before loading DataScope codes.'
             );
         }
@@ -557,8 +557,8 @@ final class BaseConfigurationReadinessModel
                 1,
                 'critical',
                 'No data object types are configured.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobject-types/list',
+                'Data Object Types',
                 'Create the core organisational type records first so each DataScope code can be classified correctly.'
             );
         }
@@ -570,8 +570,8 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             $count . ' data object type record(s) are available.',
-            'index.php?route=dataobjectcodes/index',
-            'Data Object Codes',
+            'index.php?route=dataobject-types/list',
+            'Data Object Types',
             ''
         );
     }
@@ -961,6 +961,20 @@ final class BaseConfigurationReadinessModel
                         WHERE t.DataObjectTypeID = dbo.tblDataObjectCodes.DataObjectTypeID
                    ))
         ", [':fy' => $fiscalYearId]);
+        $missingTypeCoverageRows = $this->fetchRows("
+            SELECT
+                t.DataObjectTypeID,
+                t.DataObjectTypeName
+            FROM dbo.tblDataObjectTypes t
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM dbo.tblDataObjectCodes c
+                WHERE c.FiscalYearID = :fy
+                  AND c.DataObjectTypeID = t.DataObjectTypeID
+            )
+            ORDER BY t.[Level] ASC, t.DataObjectTypeID ASC
+        ", [':fy' => $fiscalYearId]);
+        $missingTypeCoverageCount = count($missingTypeCoverageRows);
 
         if ($count <= 0) {
             return $this->buildCheck(
@@ -990,6 +1004,29 @@ final class BaseConfigurationReadinessModel
             );
         }
 
+        if ($missingTypeCoverageCount > 0) {
+            $previewNames = array_map(
+                static fn(array $row): string => trim((string) ($row['DataObjectTypeName'] ?? ('Type ' . (string) ($row['DataObjectTypeID'] ?? '')))),
+                array_slice($missingTypeCoverageRows, 0, 5)
+            );
+            $preview = implode(', ', array_filter($previewNames, static fn(string $name): bool => $name !== ''));
+            if ($missingTypeCoverageCount > 5) {
+                $preview .= ($preview !== '' ? ', ' : '') . 'and ' . ($missingTypeCoverageCount - 5) . ' more';
+            }
+
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Codes Loaded',
+                $count,
+                $missingTypeCoverageCount,
+                'warning',
+                $missingTypeCoverageCount . ' data object type(s) have no organisation codes loaded for the current fiscal year' . ($preview !== '' ? ': ' . $preview . '.' : '.'),
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Load at least one current fiscal year data object code for each configured data object type before marking organisation structure setup as complete.'
+            );
+        }
+
         return $this->buildCheck(
             'Organisation Structure',
             'Data Object Codes Loaded',
@@ -1010,8 +1047,8 @@ final class BaseConfigurationReadinessModel
                 'Organisation Structure',
                 'Data Object Hierarchy Links',
                 'The data object tree table is missing.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobjectcodes/hierarchy',
+                'Data Object Hierarchy',
                 'Create the data object hierarchy table and load parent-child relationships for the current fiscal year.'
             );
         }
@@ -1024,8 +1061,8 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'No current fiscal year is selected, so fiscal-year hierarchy links cannot be checked.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobjectcodes/hierarchy',
+                'Data Object Hierarchy',
                 'Set a fiscal year context first, then rerun readiness to validate the hierarchy for that year.'
             );
         }
@@ -1048,6 +1085,20 @@ final class BaseConfigurationReadinessModel
               )
         ", [':fy' => $fiscalYearId]);
 
+        if ($codeCount <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Hierarchy Links',
+                0,
+                0,
+                'info',
+                'No organisation codes exist for the current fiscal year, so hierarchy-link coverage is not yet in scope.',
+                'index.php?route=dataobjectcodes/hierarchy',
+                'Data Object Hierarchy',
+                'Load the current fiscal year organisation codes first, then rerun readiness to assess parent-child hierarchy coverage.'
+            );
+        }
+
         if ($codeCount > 1 && $treeCount <= 0) {
             return $this->buildCheck(
                 'Organisation Structure',
@@ -1056,8 +1107,8 @@ final class BaseConfigurationReadinessModel
                 $codeCount,
                 'critical',
                 'Organisation codes exist for the fiscal year, but no hierarchy links are loaded.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobjectcodes/hierarchy',
+                'Data Object Hierarchy',
                 'Load or rebuild the data object tree so scope expansion, hierarchy reporting, and descendant access can work correctly.'
             );
         }
@@ -1070,8 +1121,8 @@ final class BaseConfigurationReadinessModel
                 $orphanLinks,
                 'warning',
                 $orphanLinks . ' hierarchy link row(s) reference a missing parent or child organisation code.',
-                'index.php?route=dataobjectcodes/index',
-                'Data Object Codes',
+                'index.php?route=dataobjectcodes/hierarchy',
+                'Data Object Hierarchy',
                 'Review the hierarchy load and correct the parent-child links that point to missing organisation codes.'
             );
         }
@@ -1083,8 +1134,8 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             $treeCount . ' hierarchy link row(s) are available for the current fiscal year.',
-            'index.php?route=dataobjectcodes/index',
-            'Data Object Codes',
+            'index.php?route=dataobjectcodes/hierarchy',
+            'Data Object Hierarchy',
             ''
         );
     }
@@ -1096,8 +1147,8 @@ final class BaseConfigurationReadinessModel
                 'Organisation Structure',
                 'Data Object Workflow Status Coverage',
                 'The data object workflow status table is missing.',
-                'index.php?route=workflow/list',
-                'Workflow',
+                'index.php?route=dataobjectworkflow/statuses',
+                'Workflow Status',
                 'Create the workflow status table so organisation-level workflow state can be stored for the active context.'
             );
         }
@@ -1110,8 +1161,8 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'No current fiscal year/version context is selected, so workflow-status coverage cannot be checked.',
-                'index.php?route=workflow/list',
-                'Workflow',
+                'index.php?route=dataobjectworkflow/statuses',
+                'Workflow Status',
                 'Set both fiscal year and version context first, then rerun readiness to validate workflow status coverage.'
             );
         }
@@ -1166,8 +1217,8 @@ final class BaseConfigurationReadinessModel
                 $codeCount,
                 'warning',
                 'No organisation workflow statuses are set for the current fiscal year/version.',
-                'index.php?route=workflow/list',
-                'Workflow',
+                'index.php?route=dataobjectworkflow/statuses',
+                'Workflow Status',
                 'Initialize or update organisation workflow statuses for the active fiscal year/version so approvals and submission state can be tracked consistently.'
             );
         }
@@ -1180,8 +1231,8 @@ final class BaseConfigurationReadinessModel
                 $missingCoverage,
                 'warning',
                 $missingCoverage . ' organisation code(s) do not yet have a workflow status for the current context.',
-                'index.php?route=workflow/list',
-                'Workflow',
+                'index.php?route=dataobjectworkflow/statuses',
+                'Workflow Status',
                 'Review workflow initialization for the active fiscal year/version and fill in the missing organisation statuses.'
             );
         }
@@ -1193,8 +1244,8 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             'Organisation workflow statuses are present for the current fiscal year/version context.',
-            'index.php?route=workflow/list',
-            'Workflow',
+            'index.php?route=dataobjectworkflow/statuses',
+            'Workflow Status',
             ''
         );
     }
@@ -1277,6 +1328,7 @@ final class BaseConfigurationReadinessModel
             'SegmentGroup',
             'UsedInFinancialAccount',
             'UsedInStrategicPlanning',
+            'UsedInOrgStructure',
         ];
         $missingColumns = [];
         foreach ($requiredColumns as $columnName) {
@@ -1309,10 +1361,9 @@ final class BaseConfigurationReadinessModel
         $layoutIssueCount = $this->fetchCount("
             SELECT COUNT(*)
             FROM dbo.tblSegments
-            WHERE StartPoint IS NULL
-               OR EndPoint IS NULL
-               OR StartPoint <= 0
-               OR EndPoint < StartPoint
+            WHERE (StartPoint IS NOT NULL AND StartPoint <= 0)
+               OR (EndPoint IS NOT NULL AND EndPoint <= 0)
+               OR (StartPoint IS NOT NULL AND EndPoint IS NOT NULL AND EndPoint < StartPoint)
                OR (MinLength IS NOT NULL AND MaxLength IS NOT NULL AND MinLength > MaxLength)
         ");
 
@@ -1333,6 +1384,7 @@ final class BaseConfigurationReadinessModel
             FROM dbo.tblSegments
             WHERE ISNULL(UsedInFinancialAccount, 0) = 0
               AND ISNULL(UsedInStrategicPlanning, 0) = 0
+              AND ISNULL(UsedInOrgStructure, 0) = 0
         ");
 
         $issueSegmentCount = $this->fetchCount("
@@ -1340,14 +1392,17 @@ final class BaseConfigurationReadinessModel
             FROM dbo.tblSegments
             WHERE NULLIF(LTRIM(RTRIM(ISNULL(SegmentCode, ''))), '') IS NULL
                OR NULLIF(LTRIM(RTRIM(ISNULL(SegmentName, ''))), '') IS NULL
-               OR StartPoint IS NULL
-               OR EndPoint IS NULL
-               OR StartPoint <= 0
-               OR EndPoint < StartPoint
+               OR (StartPoint IS NOT NULL AND StartPoint <= 0)
+               OR (EndPoint IS NOT NULL AND EndPoint <= 0)
+               OR (StartPoint IS NOT NULL AND EndPoint IS NOT NULL AND EndPoint < StartPoint)
                OR (MinLength IS NOT NULL AND MaxLength IS NOT NULL AND MinLength > MaxLength)
                OR NULLIF(LTRIM(RTRIM(ISNULL(CBMSDimension, ''))), '') IS NULL
                OR NULLIF(LTRIM(RTRIM(ISNULL(SegmentGroup, ''))), '') IS NULL
-               OR (ISNULL(UsedInFinancialAccount, 0) = 0 AND ISNULL(UsedInStrategicPlanning, 0) = 0)
+               OR (
+                    ISNULL(UsedInFinancialAccount, 0) = 0
+                    AND ISNULL(UsedInStrategicPlanning, 0) = 0
+                    AND ISNULL(UsedInOrgStructure, 0) = 0
+               )
         ");
 
         if ($issueSegmentCount > 0) {
@@ -1396,6 +1451,17 @@ final class BaseConfigurationReadinessModel
 
     private function checkSegmentValues(int $fiscalYearId): array
     {
+        if (!$this->tableExists('dbo.tblSegments')) {
+            return $this->missingTableCheck(
+                'Segments And Dimensions',
+                'Segment Values Loaded',
+                'The segments table is missing.',
+                'index.php?route=segments/list',
+                'Segments',
+                'Create the segment catalogue before validating segment value coverage.'
+            );
+        }
+
         if (!$this->tableExists('dbo.tblSegmentValues')) {
             return $this->missingTableCheck(
                 'Segments And Dimensions',
@@ -1404,6 +1470,21 @@ final class BaseConfigurationReadinessModel
                 'index.php?route=segment-values/list',
                 'Segment Values',
                 'Create the segment values table and load the source values for the fiscal year that will be used.'
+            );
+        }
+
+        $segmentCount = $this->fetchCount('SELECT COUNT(*) FROM dbo.tblSegments');
+        if ($segmentCount <= 0) {
+            return $this->buildCheck(
+                'Segments And Dimensions',
+                'Segment Values Loaded',
+                0,
+                0,
+                'info',
+                'Segment value coverage becomes active once segment definitions have been loaded.',
+                'index.php?route=segments/list',
+                'Segments',
+                'Load the segment catalogue first, then load values for each configured segment.'
             );
         }
 
@@ -1422,6 +1503,16 @@ final class BaseConfigurationReadinessModel
         }
 
         $count = $this->fetchCount('SELECT COUNT(*) FROM dbo.tblSegmentValues WHERE FiscalYearID = :fy AND ActiveFlag = 1', [':fy' => $fiscalYearId]);
+        $segmentsWithValues = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM (
+                SELECT DISTINCT SegmentNo
+                FROM dbo.tblSegmentValues
+                WHERE FiscalYearID = :fy
+                  AND ActiveFlag = 1
+            ) v
+        ", [':fy' => $fiscalYearId]);
+
         if ($count <= 0) {
             return $this->buildCheck(
                 'Segments And Dimensions',
@@ -1436,13 +1527,51 @@ final class BaseConfigurationReadinessModel
             );
         }
 
+        $missingRows = $this->fetchRows("
+            SELECT
+                s.SegmentID,
+                s.SegmentCode,
+                s.SegmentName
+            FROM dbo.tblSegments s
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM dbo.tblSegmentValues sv
+                WHERE sv.FiscalYearID = :fy
+                  AND sv.ActiveFlag = 1
+                  AND sv.SegmentNo = s.SegmentID
+            )
+            ORDER BY s.SegmentID
+        ", [':fy' => $fiscalYearId]);
+
+        if ($missingRows !== []) {
+            $preview = [];
+            foreach (array_slice($missingRows, 0, 5) as $row) {
+                $code = trim((string) ($row['SegmentCode'] ?? ''));
+                $name = trim((string) ($row['SegmentName'] ?? ''));
+                $preview[] = trim((string) ($row['SegmentID'] ?? '') . ' ' . ($code !== '' ? $code : $name));
+            }
+            $suffix = count($missingRows) > 5 ? ' and ' . (count($missingRows) - 5) . ' more' : '';
+
+            return $this->buildCheck(
+                'Segments And Dimensions',
+                'Segment Values Loaded',
+                $count,
+                count($missingRows),
+                'critical',
+                $segmentsWithValues . ' of ' . $segmentCount . ' configured segment(s) have active values for the current fiscal year. Missing: ' . implode(', ', $preview) . $suffix . '.',
+                'index.php?route=segment-values/list',
+                'Segment Values',
+                'Load active current-year values for every configured segment before marking base configuration ready.'
+            );
+        }
+
         return $this->buildCheck(
             'Segments And Dimensions',
             'Segment Values Loaded',
             $count,
             0,
             'ready',
-            $count . ' active segment value row(s) are loaded for the current fiscal year.',
+            $count . ' active segment value row(s) are loaded across all ' . $segmentCount . ' configured segment(s) for the current fiscal year.',
             'index.php?route=segment-values/list',
             'Segment Values',
             ''
@@ -3286,6 +3415,18 @@ final class BaseConfigurationReadinessModel
         $stmt->execute($params);
 
         return (int) ($stmt->fetchColumn() ?: 0);
+    }
+
+    /**
+     * @param array<string, scalar|null> $params
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchRows(string $sql, array $params = []): array
+    {
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
     private function existsByKey(string $tableName, string $columnName, int $value): bool

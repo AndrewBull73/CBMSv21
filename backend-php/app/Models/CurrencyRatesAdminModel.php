@@ -179,8 +179,7 @@ final class CurrencyRatesAdminModel
                 ");
             }
 
-            $stmt->execute([
-                ':currencyRateId' => $currencyRateId,
+            $params = [
                 ':fromCurrencyCode' => $fromCurrencyCode,
                 ':toCurrencyCode' => $toCurrencyCode,
                 ':rateDate' => $rateDate,
@@ -189,7 +188,12 @@ final class CurrencyRatesAdminModel
                 ':rateSource' => $rateSource,
                 ':notes' => $notes,
                 ':isActive' => $isActive,
-            ]);
+            ];
+            if ($existing !== null) {
+                $params[':currencyRateId'] = $currencyRateId;
+            }
+
+            $stmt->execute($params);
 
             if ($existing === null) {
                 $currencyRateId = (int) $this->pdo->lastInsertId();

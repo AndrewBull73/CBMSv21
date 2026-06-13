@@ -1,0 +1,25 @@
+{
+  "name": "CBMSv21 Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  },
+  "extensions": [
+    "bmewburn.vscode-intelephense-client",
+    "felixfbecker.php-debug",
+    "junstyle.php-cs-fixer",
+    "ikappas.vscode-composer",
+    "ms-dotnettools.csharp",
+    "ms-vscode.vscode-dotnet-runtime",
+    "ms-mssql.mssql",
+    "mtxr.sqltools",
+    "eamodio.gitlens",
+    "ms-vscode-remote.remote-containers"
+  ],
+  "forwardPorts": [9003, 1433],
+  "postCreateCommand": "composer --version || true && dotnet --info || true",
+  "remoteUser": "vscode"
+}

@@ -738,6 +738,7 @@ return [
     'tx_set_context_warning'        => 'Set Fiscal Year, Version, and Data Object in the header to view transactions.',
     'tx_new_transaction'            => 'New Transaction',
     'tx_open_editor'                => 'Open Editor',
+    'tx_download_workbook'          => 'Download Workbook',
     'tx_query_failed'               => 'Query failed',
     'tx_search_ph'                  => 'Search TransactionID or Type',
     'tx_report_id'                  => 'ReportID',

@@ -202,6 +202,9 @@ final class SegmentValuesAdminModel
         if ($updatedBy <= 0) {
             throw new \RuntimeException('A valid user context is required.');
         }
+        if ($id > 0 && $parentSegmentValueId === $id) {
+            throw new \RuntimeException('Parent Segment Value cannot reference the same segment value.');
+        }
         if (!$this->fiscalYearExists($fiscalYearId)) {
             throw new \RuntimeException('Selected fiscal year was not found.');
         }
@@ -373,6 +376,71 @@ final class SegmentValuesAdminModel
         ], null, 'A1');
         for ($col = 1; $col <= 3; $col++) {
             $help->getColumnDimensionByColumn($col)->setAutoSize(true);
+        }
+
+        return $spreadsheet;
+    }
+
+    public function buildExportWorkbook(array $filters): \PhpOffice\PhpSpreadsheet\Spreadsheet
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('SegmentValues');
+
+        $headers = [
+            'FiscalYearID',
+            'YearLabel',
+            'DataObjectCode',
+            'DataObjectName',
+            'SegmentNo',
+            'SegmentLabel',
+            'SegmentCode',
+            'SegmentName',
+            'SegmentExternalID',
+            'ParentSegmentValueID',
+            'ParentSegmentNo',
+            'ParentSegmentLabel',
+            'ParentSegmentCode',
+            'SortOrder',
+            'ActiveFlag',
+            'Status',
+            'UpdatedBy',
+            'UpdatedDate',
+        ];
+
+        $sheet->fromArray($headers, null, 'A1');
+
+        $data = [];
+        foreach ($this->listRows($filters) as $row) {
+            $activeFlag = (int) ($row['ActiveFlag'] ?? 0);
+            $data[] = [
+                $row['FiscalYearID'] ?? '',
+                $row['YearLabel'] ?? '',
+                $row['DataObjectCode'] ?? '',
+                $row['DataObjectName'] ?? '',
+                $row['SegmentNo'] ?? '',
+                $row['SegmentLabel'] ?? '',
+                $row['SegmentCode'] ?? '',
+                $row['SegmentName'] ?? '',
+                $row['SegmentExternalID'] ?? '',
+                $row['ParentSegmentValueID'] ?? '',
+                $row['ParentSegmentNo'] ?? '',
+                $row['ParentSegmentLabel'] ?? '',
+                $row['ParentSegmentCode'] ?? '',
+                $row['SortOrder'] ?? '',
+                $row['ActiveFlag'] ?? '',
+                $activeFlag === 1 ? 'Active' : 'Archived',
+                $row['UpdatedBy'] ?? '',
+                $row['UpdatedDate'] ?? '',
+            ];
+        }
+
+        if ($data !== []) {
+            $sheet->fromArray($data, null, 'A2');
+        }
+
+        for ($col = 1; $col <= count($headers); $col++) {
+            $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
         }
 
         return $spreadsheet;

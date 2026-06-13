@@ -11,3 +11,10 @@ BEGIN
     ADD UsedInStrategicPlanning BIT NOT NULL
         CONSTRAINT DF_tblSegments_UsedInStrategicPlanning DEFAULT (0);
 END;
+
+IF COL_LENGTH('dbo.tblSegments', 'UsedInOrgStructure') IS NULL
+BEGIN
+    ALTER TABLE dbo.tblSegments
+    ADD UsedInOrgStructure BIT NOT NULL
+        CONSTRAINT DF_tblSegments_UsedInOrgStructure DEFAULT (0);
+END;

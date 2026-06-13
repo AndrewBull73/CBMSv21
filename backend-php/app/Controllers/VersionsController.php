@@ -45,6 +45,7 @@ final class VersionsController extends BaseController
         $model = new VersionsAdminModel($this->db);
         $ctx = $this->context();
         $record = ($fiscalYearId > 0 && $versionId > 0) ? $model->getByKey($fiscalYearId, $versionId) : null;
+        $isEditing = $record !== null;
 
         if ($record === null && $fiscalYearId > 0) {
             $record = [
@@ -62,8 +63,9 @@ final class VersionsController extends BaseController
         $selectedBaseFiscalYearId = (int) ($record['BaseFiscalYearID'] ?? 0);
 
         $this->render('config/VersionsForm', [
-            'title' => $record !== null && $versionId > 0 ? 'Edit Version' : 'Create Version',
+            'title' => $isEditing ? 'Edit Version' : 'Create Version',
             'record' => $record,
+            'isEditing' => $isEditing,
             'fiscalYears' => $model->listFiscalYears(),
             'versionTypes' => $model->listVersionTypes(),
             'statusOptions' => $model->listStatusOptions(),
@@ -137,11 +139,14 @@ final class VersionsController extends BaseController
                 'versionLabel' => $payload['VersionLabel'],
             ]);
             $this->flashError('Save failed: ' . $e->getMessage());
-            $query = http_build_query([
+            $queryParams = [
                 'route' => 'versions/form',
                 'fy' => (int) ($payload['FiscalYearID'] ?? 0),
-                'id' => (int) ($payload['VersionID'] ?? 0),
-            ]);
+            ];
+            if (!empty($_POST['_editing'])) {
+                $queryParams['id'] = (int) ($payload['VersionID'] ?? 0);
+            }
+            $query = http_build_query($queryParams);
             header('Location: index.php?' . $query);
             return;
         }

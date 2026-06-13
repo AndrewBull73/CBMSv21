@@ -1,0 +1,35 @@
+#!/bin/sh
+# Pre-commit hook: format code and run quick checks
+echo "Running pre-commit checks..."
+
+# Run PHP formatter if available
+if command -v composer >/dev/null 2>&1; then
+  if composer run -q format; then
+    echo "PHP format OK"
+  else
+    echo "PHP format failed or not available; please install php-cs-fixer or update composer scripts."
+  fi
+fi
+
+# Run dotnet format if available
+if command -v dotnet >/dev/null 2>&1; then
+  if dotnet tool list -g | grep -q "dotnet-format" || dotnet format --version >/dev/null 2>&1; then
+    dotnet format ./Application || echo "dotnet format failed or not configured"
+  else
+    echo "dotnet-format not found; skipping"
+  fi
+fi
+
+# (Optional) Run quick tests if present
+if [ -f "composer.json" ]; then
+  # run composer test if script exists
+  if composer run --list | grep -q "test"; then
+    composer test || { echo "PHP tests failed"; exit 1; }
+  fi
+fi
+
+# Stage any formatting fixes
+git add -A
+
+echo "Pre-commit checks completed."
+exit 0

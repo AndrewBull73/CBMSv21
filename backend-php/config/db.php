@@ -17,6 +17,7 @@ declare(strict_types=1);
  *   DB_NAME=CBMSv2              (fallback to DB_DATABASE if not set)
  *   DB_USER=CRUser              (fallback to DB_USERNAME if not set)
  *   DB_PASS=secret              (fallback to DB_PASSWORD if not set)
+ *   DB_AUTH=sql|windows         (sql default; windows uses the current Windows account)
  *   DB_PORT=1433 (sqlsrv) | 3306 (mysql)
  *
  *   # SQL Server (pdo_sqlsrv)
@@ -37,6 +38,7 @@ $host = envStr('DB_HOST',     envStr('DB_SERVER',  'localhost'));
 $name = envStr('DB_NAME',     envStr('DB_DATABASE','CBMSv2'));
 $user = envStr('DB_USER',     envStr('DB_USERNAME',''));
 $pass = envStr('DB_PASS',     envStr('DB_PASSWORD',''));
+$auth = strtolower((string) envStr('DB_AUTH', 'sql'));
 $port = envStr('DB_PORT',     null); // optional
 
 // SQL Server-specific options
@@ -79,7 +81,11 @@ try {
             $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
         }
 
-        $conn = new PDO($dsn, $user, $pass, $options);
+        if ($auth === 'windows' || $auth === 'trusted' || $auth === 'integrated') {
+            $conn = new PDO($dsn, null, null, $options);
+        } else {
+            $conn = new PDO($dsn, $user, $pass, $options);
+        }
     }
 
     // Expose connection globally for legacy code

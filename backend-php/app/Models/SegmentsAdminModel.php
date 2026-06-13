@@ -19,6 +19,7 @@ final class SegmentsAdminModel
     {
         $hasFinancialFlag = $this->columnExists('dbo.tblSegments', 'UsedInFinancialAccount');
         $hasStrategicFlag = $this->columnExists('dbo.tblSegments', 'UsedInStrategicPlanning');
+        $hasOrgStructureFlag = $this->columnExists('dbo.tblSegments', 'UsedInOrgStructure');
         $where = [];
         $params = [];
 
@@ -66,6 +67,7 @@ final class SegmentsAdminModel
                     s.SegmentGroup,
                     " . ($hasFinancialFlag ? "ISNULL(s.UsedInFinancialAccount, 0)" : "CAST(0 AS INT)") . " AS UsedInFinancialAccount,
                     " . ($hasStrategicFlag ? "ISNULL(s.UsedInStrategicPlanning, 0)" : "CAST(0 AS INT)") . " AS UsedInStrategicPlanning,
+                    " . ($hasOrgStructureFlag ? "ISNULL(s.UsedInOrgStructure, 0)" : "CAST(0 AS INT)") . " AS UsedInOrgStructure,
                     s.DisplayOrder,
                     s.Delimiter,
                     s.ParentSegmentNoDefault,
@@ -73,7 +75,7 @@ final class SegmentsAdminModel
                     (SELECT COUNT(*) FROM dbo.tblSegmentValues sv WHERE sv.SegmentNo = s.SegmentID) AS ValueCount
                 FROM dbo.tblSegments s
                 {$whereSql}
-                ORDER BY ISNULL(s.DisplayOrder, 999999), s.SegmentID";
+                ORDER BY s.SegmentID";
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
@@ -88,6 +90,7 @@ final class SegmentsAdminModel
 
         $hasFinancialFlag = $this->columnExists('dbo.tblSegments', 'UsedInFinancialAccount');
         $hasStrategicFlag = $this->columnExists('dbo.tblSegments', 'UsedInStrategicPlanning');
+        $hasOrgStructureFlag = $this->columnExists('dbo.tblSegments', 'UsedInOrgStructure');
 
         $stmt = $this->pdo->prepare(
             "SELECT
@@ -110,6 +113,7 @@ final class SegmentsAdminModel
                 SegmentGroup,
                 " . ($hasFinancialFlag ? "ISNULL(UsedInFinancialAccount, 0)" : "CAST(0 AS INT)") . " AS UsedInFinancialAccount,
                 " . ($hasStrategicFlag ? "ISNULL(UsedInStrategicPlanning, 0)" : "CAST(0 AS INT)") . " AS UsedInStrategicPlanning,
+                " . ($hasOrgStructureFlag ? "ISNULL(UsedInOrgStructure, 0)" : "CAST(0 AS INT)") . " AS UsedInOrgStructure,
                 DisplayOrder,
                 Delimiter,
                 ParentSegmentNoDefault,
@@ -143,13 +147,17 @@ final class SegmentsAdminModel
         $segmentGroup = $this->nullIfEmpty($data['SegmentGroup'] ?? null);
         $usedInFinancialAccount = !empty($data['UsedInFinancialAccount']) ? 1 : 0;
         $usedInStrategicPlanning = !empty($data['UsedInStrategicPlanning']) ? 1 : 0;
+        $usedInOrgStructure = !empty($data['UsedInOrgStructure']) ? 1 : 0;
         $parentSegmentNoDefault = $this->nullIfZero($data['ParentSegmentNoDefault'] ?? null);
 
-        if ($startPoint === null || $endPoint === null) {
-            throw new \RuntimeException('Start Point and End Point are required.');
+        if ($startPoint !== null && $startPoint <= 0) {
+            throw new \RuntimeException('Start Point must be greater than zero when entered.');
         }
-        if ($startPoint <= 0 || $endPoint < $startPoint) {
-            throw new \RuntimeException('End Point must be greater than or equal to Start Point, and Start Point must be greater than zero.');
+        if ($endPoint !== null && $endPoint <= 0) {
+            throw new \RuntimeException('End Point must be greater than zero when entered.');
+        }
+        if ($startPoint !== null && $endPoint !== null && $endPoint < $startPoint) {
+            throw new \RuntimeException('End Point must be greater than or equal to Start Point.');
         }
         if ($minLength !== null && $maxLength !== null && $minLength > $maxLength) {
             throw new \RuntimeException('Min Length cannot be greater than Max Length.');
@@ -160,7 +168,7 @@ final class SegmentsAdminModel
         if ($segmentGroup === null) {
             throw new \RuntimeException('Segment Group is required.');
         }
-        if ($usedInFinancialAccount !== 1 && $usedInStrategicPlanning !== 1) {
+        if ($usedInFinancialAccount !== 1 && $usedInStrategicPlanning !== 1 && $usedInOrgStructure !== 1) {
             throw new \RuntimeException('At least one usage flag must be enabled for the segment.');
         }
         if ($parentSegmentNoDefault !== null) {
@@ -178,6 +186,7 @@ final class SegmentsAdminModel
         $existing = $this->getById($segmentId);
         $hasFinancialFlag = $this->columnExists('dbo.tblSegments', 'UsedInFinancialAccount');
         $hasStrategicFlag = $this->columnExists('dbo.tblSegments', 'UsedInStrategicPlanning');
+        $hasOrgStructureFlag = $this->columnExists('dbo.tblSegments', 'UsedInOrgStructure');
         $params = [
             ':segmentId' => $segmentId,
             ':segmentCode' => $segmentCode,
@@ -207,6 +216,9 @@ final class SegmentsAdminModel
         if ($hasStrategicFlag) {
             $params[':usedInStrategicPlanning'] = $usedInStrategicPlanning;
         }
+        if ($hasOrgStructureFlag) {
+            $params[':usedInOrgStructure'] = $usedInOrgStructure;
+        }
 
         if ($existing !== null) {
             $sql = "UPDATE dbo.tblSegments
@@ -233,6 +245,10 @@ final class SegmentsAdminModel
             if ($hasStrategicFlag) {
                 $sql .= ",
                         UsedInStrategicPlanning = :usedInStrategicPlanning";
+            }
+            if ($hasOrgStructureFlag) {
+                $sql .= ",
+                        UsedInOrgStructure = :usedInOrgStructure";
             }
             $sql .= ",
                         DisplayOrder = :displayOrder,
@@ -267,6 +283,10 @@ final class SegmentsAdminModel
                 $sql .= ",
                         UsedInStrategicPlanning";
             }
+            if ($hasOrgStructureFlag) {
+                $sql .= ",
+                        UsedInOrgStructure";
+            }
             $sql .= ",
                         DisplayOrder,
                         Delimiter,
@@ -297,6 +317,10 @@ final class SegmentsAdminModel
             if ($hasStrategicFlag) {
                 $sql .= ",
                         :usedInStrategicPlanning";
+            }
+            if ($hasOrgStructureFlag) {
+                $sql .= ",
+                        :usedInOrgStructure";
             }
             $sql .= ",
                         :displayOrder,
@@ -338,6 +362,7 @@ final class SegmentsAdminModel
             'SegmentGroup' => trim((string)($data['SegmentGroup'] ?? '')),
             'UsedInFinancialAccount' => (int)($data['UsedInFinancialAccount'] ?? 0),
             'UsedInStrategicPlanning' => (int)($data['UsedInStrategicPlanning'] ?? 0),
+            'UsedInOrgStructure' => (int)($data['UsedInOrgStructure'] ?? 0),
             'DisplayOrder' => $data['DisplayOrder'] ?? null,
             'Delimiter' => trim((string)($data['Delimiter'] ?? '')),
             'ParentSegmentNoDefault' => $data['ParentSegmentNoDefault'] ?? null,
@@ -374,6 +399,7 @@ final class SegmentsAdminModel
             'SegmentGroup',
             'UsedInFinancialAccount',
             'UsedInStrategicPlanning',
+            'UsedInOrgStructure',
             'DisplayOrder',
             'Delimiter',
             'ParentSegmentNoDefault',
@@ -382,8 +408,8 @@ final class SegmentsAdminModel
 
         $sheet->fromArray($headers, null, 'A1');
         $sheet->fromArray([
-            [1, 'FUND', 'Fund', 4, 4, 1, 4, '', '', '', '', 'Master', '', 'FUND', 'Y', 'N', 'Core', 1, 0, 10, '-', '', 0],
-            [2, 'PROGRAM', 'Program', 4, 4, 5, 8, '', '', '', '', 'Hierarchy', '', 'PROGRAM', 'Y', 'N', 'Core', 1, 1, 20, '-', '', 0],
+            [1, 'FUND', 'Fund', 4, 4, 1, 4, '', '', '', '', 'Master', '', 'FUND', 'Y', 'N', 'Core', 1, 0, 0, 10, '-', '', 0],
+            [2, 'PROGRAM', 'Program', 4, 4, 5, 8, '', '', '', '', 'Hierarchy', '', 'PROGRAM', 'Y', 'N', 'Core', 1, 1, 0, 20, '-', '', 0],
         ], null, 'A2');
 
         for ($col = 1; $col <= count($headers); $col++) {
@@ -410,6 +436,7 @@ final class SegmentsAdminModel
             ['SegmentGroup', 'No', 'Optional grouping label.'],
             ['UsedInFinancialAccount', 'No', 'Use 1 or 0. Defaults to 0 when blank.'],
             ['UsedInStrategicPlanning', 'No', 'Use 1 or 0. Defaults to 0 when blank.'],
+            ['UsedInOrgStructure', 'No', 'Use 1 or 0. Defaults to 0 when blank.'],
             ['DisplayOrder', 'No', 'Controls list ordering.'],
             ['Delimiter', 'No', 'Optional separator character.'],
             ['ParentSegmentNoDefault', 'No', 'Optional default parent segment number.'],

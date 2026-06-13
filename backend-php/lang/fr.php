@@ -514,6 +514,7 @@ return [
     'tx_set_context_warning'        => 'Definissez Exercice, Version et Objet de donnees dans l en-tete pour voir les transactions.',
     'tx_new_transaction'            => 'Nouvelle transaction',
     'tx_open_editor'                => 'Ouvrir l editeur',
+    'tx_download_workbook'          => 'Telecharger le classeur',
     'tx_query_failed'               => 'Echec de la requete',
     'tx_search_ph'                  => 'Rechercher TransactionID ou Type',
     'tx_report_id'                  => 'ReportID',

@@ -21,6 +21,7 @@ final class SegmentValuesController extends BaseController
         'archive' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'uploadProcess' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'downloadTemplate' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportExcel' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     protected bool $requiresContext = true;
@@ -29,15 +30,20 @@ final class SegmentValuesController extends BaseController
     {
         $ctxFy = (int)SessionHelper::get('FiscalYearID', 0);
 
+        $model = new SegmentValuesAdminModel($this->db);
+        $segments = $model->listSegments();
+        $defaultSegmentNo = (string) (int) ($segments[0]['SegmentNo'] ?? 0);
+
         $filters = [
             'fy' => trim((string)($_GET['fy'] ?? ($ctxFy > 0 ? (string)$ctxFy : ''))),
             'data_object_code' => trim((string)($_GET['data_object_code'] ?? '')),
-            'segment_no' => trim((string)($_GET['segment_no'] ?? '')),
+            'segment_no' => trim((string)($_GET['segment_no'] ?? $defaultSegmentNo)),
             'q' => trim((string)($_GET['q'] ?? '')),
             'active' => trim((string)($_GET['active'] ?? '1')),
         ];
-
-        $model = new SegmentValuesAdminModel($this->db);
+        if ((int) $filters['segment_no'] <= 0) {
+            $filters['segment_no'] = $defaultSegmentNo;
+        }
 
         $rows = $model->listRows($filters);
 
@@ -46,7 +52,7 @@ final class SegmentValuesController extends BaseController
             'rows' => $rows,
             'filters' => $filters,
             'fiscalYears' => $model->listFiscalYears(),
-            'segments' => $model->listSegments(),
+            'segments' => $segments,
             'ctxFy' => $ctxFy,
         ]);
     }
@@ -348,6 +354,37 @@ final class SegmentValuesController extends BaseController
         $model = new SegmentValuesAdminModel($this->db);
         $spreadsheet = $model->buildTemplateWorkbook();
         $filename = 'SegmentValuesUploadTemplate_' . date('Ymd_His') . '.xlsx';
+
+        if (ob_get_length()) {
+            @ob_end_clean();
+        }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+        $writer = new Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
+
+    public function exportExcel(): void
+    {
+        $model = new SegmentValuesAdminModel($this->db);
+        $segments = $model->listSegments();
+        $defaultSegmentNo = (string) (int) ($segments[0]['SegmentNo'] ?? 0);
+
+        $filters = [
+            'fy' => trim((string)($_GET['fy'] ?? '')),
+            'data_object_code' => trim((string)($_GET['data_object_code'] ?? '')),
+            'segment_no' => trim((string)($_GET['segment_no'] ?? $defaultSegmentNo)),
+            'q' => trim((string)($_GET['q'] ?? '')),
+            'active' => trim((string)($_GET['active'] ?? '1')),
+        ];
+        if ((int) $filters['segment_no'] <= 0) {
+            $filters['segment_no'] = $defaultSegmentNo;
+        }
+
+        $spreadsheet = $model->buildExportWorkbook($filters);
+        $filename = 'SegmentValues_' . date('Ymd_His') . '.xlsx';
 
         if (ob_get_length()) {
             @ob_end_clean();

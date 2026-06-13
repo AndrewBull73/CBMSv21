@@ -59,11 +59,23 @@ $printMode = ($_GET['print'] ?? '') === '1';
       </div>
       <?php if (!$printMode): ?>
       <div class="d-inline-flex gap-2">
+        <a href="index.php?route=dataobject-types/list" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-diagram-3 me-1"></i>Types
+        </a>
+        <a href="index.php?route=dataobjectcodes/hierarchy" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-diagram-2 me-1"></i>Hierarchy
+        </a>
+        <a href="index.php?route=dataobjectworkflow/statuses" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-list-check me-1"></i>Workflow Status
+        </a>
         <a href="index.php?route=dataobjectcodes/downloadTemplate" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-download me-1"></i>Template
         </a>
         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docUploadModal">
           <i class="bi bi-upload me-1"></i>Upload
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#docRebuildHierarchyModal">
+          <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
         </button>
         <a href="index.php?route=dataobjectcodes/export" class="btn btn-sm btn-outline-success">
           <i class="bi bi-file-earmark-excel me-1"></i><?= __t('export_excel') ?>
@@ -96,7 +108,7 @@ $printMode = ($_GET['print'] ?? '') === '1';
           <select id="dataobjectcodes-type-filter" name="typeId" class="form-select">
             <option value=""><?= __t('all_types') ?></option>
             <?php foreach ($types as $t): ?>
-              <?php $id = (int)($t['DataObjectTypeID'] ?? 0); $label = (string)($t['TypeName'] ?? $id); ?>
+              <?php $id = (int)($t['DataObjectTypeID'] ?? 0); $label = (string)($t['DataObjectTypeName'] ?? $id); ?>
               <option value="<?= $id ?>" <?= ($typeId === $id) ? 'selected' : '' ?>><?= h($label) ?></option>
             <?php endforeach; ?>
           </select>
@@ -243,6 +255,32 @@ $printMode = ($_GET['print'] ?? '') === '1';
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __t('cancel') ?></button>
           <button type="submit" class="btn btn-primary">Upload Spreadsheet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="docRebuildHierarchyModal" tabindex="-1" aria-labelledby="docRebuildHierarchyModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="docRebuildHierarchyModalLabel">Rebuild Data Object Hierarchy</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="index.php?route=dataobjectcodes/rebuildHierarchy">
+        <div class="modal-body">
+          <input type="hidden" name="_csrf" value="<?= h($_csrf ?? csrf_token()) ?>">
+          <p class="mb-2">Rebuild hierarchy links for the current fiscal year<?= $fiscalYearId > 0 ? ' (FY ' . h((string)$fiscalYearId) . ')' : '' ?>?</p>
+          <div class="alert alert-warning mb-0">
+            This will replace existing hierarchy links in <code>tblDataObjectTree</code> for the current fiscal year using the parent codes in <code>tblDataObjectCodes</code>.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __t('cancel') ?></button>
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
+          </button>
         </div>
       </form>
     </div>

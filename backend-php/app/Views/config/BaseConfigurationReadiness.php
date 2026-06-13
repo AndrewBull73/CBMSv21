@@ -19,6 +19,20 @@ foreach ($checks as $check) {
     $grouped[$category][] = $check;
 }
 
+$preferredCategoryOrder = [
+    'Fiscal Context',
+    'Organisation Structure',
+    'Segments And Dimensions',
+];
+$orderedGrouped = [];
+foreach ($preferredCategoryOrder as $category) {
+    if (array_key_exists($category, $grouped)) {
+        $orderedGrouped[$category] = $grouped[$category];
+        unset($grouped[$category]);
+    }
+}
+$grouped = $orderedGrouped + $grouped;
+
 $statusBadge = static function (string $status): string {
     return match ($status) {
         'ready' => 'text-bg-success',
@@ -79,7 +93,7 @@ $screenHeader = [
         <div class="col-6 col-xl-3">
           <div class="card shadow-sm h-100">
             <div class="card-body">
-              <div class="text-muted small">Needs Attention</div>
+              <div class="text-muted small">Warning Checks</div>
               <div class="fs-4 fw-semibold"><?= (int) ($summary['warning_checks'] ?? 0) ?></div>
             </div>
           </div>

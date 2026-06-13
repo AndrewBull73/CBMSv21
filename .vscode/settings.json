@@ -1,0 +1,22 @@
+{
+  "editor.tabSize": 4,
+  "editor.formatOnSave": true,
+  "editor.rulers": [80],
+  "files.exclude": {
+    "**/vendor": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/.venv": true
+  },
+  "[php]": {
+    "editor.defaultFormatter": "junstyle.php-cs-fixer",
+    "editor.tabSize": 4
+  },
+  "[csharp]": {
+    "editor.tabSize": 4
+  },
+  "php.validate.executablePath": "php",
+  "intelephense.files.maxSize": 10000000,
+  "git.enableSmartCommit": true,
+  "git.autofetch": true
+}

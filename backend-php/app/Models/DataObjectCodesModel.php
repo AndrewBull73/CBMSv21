@@ -543,7 +543,7 @@ SQL;
             $st = $this->pdo->query("
                 SELECT DataObjectTypeID, DataObjectTypeName
                 FROM tblDataObjectTypes
-                ORDER BY DataObjectTypeName;
+                ORDER BY DataObjectTypeID;
             ");
             return $st->fetchAll(\PDO::FETCH_ASSOC) ?: [];
         } catch (\Throwable $e) {

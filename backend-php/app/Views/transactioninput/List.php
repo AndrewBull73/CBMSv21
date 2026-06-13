@@ -17,6 +17,7 @@ declare(strict_types=1);
 /** @var array $allowedFilterFields */
 /** @var string $warning */
 /** @var string $error */
+/** @var string $_csrf */
 
 if (!function_exists('h')) {
     function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
@@ -186,6 +187,12 @@ $buildListUrl = static function (array $overrides) use ($sharedNavParams): strin
       <a href="index.php?route=transaction-input/editor" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-pencil-square me-1"></i> <?= __t('tx_open_editor') ?>
       </a>
+      <a href="index.php?route=transaction-input/download-template" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-download me-1"></i> <?= __t('tx_download_workbook') ?>
+      </a>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#transactionWorkbookUploadModal">
+        <i class="bi bi-upload me-1"></i> Upload Workbook
+      </button>
     </div>
   </div>
 
@@ -773,5 +780,31 @@ $buildListUrl = static function (array $overrides) use ($sharedNavParams): strin
         });
       })();
     </script>
+  </div>
+</div>
+
+<div class="modal fade" id="transactionWorkbookUploadModal" tabindex="-1" aria-labelledby="transactionWorkbookUploadModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="index.php?route=transaction-input/upload-process" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf" value="<?= h((string)($_csrf ?? '')) ?>">
+        <div class="modal-header">
+          <h5 class="modal-title" id="transactionWorkbookUploadModalLabel"><i class="bi bi-upload me-2"></i>Upload Budget Workbook</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __t('close') ?>"></button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-muted mb-3">
+            Upload the password-protected workbook generated from this Transaction Input screen. CBMS will validate the workbook identity and context before any transaction rows can be committed.
+          </div>
+          <label for="transactionWorkbookUploadFile" class="form-label">Workbook file</label>
+          <input type="file" class="form-control" id="transactionWorkbookUploadFile" name="uploadFile" accept=".xlsx" required>
+          <div class="form-text">The workbook must match Fiscal Year <?= h((string)$ctxFy) ?>, Version <?= h((string)$ctxVer) ?><?= $ctxDataObject !== '' ? ', Data Object ' . h($ctxDataObject) : '' ?>.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __t('cancel') ?></button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check me-1"></i>Validate Upload</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>

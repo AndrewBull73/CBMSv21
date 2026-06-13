@@ -1086,8 +1086,13 @@ abstract class BaseController
         }
 
         $flash = \App\Shared\SessionHelper::get('flash.message', null);
-        $suppressInlineFlash = str_starts_with($view, 'strategy/');
         $route = $this->currentRoute();
+        $useMainLayout = $view !== 'auth/login' && is_file($layout);
+        $allowInlineFlash = (bool) ($vars['allowInlineFlash'] ?? false);
+        // Standardize flash handling: full-page screens render session flash once in the shared layout.
+        $inlineFlash = $useMainLayout && !$allowInlineFlash
+            ? null
+            : ($vars['flash'] ?? $flash);
         $screenTestingEnabled = screen_testing_features_enabled($this->db);
         $trainingEnabled = training_features_enabled($this->db);
         if (!array_key_exists('screenTestingEnabled', $vars)) {
@@ -1110,7 +1115,7 @@ abstract class BaseController
             );
         }
         $vars = array_merge([
-            'flash' => $suppressInlineFlash ? null : $flash,
+            'flash' => $inlineFlash,
             'layoutFlash' => $flash,
             '_ctx' => $this->context(),
             'userId' => (int) SessionHelper::get('auth.user_id', 0),

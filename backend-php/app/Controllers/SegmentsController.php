@@ -50,6 +50,7 @@ final class SegmentsController extends BaseController
             'record' => $id > 0 ? $model->getById($id) : null,
             'dimensions' => $model->listDimensions(),
             'groups' => $model->listGroups(),
+            'parentSegments' => $model->listRows([]),
         ]);
     }
 
@@ -87,6 +88,7 @@ final class SegmentsController extends BaseController
             'SegmentGroup' => trim((string)($_POST['SegmentGroup'] ?? '')),
             'UsedInFinancialAccount' => isset($_POST['UsedInFinancialAccount']) ? 1 : 0,
             'UsedInStrategicPlanning' => isset($_POST['UsedInStrategicPlanning']) ? 1 : 0,
+            'UsedInOrgStructure' => isset($_POST['UsedInOrgStructure']) ? 1 : 0,
             'DisplayOrder' => $_POST['DisplayOrder'] ?? null,
             'Delimiter' => trim((string)($_POST['Delimiter'] ?? '')),
             'ParentSegmentNoDefault' => $_POST['ParentSegmentNoDefault'] ?? null,
@@ -105,6 +107,7 @@ final class SegmentsController extends BaseController
                 'SegmentGroup' => $payload['SegmentGroup'],
                 'UsedInFinancialAccount' => $payload['UsedInFinancialAccount'],
                 'UsedInStrategicPlanning' => $payload['UsedInStrategicPlanning'],
+                'UsedInOrgStructure' => $payload['UsedInOrgStructure'],
                 'ParentRequired' => $payload['ParentRequired'],
             ]);
             $this->flashSuccess($existing !== null ? 'Segment updated.' : 'Segment created.');
@@ -218,6 +221,7 @@ final class SegmentsController extends BaseController
                         'SegmentGroup' => $valueFor($headerMap, $row, 'SegmentGroup'),
                         'UsedInFinancialAccount' => $valueFor($headerMap, $row, 'UsedInFinancialAccount') === '' ? 0 : (int)$valueFor($headerMap, $row, 'UsedInFinancialAccount'),
                         'UsedInStrategicPlanning' => $valueFor($headerMap, $row, 'UsedInStrategicPlanning') === '' ? 0 : (int)$valueFor($headerMap, $row, 'UsedInStrategicPlanning'),
+                        'UsedInOrgStructure' => $valueFor($headerMap, $row, 'UsedInOrgStructure') === '' ? 0 : (int)$valueFor($headerMap, $row, 'UsedInOrgStructure'),
                         'DisplayOrder' => $valueFor($headerMap, $row, 'DisplayOrder'),
                         'Delimiter' => $valueFor($headerMap, $row, 'Delimiter'),
                         'ParentSegmentNoDefault' => $valueFor($headerMap, $row, 'ParentSegmentNoDefault'),

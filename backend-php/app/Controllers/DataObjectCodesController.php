@@ -21,6 +21,8 @@ final class DataObjectCodesController extends BaseController
         'delete'   => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
         'uploadProcess' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
         'downloadTemplate' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        'rebuildHierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        'hierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
     ];
 
     protected bool $requiresContext = true;
@@ -316,6 +318,88 @@ final class DataObjectCodesController extends BaseController
         exit;
     }
 
+    public function rebuildHierarchy(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        require_once __DIR__ . '/../../shared/csrf.php';
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError('Security check failed.');
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        if (!isset($conn) || !($conn instanceof \PDO)) {
+            require __DIR__ . '/../../config/db.php';
+        }
+        require_once __DIR__ . '/../Models/DataObjectCodesModel.php';
+
+        $fy = (int)SessionHelper::get('FiscalYearID', 0);
+        if ($fy <= 0) {
+            $this->flashError('Select a fiscal year before rebuilding data object hierarchy links.');
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        $model = new DataObjectCodesModel($conn);
+        try {
+            $model->rebuildTreeForFiscalYear($fy);
+            $countStmt = $conn->prepare('SELECT COUNT(*) FROM dbo.tblDataObjectTree WHERE FiscalYearID = :fy');
+            $countStmt->execute([':fy' => $fy]);
+            $linkCount = (int)($countStmt->fetchColumn() ?: 0);
+
+            $this->auditEvent('REBUILD', 'DataObjectTree', (string)$fy, [
+                'FiscalYearID' => $fy,
+                'LinkCount' => $linkCount,
+            ]);
+            $this->flashSuccess('Data object hierarchy links rebuilt for fiscal year ' . $fy . '. Links: ' . $linkCount . '.');
+        } catch (\Throwable $e) {
+            $this->logHandledException('DataObjectCodesController::rebuildHierarchy failed', $e, [
+                'fiscalYearId' => $fy,
+            ]);
+            $this->flashError('Hierarchy rebuild failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=dataobjectcodes/index');
+    }
+
+    public function hierarchy(): void
+    {
+        if (!isset($conn) || !($conn instanceof \PDO)) {
+            require __DIR__ . '/../../config/db.php';
+        }
+        require_once __DIR__ . '/../Models/DataObjectTreeModel.php';
+        require_once __DIR__ . '/../../shared/csrf.php';
+
+        $fy = (int)SessionHelper::get('FiscalYearID', 0);
+        $filters = [
+            'q' => trim((string)($_GET['q'] ?? '')),
+            'ancestor_code' => trim((string)($_GET['ancestor_code'] ?? '')),
+            'descendant_code' => trim((string)($_GET['descendant_code'] ?? '')),
+            'depth' => trim((string)($_GET['depth'] ?? '')),
+            'page' => max(1, (int)($_GET['page'] ?? 1)),
+            'pageSize' => max(1, min(200, (int)($_GET['pageSize'] ?? 50))),
+        ];
+
+        $model = new \App\Models\DataObjectTreeModel($conn);
+        $result = $model->listRows($fy, $filters);
+        $treeNodes = $model->listTreeNodes($fy, $filters['q']);
+
+        $this->render('dataobjectcodes/DataObjectTreeList', [
+            'title' => 'Data Object Hierarchy',
+            'fiscalYearId' => $fy,
+            'rows' => $result['rows'] ?? [],
+            'treeNodes' => $treeNodes,
+            'total' => (int)($result['total'] ?? 0),
+            'filters' => $filters,
+            '_csrf' => csrf_token(),
+        ]);
+    }
+
     /* ------------------------------------------------------------------ */
     /*  INDEX                                                             */
     /* ------------------------------------------------------------------ */
@@ -330,7 +414,25 @@ final class DataObjectCodesController extends BaseController
         $fy = (int)SessionHelper::get('FiscalYearID', 0);
         $model = new \App\Models\DataObjectCodesModel($conn);
 
-        $result = $model->listPaged($fy, 1, 25, null, 'DataObjectCode', 'ASC', null, null);
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $pageSize = max(1, min(200, (int)($_GET['pageSize'] ?? 25)));
+        $q = trim((string)($_GET['q'] ?? ''));
+        $rawTypeId = trim((string)($_GET['typeId'] ?? ''));
+        $typeId = $rawTypeId !== '' ? (int)$rawTypeId : null;
+        $status = trim((string)($_GET['status'] ?? ''));
+        $sort = trim((string)($_GET['sort'] ?? 'DataObjectCode'));
+        $dir = strtoupper(trim((string)($_GET['dir'] ?? 'ASC'))) === 'DESC' ? 'DESC' : 'ASC';
+
+        $result = $model->listPaged(
+            $fy,
+            $page,
+            $pageSize,
+            $q !== '' ? $q : null,
+            $sort,
+            $dir,
+            $typeId,
+            $status !== '' ? $status : null
+        );
         if ($model->getLastError()) {
             $this->flashError('Failed to load data: ' . $model->getLastError());
             $result = ['rows' => [], 'total' => 0];
@@ -347,13 +449,13 @@ final class DataObjectCodesController extends BaseController
             'fiscalYearId' => $fy,
             'rows'     => $result['rows'] ?? [],
             'total'    => (int)($result['total'] ?? 0),
-            'page'     => 1,
-            'pageSize' => 25,
-            'q'        => '',
-            'typeId'   => null,
-            'status'   => '',
-            'sort'     => 'DataObjectCode',
-            'dir'      => 'ASC',
+            'page'     => $page,
+            'pageSize' => $pageSize,
+            'q'        => $q,
+            'typeId'   => $typeId,
+            'status'   => $status,
+            'sort'     => $sort,
+            'dir'      => $dir,
             'types'    => $types,
             '_csrf'    => csrf_token(),
         ]);

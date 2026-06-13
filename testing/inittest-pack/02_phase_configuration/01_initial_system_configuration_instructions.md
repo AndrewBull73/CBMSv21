@@ -77,6 +77,7 @@ Recommended minimum decisions:
 - segment groups
 - financial usage flag
 - strategic usage flag
+- organisation structure usage flag
 - parent requirements
 
 Expected outcome:

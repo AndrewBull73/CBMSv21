@@ -86,7 +86,7 @@ $blockers = is_array($summary['blockers'] ?? null) ? $summary['blockers'] : [];
     <div class="col-6 col-xl-3">
       <div class="card shadow-sm h-100 metric-card">
         <div class="card-body py-3">
-          <div class="text-muted small">Needs Attention</div>
+          <div class="text-muted small">Warning Checks</div>
           <div class="metric-value fw-semibold"><?= (int) ($summary['warning_checks'] ?? 0) ?></div>
         </div>
       </div>

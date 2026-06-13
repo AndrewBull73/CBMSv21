@@ -147,7 +147,10 @@ $screenHeader = [
       <div class="card shadow-sm mb-4">
         <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
           <h5 class="mb-0">Version Register</h5>
-          <a id="versions-create-btn" href="index.php?route=versions/form<?= $createFy > 0 ? '&fy=' . $createFy : '' ?>" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Version</a>
+          <div class="d-flex gap-2">
+            <a href="index.php?route=version-types/list" class="btn btn-sm btn-outline-secondary">Version Types</a>
+            <a id="versions-create-btn" href="index.php?route=versions/form<?= $createFy > 0 ? '&fy=' . $createFy : '' ?>" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Version</a>
+          </div>
         </div>
         <div class="card-body">
           <div class="table-responsive">

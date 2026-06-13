@@ -355,7 +355,10 @@ return [
         'roles' => [],
         'perms' => ['DATAOBJECTCODES_ADMIN'],
         'children' => [
+          ['label'=>'Data Object Types','code'=>'ADOT','route'=>'dataobject-types/list','icon'=>'diagram-3','active'=>['dataobject-types/*'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
           ['label'=>'Data Object Codes','code'=>'ADOC','route'=>'dataobjectcodes/index','icon'=>'collection','active'=>['dataobjectcodes/*'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
+          ['label'=>'Data Object Hierarchy','code'=>'ADOH','route'=>'dataobjectcodes/hierarchy','icon'=>'diagram-2','active'=>['dataobjectcodes/hierarchy'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
+          ['label'=>'Workflow Status','code'=>'ADOW','route'=>'dataobjectworkflow/statuses','icon'=>'list-check','active'=>['dataobjectworkflow/*'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
           ['label'=>'Add Data Object Code','code'=>'ADDC','route'=>'dataobjectcodes/create','icon'=>'plus-circle','active'=>['dataobjectcodes/create'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
           ['label'=>'Access Management','code'=>'ADAM','route'=>'dataobjectcodes/access','icon'=>'shield-lock','active'=>['dataobjectcodes/access*'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
           ['label'=>'Grant Access','code'=>'ADGA','route'=>'dataobjectcodes/access_form','icon'=>'person-plus','active'=>['dataobjectcodes/access_form'],'roles'=>[],'perms'=>['DATAOBJECTCODES_ADMIN']],
