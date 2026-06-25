@@ -25,6 +25,16 @@ $map = [
         ],
         'note' => 'The total strategic budget shown here is the sum of active activity budget lines in the active fiscal year and version.',
     ],
+    'strategy/framework-guide' => [
+        'title' => 'Strategic Budget Framework Guide Help',
+        'purpose' => 'Use this guide as the recommended high-level order for preparing the Strategic Budget Framework.',
+        'points' => [
+            'Start with base setup, source mappings, and clean dimensions before entering planning detail.',
+            'Prepare and review Funding Lodgements before setting final ceilings, because lodgements capture demand and ceilings represent approved fiscal control.',
+            'Use readiness checks and reports at the end to confirm the framework is complete before workflow approval.',
+        ],
+        'note' => 'Indicative ceilings can be used early as planning guidance, but final ceilings should normally follow funding review and approval.',
+    ],
     'strategy-config/segment-mapping' => [
         'title' => 'Segment Mapping Help',
         'purpose' => 'This screen tells the strategic module which CBMS segments represent each strategic dimension for this client and fiscal year.',
@@ -44,6 +54,116 @@ $map = [
             'Look at missing counts before moving into performance, delivery, and reporting screens.',
         ],
         'note' => 'A primary import card does not replace maintenance. It helps create the first Strategy records for the active fiscal year.',
+    ],
+    'strategy-config/resolution-check' => [
+        'title' => 'Source Resolution Check Help',
+        'purpose' => 'Use this diagnostic screen to confirm whether a mapped strategic dimension can be resolved back to the expected source segment value.',
+        'points' => [
+            'Enter the strategic dimension, data object code, and segment code you want to test.',
+            'Use the result to confirm whether Strategic Segment Mapping, DataObjectCode, SegmentNo, and SegmentCode line up with tblSegmentValues.',
+            'Run this check when imports create no records, parent links look wrong, or a mapped source value is not appearing on a Strategy screen.',
+        ],
+        'note' => 'This screen does not import or change data. It only helps explain why a source-backed strategic value can or cannot be found.',
+    ],
+    'strategy-config/custom-attributes' => [
+        'title' => 'Strategic Custom Attributes Help',
+        'purpose' => 'Use this screen to define extra client-specific fields for strategic dimensions without changing the core Strategy tables.',
+        'points' => [
+            'Create attributes only for information the client needs to capture consistently on a strategic dimension.',
+            'Choose the target dimension, data type, required flag, and display order so data-entry screens can render the field correctly.',
+            'Use list-type attributes when users should choose from controlled options rather than typing free text.',
+        ],
+        'note' => 'Custom attributes extend Strategy records such as programs, projects, objectives, outputs, and activities. They do not create new source segment values or replace Strategic Segment Mapping.',
+    ],
+    'strategy-config/custom-attribute-form' => [
+        'title' => 'Custom Attribute Setup Help',
+        'purpose' => 'Use this form to create or refine one extra field for a selected strategic dimension.',
+        'points' => [
+            'Set the dimension first so the attribute appears only where it is relevant.',
+            'Pick the data type carefully because it controls validation and how the field appears to users.',
+            'Use required and active flags deliberately so incomplete or retired fields do not disrupt data entry.',
+        ],
+        'note' => 'For LIST attributes, save the attribute first, then maintain its selectable options from the options screen.',
+    ],
+    'strategy-config/custom-attribute-options' => [
+        'title' => 'Custom Attribute Options Help',
+        'purpose' => 'Use this screen to maintain the allowed choices for one list-type strategic custom attribute.',
+        'points' => [
+            'Create one option for each value users should be able to select.',
+            'Keep option codes stable because stored Strategy records may refer to them.',
+            'Archive options that should no longer be used rather than changing their meaning.',
+        ],
+        'note' => 'Options apply only to LIST attributes. Text, number, date, and yes/no attributes do not need option rows.',
+    ],
+    'strategy-config/custom-attribute-option-form' => [
+        'title' => 'Custom Attribute Option Setup Help',
+        'purpose' => 'Use this form to create or edit one selectable value for a list-type strategic custom attribute.',
+        'points' => [
+            'Use a short stable option code for storage and reporting.',
+            'Use the label for the wording users should see on forms.',
+            'Set display order and active status so current choices appear predictably on data-entry screens.',
+        ],
+        'note' => 'Changing an option label is usually safe, but changing the code can affect existing records and reports.',
+    ],
+    'strategy-config/fiscal-assumptions' => [
+        'title' => 'Fiscal Assumptions Help',
+        'purpose' => 'Use this screen to maintain fiscal planning assumptions for the active fiscal year and version, such as inflation rates used by MTFF projection helpers.',
+        'points' => [
+            'Create one active assumption for each planning driver the Strategy module should reuse in calculations or helper tools.',
+            'Keep assumption codes stable because projection screens and reports may look them up by code, such as INFLATION_RATE.',
+            'Use notes to document the source, approval basis, or policy rationale behind an assumption value.',
+        ],
+        'note' => 'Fiscal assumptions support planning helpers and projections. They do not replace approved ceilings, resource envelope entries, or final budget amounts.',
+    ],
+    'strategy-config/phasing-profiles' => [
+        'title' => 'Custom Phasing Profiles Help',
+        'purpose' => 'Use this screen to define reusable phasing patterns that spread a resource envelope amount across BP1 to BP12.',
+        'points' => [
+            'Create profiles for common timing patterns such as even monthly, front-loaded, seasonal, or grant-disbursement schedules.',
+            'Enter relative weights rather than final amounts; the resource envelope helper normalizes the weights to the line amount being phased.',
+            'Assign default phasing profiles to funding types when new resource envelope lines should start with a predictable phasing method.',
+        ],
+        'note' => 'Custom phasing profiles are calculation helpers for spreading amounts over periods. They do not create funding, change ceilings, or approve budget values.',
+    ],
+    'strategy-performance/strategic-pillars' => [
+        'title' => 'Strategic Pillars Help',
+        'purpose' => 'Use this screen to maintain the top-level pillars of the strategic results framework for the active planning cycle.',
+        'points' => [
+            'Create one pillar for each high-level policy or development area that goals and objectives should sit underneath.',
+            'Keep pillar codes stable because goals, readiness checks, reports, and historical references may rely on them.',
+            'Review inactive or duplicate pillars before building out goals, objectives, indicators, outputs, and activities.',
+        ],
+        'note' => 'Strategic pillars organize the planning framework. They are not source segment values and do not by themselves create budgets or resource envelope lines.',
+    ],
+    'strategy-performance/strategic-pillar-form' => [
+        'title' => 'Strategic Pillar Setup Help',
+        'purpose' => 'Use this form to create or refine one top-level strategic pillar.',
+        'points' => [
+            'Use a short stable code that can be recognized in reports and framework references.',
+            'Use the name and description to make the policy intent clear before linking goals beneath the pillar.',
+            'Archive a pillar only after checking whether goals or downstream records still depend on it.',
+        ],
+        'note' => 'A pillar should describe a broad strategic direction. More detailed outcomes belong in goals, objectives, indicators, outputs, and activities.',
+    ],
+    'strategy-performance/goals' => [
+        'title' => 'Goals Help',
+        'purpose' => 'Use this screen to maintain the strategic goals that sit below pillars and above detailed objectives in the results framework.',
+        'points' => [
+            'Create goals for high-level outcomes or commitments such as SDGs, national development goals, government priorities, or client-specific goal types.',
+            'Link goals to strategic pillars where possible so the framework can be reviewed from broad policy area down to objective detail.',
+            'Review inactive, duplicate, or unlinked goals before creating objectives and indicators underneath them.',
+        ],
+        'note' => 'Goals organize strategic intent. They do not hold budget lines directly; budget and performance detail is captured further down through objectives, outputs, activities, submissions, and resource envelopes.',
+    ],
+    'strategy-performance/goal-form' => [
+        'title' => 'Goal Setup Help',
+        'purpose' => 'Use this form to create or refine one strategic goal and optionally align it to a strategic pillar.',
+        'points' => [
+            'Use the goal type to classify whether the goal is an SDG, national plan goal, government priority, or another framework category.',
+            'Choose a strategic pillar when the goal should contribute to a broader policy area.',
+            'Keep the code stable because objectives, reports, and readiness checks may use it as a framework reference.',
+        ],
+        'note' => 'A goal should describe a high-level outcome or commitment. Specific measurable results belong in objectives and indicators.',
     ],
     'integration-admin/systems' => [
         'title' => 'Integration Systems Help',
@@ -1012,13 +1132,43 @@ $map = [
     ],
     'strategy-submissions/list' => [
         'title' => 'Funding Submissions Help',
-        'purpose' => 'Use this area to capture funding lodgements, move selected items into formal submission, and manage review and approval decisions.',
+        'purpose' => 'Use this workspace to track funding lodgements as they move from draft capture through formal submission, review, approval, and publication.',
         'points' => [
-            'Create a lodgement header first, then add one or more funding items.',
-            'Lodge the package once it is ready for internal handoff, then submit it for formal review.',
-            'Use the summary report to compare requested, approved, and published amounts by sector and program.',
+            'Create a lodgement header first so the request has an owner, scope, title, and classification.',
+            'Add one or more funding items to describe the actual funding demand before lodging the package.',
+            'Use the status views to separate draft lodgements from items awaiting review, approval, or publication.',
         ],
-        'note' => 'This module separates funding demand from the resource envelope so review decisions stay auditable.',
+        'note' => 'A lodgement captures funding demand and supporting detail. It does not affect ceilings until approved amounts are published.',
+    ],
+    'strategy-submissions/lodgements' => [
+        'title' => 'Funding Lodgements Help',
+        'purpose' => 'Use this screen to focus on funding packages that are still being prepared or have been lodged for handoff before formal review.',
+        'points' => [
+            'Use Draft lodgements while preparers are still editing the header, attachments, and funding items.',
+            'Move a complete package to Lodged when it is ready to leave preparation and become part of the submission workflow.',
+            'Open each lodgement to check whether the funding items, scope, priority, and supporting notes are complete.',
+        ],
+        'note' => 'The lodgement stage is about capturing and packaging funding demand. Reviewers and approvers make funding decisions later in the workflow.',
+    ],
+    'strategy-submissions/reviews' => [
+        'title' => 'Funding Reviews Help',
+        'purpose' => 'Use this screen to focus on funding submissions that require reviewer assessment before approval.',
+        'points' => [
+            'Review each funding item and record recommended approved amounts, reductions, or rejection decisions.',
+            'Use assessment notes to explain trade-offs, missing evidence, or conditions attached to the recommendation.',
+            'Move the package forward only when item-level review and overall assessment are complete.',
+        ],
+        'note' => 'Review records recommendations and analysis. Final approval remains a separate approval step.',
+    ],
+    'strategy-submissions/approvals' => [
+        'title' => 'Funding Approvals Help',
+        'purpose' => 'Use this screen to focus on reviewed funding submissions that need final approval, rejection, funding, or publication action.',
+        'points' => [
+            'Confirm that reviewer recommendations and approved amounts are complete before making the final decision.',
+            'Approve or reject the submission according to the current delegation and workflow rules.',
+            'Publish approved amounts to sector ceilings only when they are ready to affect fiscal controls.',
+        ],
+        'note' => 'Approval decisions are auditable workflow actions. Publishing changes the fiscal control layer; it is not the same as editing the original lodgement.',
     ],
     'strategy-submissions/report' => [
         'title' => 'Funding Submission Summary Help',
@@ -1031,18 +1181,18 @@ $map = [
         'note' => 'Published totals only reflect lines that have been pushed into sector ceilings from the funding submission workflow.',
     ],
     'strategy-submissions/form' => [
-        'title' => 'Funding Submission Header Help',
-        'purpose' => 'Create the lodgement header that will hold one package of funding items for the active context.',
+        'title' => 'Funding Lodgement Header Help',
+        'purpose' => 'Use this form to create or edit the lodgement header that holds one package of funding items for the active context.',
         'points' => [
             'Use a clear title and the system DataScope so preparers, reviewers, and approvers understand ownership.',
-            'Choose the submission type carefully because it helps classify the nature of the request.',
-            'Add detailed funding items after saving the header, then lodge it before formal submission.',
+            'Choose the submission type, priority, and notes carefully because they classify why the funding is being requested.',
+            'Save the header first, then add funding items, attachments, and supporting narrative before lodging.',
         ],
-        'note' => 'The header starts as a lodgement container. Requested and approved amounts roll up from the funding items.',
+        'note' => 'The header is the container. Requested and approved amounts come from the funding items attached to it.',
     ],
     'strategy-submissions/view' => [
-        'title' => 'Funding Submission Review Help',
-        'purpose' => 'Move the request from lodgement into formal submission, complete review, then send it for final approval and publication when ready.',
+        'title' => 'Funding Lodgement Workflow Help',
+        'purpose' => 'Use this screen to manage one funding package from lodgement through submission, review, approval, and publication.',
         'points' => [
             'Use Draft while still editing the lodgement header and funding items, then use Lodged as the handoff state before formal review.',
             'Use funding item review and submission assessment for reviewer comments before the submission moves to Reviewed - Awaiting Approval.',
@@ -1051,14 +1201,14 @@ $map = [
         'note' => 'Publishing to sector ceilings updates the fiscal control layer but does not yet create plan rows.',
     ],
     'strategy-submissions/line-form' => [
-        'title' => 'Funding Item Help',
-        'purpose' => 'Each funding item captures one funding request with its strategic, programmatic, and fiscal classification.',
+        'title' => 'Funding Lodgement Item Help',
+        'purpose' => 'Use this form to add or edit one funding item inside the lodgement package.',
         'points' => [
-            'Use sector and program classification consistently so reporting aggregates correctly.',
-            'Enter only the requested amounts on this screen. Approved amounts are set in the review step.',
-            'Use the narrative and expected result fields to help reviewers assess value and readiness.',
+            'Classify the item by sector, program, project, funding source, and other dimensions so reporting and review totals aggregate correctly.',
+            'Enter the requested amounts and supporting narrative here. Approved amounts are set during review.',
+            'Use expected results, justification, and attachments to help reviewers understand the value and readiness of the request.',
         ],
-        'note' => 'This first version focuses on demand capture and approval, not automatic plan creation.',
+        'note' => 'Funding items capture demand. They do not create plan rows or affect ceilings until the package is approved and published.',
     ],
     'strategy-submissions/review-line' => [
         'title' => 'Funding Item Review Help',
@@ -1089,6 +1239,16 @@ $map = [
             'Use it together with performance reporting to compare planned resources and intended results.',
         ],
         'note' => 'Program-level reporting depends on clean program records and valid activity budget lines.',
+    ],
+    'strategy-reports/segment-parent-child' => [
+        'title' => 'Segment Parent-Child Check Help',
+        'purpose' => 'Use this screen to verify that one segment is correctly linked to its parent segment for the active fiscal year.',
+        'points' => [
+            'Select the parent segment and child segment you want to test, such as Program to SubProgram.',
+            'Review errors for missing parent codes, missing ParentSegmentValueID values, duplicate keys, or child rows that resolve to more than one parent.',
+            'Use Resolve Parent Links after loading or editing segment values so ParentSegmentDataObjectCode and ParentSegmentValueID are refreshed from the current parent-child codes.',
+        ],
+        'note' => 'SegmentCode may repeat across DataObjectCode values, so parent checks rely on FiscalYearID, SegmentNo, SegmentCode, and the correct parent DataObjectCode scope.',
     ],
     'strategy-reports/mtff' => [
         'title' => 'MTFF Help',

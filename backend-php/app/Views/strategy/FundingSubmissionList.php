@@ -40,81 +40,35 @@ if (!function_exists('funding_submission_status_badge_class')) {
         };
     }
 }
+
+$screenHeader = [
+    'title' => (string) ($pageTitle ?? 'Funding Submissions'),
+    'icon' => 'bi-inbox',
+];
 ?>
-<div class="container-fluid py-3">
-  <style>
-    .container-fluid.py-3 {
-      font-size: .95rem;
-    }
-    .funding-list-shell {
-      background: linear-gradient(180deg, #f7fafc 0%, #ffffff 100%);
-    }
-    .funding-list-hero {
-      background: linear-gradient(135deg, #f3f9ff 0%, #ffffff 100%);
-      border: 1px solid #dce8f3;
-      border-radius: 1.2rem;
-      padding: 1.25rem 1.35rem;
-      box-shadow: 0 .45rem 1.35rem rgba(43, 63, 87, 0.06);
-    }
-    .funding-list-eyebrow {
-      font-size: .72rem;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: #6c757d;
-      font-weight: 700;
-      margin-bottom: .45rem;
-    }
-    .funding-list-title {
-      font-size: 1.45rem;
-      line-height: 1.2;
-      letter-spacing: -.02em;
-    }
-    .funding-list-subtext {
-      font-size: .9rem;
-      max-width: 52rem;
-    }
-    .funding-list-panel {
-      background: #fff;
-      border: 1px solid #e4ebf2;
-      border-radius: 1rem;
-      overflow: hidden;
-      box-shadow: 0 .35rem 1rem rgba(43, 63, 87, 0.05);
-    }
-    .funding-list-table thead th {
-      font-size: .72rem;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      color: #6f7f90;
-    }
-    .funding-list-table td,
-    .funding-list-table th {
-      padding: .85rem 1rem;
-      font-size: .89rem;
-      vertical-align: top;
-    }
-  </style>
-  <div class="funding-list-shell rounded-4 p-1 mb-3">
-    <div class="funding-list-hero d-flex justify-content-between align-items-start gap-3 flex-wrap">
-      <div>
-        <div class="funding-list-eyebrow">Funding Submission Workspace</div>
-        <h1 class="funding-list-title mb-2"><?= h((string) ($pageTitle ?? 'Funding Submissions')) ?></h1>
-        <div class="text-muted funding-list-subtext">
-        <?= h((string) ($pageSubtitle ?? 'Funding lodgements and formal submissions across the workflow.')) ?>
-        For <?= h((string) ($contextLabels['YearLabel'] ?? '')) ?> / <?= h((string) ($contextLabels['VersionLabel'] ?? '')) ?>.
+<div class="container mt-4">
+  <div class="card shadow-sm">
+    <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
+    <div class="card-body">
+      <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
+        <div class="small text-muted">
+          <?= h((string) ($pageSubtitle ?? 'Funding lodgements and formal submissions across the workflow.')) ?>
+          For
+          <strong><?= h((string) ($contextLabels['YearLabel'] ?? '')) ?></strong>
+          /
+          <strong><?= h((string) ($contextLabels['VersionLabel'] ?? '')) ?></strong>.
         </div>
+        <a href="index.php?route=strategy-submissions/form" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-circle me-1"></i>New Lodgement
+        </a>
       </div>
-      <a href="index.php?route=strategy-submissions/form" class="btn btn-primary btn-sm">New Lodgement</a>
-    </div>
-  </div>
 
-  <?php if (!$workflowInstalled): ?>
-    <div class="alert alert-warning">Run <code>create_tblSbFundingSubmission.sql</code> to enable funding submissions.</div>
-  <?php endif; ?>
+      <?php if (!$workflowInstalled): ?>
+        <div class="alert alert-warning">Run <code>create_tblSbFundingSubmission.sql</code> to enable funding submissions.</div>
+      <?php endif; ?>
 
-  <div class="funding-list-panel">
-    <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 funding-list-table">
+        <table class="table table-sm table-striped table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>ID</th>
@@ -167,7 +121,9 @@ if (!function_exists('funding_submission_status_badge_class')) {
                   <td class="text-end"><?= h(number_format((float) ($row['TotalApprovedAmount'] ?? 0), 0)) ?></td>
                   <td><?= h((string) ($row['UpdatedDate'] ?? $row['CreatedDate'] ?? '')) ?></td>
                   <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary" href="index.php?route=strategy-submissions/view&id=<?= (int) ($row['StrategicFundingSubmissionID'] ?? 0) ?>">Open</a>
+                    <a class="btn btn-sm btn-outline-primary" href="index.php?route=strategy-submissions/view&id=<?= (int) ($row['StrategicFundingSubmissionID'] ?? 0) ?>">
+                      <i class="bi bi-folder2-open me-1"></i>Open
+                    </a>
                   </td>
                 </tr>
               <?php endforeach; ?>

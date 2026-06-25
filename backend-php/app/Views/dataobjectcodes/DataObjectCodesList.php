@@ -74,6 +74,9 @@ $printMode = ($_GET['print'] ?? '') === '1';
         <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docUploadModal">
           <i class="bi bi-upload me-1"></i>Upload
         </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docOrgSegmentSyncModal">
+          <i class="bi bi-diagram-3 me-1"></i>Load Org Structure
+        </button>
         <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#docRebuildHierarchyModal">
           <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
         </button>
@@ -219,6 +222,50 @@ $printMode = ($_GET['print'] ?? '') === '1';
 </div>
 
 <?php if (!$printMode): ?>
+<div class="modal fade" id="docOrgSegmentSyncModal" tabindex="-1" aria-labelledby="docOrgSegmentSyncModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="docOrgSegmentSyncModalLabel">Load Org Structure</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="index.php?route=dataobjectcodes/syncOrgFromSegments">
+        <div class="modal-body">
+          <input type="hidden" name="_csrf" value="<?= h($_csrf ?? csrf_token()) ?>">
+          <input type="hidden" name="apply" value="0">
+
+          <div class="alert alert-light border small">
+            Preview Data Object Codes from <code>tblSegmentValues</code> using <code>tblDataObjectTypes.SegmentNo</code>. Types with a blank SegmentNo are treated as the root level.
+          </div>
+
+          <div class="mb-3">
+            <label for="docOrgSegmentRootCode" class="form-label">Root Code</label>
+            <input type="text" class="form-control" id="docOrgSegmentRootCode" name="root_code" value="GOV" maxlength="50" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="docOrgSegmentRootName" class="form-label">Root Name</label>
+            <input type="text" class="form-control" id="docOrgSegmentRootName" name="root_name" value="Government" maxlength="255" required>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" value="1" id="docOrgSegmentIncludeInactive" name="include_inactive">
+            <label class="form-check-label" for="docOrgSegmentIncludeInactive">
+              Include inactive segment values
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __t('cancel') ?></button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-eye me-1"></i>Preview Load
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="docUploadModal" tabindex="-1" aria-labelledby="docUploadModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">

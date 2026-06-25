@@ -67,6 +67,7 @@ $inlineErrors = is_array($inlineErrors ?? null) ? $inlineErrors : [];
                     $decisionState = (string) ($row['DecisionState'] ?? '');
                     $selectedDecision = $decisionState !== '' ? $decisionState : ($rawSelectedSegmentNo > 0 ? 'MAPPED' : '');
                     $selectedSegmentNo = $selectedDecision === 'MAPPED' ? $rawSelectedSegmentNo : 0;
+                    $segmentValueCount = (int) ($row['SegmentValueCount'] ?? 0);
                     $rowErrors = is_array($inlineErrors[$code] ?? null) ? $inlineErrors[$code] : [];
                   ?>
                   <tr>
@@ -97,6 +98,17 @@ $inlineErrors = is_array($inlineErrors ?? null) ? $inlineErrors : [];
                       </select>
                       <?php if (isset($rowErrors['SegmentNo'])): ?>
                         <div class="invalid-feedback d-block"><?= h((string) $rowErrors['SegmentNo']) ?></div>
+                      <?php endif; ?>
+                      <?php if ($selectedDecision === 'MAPPED' && $selectedSegmentNo > 0): ?>
+                        <?php if ($segmentValueCount > 0): ?>
+                          <div class="mt-2">
+                            <span class="badge text-bg-success"><?= $segmentValueCount ?> segment value<?= $segmentValueCount === 1 ? '' : 's' ?> loaded</span>
+                          </div>
+                        <?php else: ?>
+                          <div class="mt-2">
+                            <span class="badge text-bg-danger">No segment values loaded</span>
+                          </div>
+                        <?php endif; ?>
                       <?php endif; ?>
                       <div class="form-text">Pick a segment only when the decision is `Mapped`.</div>
                     </td>

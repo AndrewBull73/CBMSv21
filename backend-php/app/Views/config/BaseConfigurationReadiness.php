@@ -14,7 +14,14 @@ $yearLabel = trim((string) ($contextLabels['YearLabel'] ?? ''));
 $versionLabel = trim((string) ($contextLabels['VersionLabel'] ?? ''));
 
 $grouped = [];
+$checkNumbersByTitle = [];
+$checkNumber = 0;
 foreach ($checks as $check) {
+    $check['_display_number'] = ++$checkNumber;
+    $checkTitle = (string) ($check['title'] ?? '');
+    if ($checkTitle !== '' && !array_key_exists($checkTitle, $checkNumbersByTitle)) {
+        $checkNumbersByTitle[$checkTitle] = $checkNumber;
+    }
     $category = (string) ($check['category'] ?? 'Other');
     $grouped[$category][] = $check;
 }
@@ -123,6 +130,10 @@ $screenHeader = [
           <div class="small">
             <?php foreach ($blockers as $index => $blocker): ?>
               <?php if ($index > 0): ?><span class="mx-1">|</span><?php endif; ?>
+              <?php $blockerCheckNumber = $checkNumbersByTitle[(string) ($blocker['title'] ?? '')] ?? null; ?>
+              <?php if ($blockerCheckNumber !== null): ?>
+                <span class="badge text-bg-light border me-1">No. <?= (int) $blockerCheckNumber ?></span>
+              <?php endif; ?>
               <strong><?= h((string) ($blocker['title'] ?? '')) ?></strong>
               <?php if ((int) ($blocker['issue_count'] ?? 0) > 0): ?>
                 (<?= (int) ($blocker['issue_count'] ?? 0) ?>)
@@ -142,6 +153,7 @@ $screenHeader = [
               <table class="table table-sm table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
+                    <th class="text-end" style="width: 4rem;">No.</th>
                     <th>Check</th>
                     <th>Status</th>
                     <th class="text-end">Scope</th>
@@ -153,6 +165,7 @@ $screenHeader = [
                 <tbody>
                   <?php foreach ($rows as $row): ?>
                     <tr>
+                      <td class="text-end text-muted"><?= (int) ($row['_display_number'] ?? 0) ?></td>
                       <td class="fw-semibold"><?= h((string) ($row['title'] ?? '')) ?></td>
                       <td>
                         <span class="badge <?= $statusBadge((string) ($row['status'] ?? 'info')) ?>">

@@ -135,7 +135,11 @@ $screenHeader = [
               </select>
               <div class="invalid-feedback">Select Parent Segment when Parent Segment Code is entered.</div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2">
+              <label class="form-label">Parent Org Unit</label>
+              <input id="segmentValueParentDataObjectCode" class="form-control" type="text" name="ParentSegmentDataObjectCode" value="<?= h((string) ($record['ParentSegmentDataObjectCode'] ?? '')) ?>">
+            </div>
+            <div class="col-md-2">
               <label class="form-label">Parent Segment Code</label>
               <input id="segmentValueParentSegmentCode" class="form-control" type="text" name="ParentSegmentCode" value="<?= h((string) ($record['ParentSegmentCode'] ?? '')) ?>">
               <div class="invalid-feedback">Enter Parent Segment Code when Parent Segment is selected.</div>
@@ -181,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sortOrder: byId('segmentValueSortOrder'),
     parentValueId: byId('segmentValueParentValueID'),
     parentSegmentNo: byId('segmentValueParentSegmentNo'),
+    parentDataObjectCode: byId('segmentValueParentDataObjectCode'),
     parentSegmentCode: byId('segmentValueParentSegmentCode'),
   };
 

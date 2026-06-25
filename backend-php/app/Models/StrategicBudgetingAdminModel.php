@@ -4564,6 +4564,17 @@ final class StrategicBudgetingAdminModel
 
     public function getStrategicSegmentDecisions(int $fiscalYearId): array
     {
+        $segmentValueSelect = '0 AS SegmentValueCount';
+        $segmentValueJoin = '';
+        if ($this->tableExists('dbo.tblSegmentValues')) {
+            $segmentValueSelect = 'COUNT(DISTINCT sv.SegmentCode) AS SegmentValueCount';
+            $segmentValueJoin = '
+            LEFT JOIN dbo.tblSegmentValues sv
+              ON sv.FiscalYearID = c.FiscalYearID
+             AND sv.SegmentNo = c.SegmentNo
+             AND sv.ActiveFlag = 1';
+        }
+
         $stmt = $this->conn->prepare("
             SELECT
                 c.StrategicDimensionCode,
@@ -4572,11 +4583,21 @@ final class StrategicBudgetingAdminModel
                 s.CBMSDimension,
                 c.Notes,
                 c.ActiveFlag,
-                c.StrategicSegmentConfigID
+                c.StrategicSegmentConfigID,
+                {$segmentValueSelect}
             FROM dbo.tblSbSegmentConfig c
             LEFT JOIN dbo.tblSegments s
               ON TRY_CONVERT(INT, s.SegmentCode) = c.SegmentNo
+            {$segmentValueJoin}
             WHERE c.FiscalYearID = :fy
+            GROUP BY
+                c.StrategicDimensionCode,
+                c.SegmentNo,
+                s.SegmentName,
+                s.CBMSDimension,
+                c.Notes,
+                c.ActiveFlag,
+                c.StrategicSegmentConfigID
             ORDER BY c.StrategicDimensionCode ASC, c.StrategicSegmentConfigID DESC
         ");
         $stmt->execute([':fy' => $fiscalYearId]);

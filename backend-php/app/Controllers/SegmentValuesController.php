@@ -19,6 +19,7 @@ final class SegmentValuesController extends BaseController
         'upload' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'save' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'archive' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'resolveParentLinks' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'uploadProcess' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'downloadTemplate' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'exportExcel' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
@@ -127,6 +128,7 @@ final class SegmentValuesController extends BaseController
             'ActiveFlag' => isset($_POST['ActiveFlag']) ? 1 : 0,
             'UpdatedBy' => (int)SessionHelper::get('auth.user_id', 0),
             'ParentSegmentNo' => (int)($_POST['ParentSegmentNo'] ?? 0),
+            'ParentSegmentDataObjectCode' => trim((string)($_POST['ParentSegmentDataObjectCode'] ?? '')),
             'ParentSegmentCode' => trim((string)($_POST['ParentSegmentCode'] ?? '')),
         ];
 
@@ -207,6 +209,62 @@ final class SegmentValuesController extends BaseController
         header('Location: ' . $returnTo);
     }
 
+    public function resolveParentLinks(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=segment-values/list');
+            return;
+        }
+
+        $fy = (int) ($_POST['FiscalYearID'] ?? 0);
+        if ($fy <= 0) {
+            $fy = (int) SessionHelper::get('FiscalYearID', 0);
+        }
+        $segmentNo = (int) ($_POST['SegmentNo'] ?? 0);
+        $model = new SegmentValuesAdminModel($this->db);
+
+        try {
+            $result = $model->resolveParentSegmentValueIds($fy, $segmentNo > 0 ? $segmentNo : null);
+            $parentDataObjectRows = (int) ($result['ParentDataObjectRowsUpdated'] ?? 0);
+            $parentValueRows = (int) ($result['ParentValueRowsUpdated'] ?? 0);
+            $missingRows = (int) ($result['MissingParentValueIDRows'] ?? 0);
+            $scope = $segmentNo > 0 ? 'segment ' . $segmentNo : 'all segments';
+            $message = "Parent links resolved for {$scope}. Parent data-object rows updated: {$parentDataObjectRows}. Parent value IDs updated: {$parentValueRows}.";
+            if ($missingRows > 0) {
+                $message .= " Rows still missing ParentSegmentValueID: {$missingRows}.";
+                $this->flashError($message);
+            } else {
+                $this->flashSuccess($message);
+            }
+            $this->auditEvent('RESOLVE_PARENT_LINKS', 'SegmentValue', (string) $fy, [
+                'FiscalYearID' => $fy,
+                'SegmentNo' => $segmentNo,
+                'ParentDataObjectRowsUpdated' => $parentDataObjectRows,
+                'ParentValueRowsUpdated' => $parentValueRows,
+                'MissingParentValueIDRows' => $missingRows,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logHandledException('SegmentValuesController::resolveParentLinks failed', $e, [
+                'fiscalYearId' => $fy,
+                'segmentNo' => $segmentNo,
+            ]);
+            $this->flashError('Parent link resolution failed: ' . $e->getMessage());
+        }
+
+        $returnTo = trim((string) ($_POST['return_to'] ?? ''));
+        if ($returnTo === '') {
+            $returnTo = 'index.php?route=segment-values/list';
+        }
+        header('Location: ' . $returnTo);
+    }
+
     public function uploadProcess(): void
     {
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
@@ -234,6 +292,7 @@ final class SegmentValuesController extends BaseController
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $affectedFiscalYears = [];
 
         try {
             $spreadsheet = IOFactory::load((string)$_FILES['uploadFile']['tmp_name']);
@@ -252,6 +311,7 @@ final class SegmentValuesController extends BaseController
                 'SegmentExternalID',
                 'ParentSegmentValueID',
                 'ParentSegmentNo',
+                'ParentSegmentDataObjectCode',
                 'ParentSegmentCode',
                 'SortOrder',
                 'ActiveFlag',
@@ -265,7 +325,8 @@ final class SegmentValuesController extends BaseController
                 }
             }
 
-            foreach ($expected as $column) {
+            $required = array_diff($expected, ['ParentSegmentDataObjectCode']);
+            foreach ($required as $column) {
                 if (!array_key_exists(strtoupper($column), $headerMap)) {
                     throw new \RuntimeException('Missing required column: ' . $column . '.');
                 }
@@ -304,6 +365,7 @@ final class SegmentValuesController extends BaseController
                         'SegmentExternalID' => $assoc['SegmentExternalID'],
                         'ParentSegmentValueID' => (int)$assoc['ParentSegmentValueID'],
                         'ParentSegmentNo' => (int)$assoc['ParentSegmentNo'],
+                        'ParentSegmentDataObjectCode' => $assoc['ParentSegmentDataObjectCode'],
                         'ParentSegmentCode' => $assoc['ParentSegmentCode'],
                         'SortOrder' => $assoc['SortOrder'] === '' ? 0 : (int)$assoc['SortOrder'],
                         'ActiveFlag' => $assoc['ActiveFlag'] === '' ? 1 : (int)$assoc['ActiveFlag'],
@@ -314,17 +376,31 @@ final class SegmentValuesController extends BaseController
                     } else {
                         $updated++;
                     }
+                    $affectedFiscalYears[$fiscalYearId] = true;
                 } catch (\Throwable $e) {
                     $errors[] = 'Row ' . ($r + 1) . ': ' . $e->getMessage();
                 }
             }
 
-            $message = "Segment values upload completed. Created: {$created}, updated: {$updated}, skipped blank rows: {$skipped}.";
+            $resolvedRows = 0;
+            $remainingMissing = 0;
+            foreach (array_keys($affectedFiscalYears) as $affectedFiscalYearId) {
+                $resolution = $model->resolveParentSegmentValueIds((int) $affectedFiscalYearId);
+                $resolvedRows += (int) ($resolution['ParentValueRowsUpdated'] ?? 0);
+                $remainingMissing += (int) ($resolution['MissingParentValueIDRows'] ?? 0);
+            }
+
+            $message = "Segment values upload completed. Created: {$created}, updated: {$updated}, skipped blank rows: {$skipped}. Parent value IDs resolved: {$resolvedRows}.";
+            if ($remainingMissing > 0) {
+                $message .= " Rows still missing ParentSegmentValueID: {$remainingMissing}.";
+            }
             $this->auditEvent('UPLOAD', 'SegmentValue', 'batch', [
                 'Created' => $created,
                 'Updated' => $updated,
                 'Skipped' => $skipped,
                 'ErrorCount' => count($errors),
+                'ParentValueRowsResolved' => $resolvedRows,
+                'MissingParentValueIDRows' => $remainingMissing,
                 'UploadFiscalYearID' => $overrideFiscalYearId,
                 'FileName' => (string) ($_FILES['uploadFile']['name'] ?? ''),
             ]);

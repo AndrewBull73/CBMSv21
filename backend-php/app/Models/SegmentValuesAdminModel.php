@@ -115,6 +115,7 @@ final class SegmentValuesAdminModel
                        sv.ParentSegmentNo,
                        parentSeg.SegmentName AS ParentSegmentLabel,
                        sv.ParentSegmentCode,
+                       " . ($this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode') ? 'sv.ParentSegmentDataObjectCode' : 'CONVERT(nvarchar(50), NULL) AS ParentSegmentDataObjectCode') . ",
                        sv.SortOrder,
                        sv.ActiveFlag,
                        sv.UpdatedBy,
@@ -162,7 +163,8 @@ final class SegmentValuesAdminModel
                     UpdatedBy,
                     UpdatedDate,
                     ParentSegmentNo,
-                    ParentSegmentCode
+                    ParentSegmentCode,
+                    " . ($this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode') ? 'ParentSegmentDataObjectCode' : 'CONVERT(nvarchar(50), NULL) AS ParentSegmentDataObjectCode') . "
              FROM dbo.tblSegmentValues
              WHERE SegmentValueID = :id"
         );
@@ -171,7 +173,7 @@ final class SegmentValuesAdminModel
         return $row ?: null;
     }
 
-    public function save(array $data): void
+    public function save(array $data, bool $resolveParentLinks = true): void
     {
         $id = (int)($data['SegmentValueID'] ?? 0);
         $fiscalYearId = (int)($data['FiscalYearID'] ?? 0);
@@ -183,6 +185,8 @@ final class SegmentValuesAdminModel
         $parentSegmentValueId = (int)($data['ParentSegmentValueID'] ?? 0);
         $parentSegmentNo = (int)($data['ParentSegmentNo'] ?? 0);
         $parentSegmentCode = trim((string)($data['ParentSegmentCode'] ?? ''));
+        $parentSegmentDataObjectCode = trim((string)($data['ParentSegmentDataObjectCode'] ?? ''));
+        $hasParentDataObjectCode = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode');
 
         if ($fiscalYearId <= 0) {
             throw new \RuntimeException('Fiscal year is required.');
@@ -243,6 +247,9 @@ final class SegmentValuesAdminModel
             ':parentSegmentNo' => $this->nullIfZero($parentSegmentNo),
             ':parentSegmentCode' => $this->nullIfEmpty($parentSegmentCode),
         ];
+        if ($hasParentDataObjectCode) {
+            $params[':parentSegmentDataObjectCode'] = $this->nullIfEmpty($parentSegmentDataObjectCode);
+        }
 
         if ($id > 0) {
             $params[':id'] = $id;
@@ -259,7 +266,8 @@ final class SegmentValuesAdminModel
                         UpdatedBy = :updatedBy,
                         UpdatedDate = GETDATE(),
                         ParentSegmentNo = :parentSegmentNo,
-                        ParentSegmentCode = :parentSegmentCode
+                        ParentSegmentCode = :parentSegmentCode" . ($hasParentDataObjectCode ? ",
+                        ParentSegmentDataObjectCode = :parentSegmentDataObjectCode" : "") . "
                     WHERE SegmentValueID = :id";
         } else {
             $sql = "INSERT INTO dbo.tblSegmentValues (
@@ -275,7 +283,8 @@ final class SegmentValuesAdminModel
                         UpdatedBy,
                         UpdatedDate,
                         ParentSegmentNo,
-                        ParentSegmentCode
+                        ParentSegmentCode" . ($hasParentDataObjectCode ? ",
+                        ParentSegmentDataObjectCode" : "") . "
                     ) VALUES (
                         :fy,
                         :dataObjectCode,
@@ -289,12 +298,16 @@ final class SegmentValuesAdminModel
                         :updatedBy,
                         GETDATE(),
                         :parentSegmentNo,
-                        :parentSegmentCode
+                        :parentSegmentCode" . ($hasParentDataObjectCode ? ",
+                        :parentSegmentDataObjectCode" : "") . "
                     )";
         }
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
+        if ($resolveParentLinks) {
+            $this->resolveParentSegmentValueIds($fiscalYearId);
+        }
     }
 
     public function archive(int $id, ?int $updatedBy = null): void
@@ -312,6 +325,30 @@ final class SegmentValuesAdminModel
         ]);
     }
 
+    public function deleteById(int $id): array
+    {
+        if ($id <= 0) {
+            throw new \RuntimeException('Segment value id is required.');
+        }
+
+        $record = $this->getById($id);
+        if (!$record) {
+            throw new \RuntimeException('Segment value was not found.');
+        }
+
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM dbo.tblSegmentValues
+             WHERE SegmentValueID = :id"
+        );
+        $stmt->execute([':id' => $id]);
+
+        if ($stmt->rowCount() !== 1) {
+            throw new \RuntimeException('Segment value delete did not remove exactly one row.');
+        }
+
+        return $record;
+    }
+
     public function saveImportRow(array $data): bool
     {
         $existingId = $this->findExistingId(
@@ -327,8 +364,35 @@ final class SegmentValuesAdminModel
         $payload['ActiveFlag'] = (int)($data['ActiveFlag'] ?? 1);
         $payload['UpdatedBy'] = $data['UpdatedBy'] ?? null;
 
-        $this->save($payload);
+        $this->save($payload, false);
         return $existingId === null;
+    }
+
+    public function resolveParentSegmentValueIds(int $fiscalYearId, ?int $segmentNo = null): array
+    {
+        if ($fiscalYearId <= 0) {
+            throw new \RuntimeException('Fiscal year is required before resolving parent links.');
+        }
+
+        if ($this->procedureExists('dbo.uspResolveSegmentValueParentLinks')) {
+            $stmt = $this->pdo->prepare(
+                "EXEC dbo.uspResolveSegmentValueParentLinks
+                    @FiscalYearID = :fy,
+                    @SegmentNo = :segmentNo"
+            );
+            $stmt->execute([
+                ':fy' => $fiscalYearId,
+                ':segmentNo' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+            ]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            return $row ?: [
+                'ParentDataObjectRowsUpdated' => 0,
+                'ParentValueRowsUpdated' => 0,
+                'MissingParentValueIDRows' => 0,
+            ];
+        }
+
+        return $this->resolveParentSegmentValueIdsInline($fiscalYearId, $segmentNo);
     }
 
     public function buildTemplateWorkbook(): \PhpOffice\PhpSpreadsheet\Spreadsheet
@@ -346,13 +410,14 @@ final class SegmentValuesAdminModel
             'SegmentExternalID',
             'ParentSegmentValueID',
             'ParentSegmentNo',
+            'ParentSegmentDataObjectCode',
             'ParentSegmentCode',
             'SortOrder',
             'ActiveFlag',
         ];
         $sheet->fromArray($headers, null, 'A1');
         $sheet->fromArray([
-            ['2026', '1001', '9', '0001', 'Example Project', 'EXT-1', '', '', '', '10', '1'],
+            ['2026', '1001', '9', '0001', 'Example Project', 'EXT-1', '', '', '', '', '10', '1'],
         ], null, 'A2');
         for ($col = 1; $col <= count($headers); $col++) {
             $sheet->getColumnDimensionByColumn($col)->setAutoSize(true);
@@ -370,6 +435,7 @@ final class SegmentValuesAdminModel
             ['SegmentExternalID', 'No', 'External reference if used.'],
             ['ParentSegmentValueID', 'No', 'Optional direct parent value id.'],
             ['ParentSegmentNo', 'No', 'Optional parent segment number.'],
+            ['ParentSegmentDataObjectCode', 'No', 'Optional parent data object code. The application resolver can populate it.'],
             ['ParentSegmentCode', 'No', 'Optional parent segment code.'],
             ['SortOrder', 'No', 'Defaults to 0.'],
             ['ActiveFlag', 'No', 'Use 1 or 0. Defaults to 1.'],
@@ -400,6 +466,7 @@ final class SegmentValuesAdminModel
             'ParentSegmentValueID',
             'ParentSegmentNo',
             'ParentSegmentLabel',
+            'ParentSegmentDataObjectCode',
             'ParentSegmentCode',
             'SortOrder',
             'ActiveFlag',
@@ -426,6 +493,7 @@ final class SegmentValuesAdminModel
                 $row['ParentSegmentValueID'] ?? '',
                 $row['ParentSegmentNo'] ?? '',
                 $row['ParentSegmentLabel'] ?? '',
+                $row['ParentSegmentDataObjectCode'] ?? '',
                 $row['ParentSegmentCode'] ?? '',
                 $row['SortOrder'] ?? '',
                 $row['ActiveFlag'] ?? '',
@@ -538,6 +606,243 @@ final class SegmentValuesAdminModel
             ':segmentNo' => $segmentNo,
             ':segmentCode' => $segmentCode,
         ]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function resolveParentSegmentValueIdsInline(int $fiscalYearId, ?int $segmentNo = null): array
+    {
+        if (!$this->columnExists('dbo.tblSegmentValues', 'ParentSegmentNo')
+            || !$this->columnExists('dbo.tblSegmentValues', 'ParentSegmentCode')
+            || !$this->columnExists('dbo.tblSegmentValues', 'ParentSegmentValueID')
+        ) {
+            return [
+                'FiscalYearID' => $fiscalYearId,
+                'SegmentNo' => $segmentNo,
+                'ParentDataObjectRowsUpdated' => 0,
+                'ParentValueRowsUpdated' => 0,
+                'MissingParentValueIDRows' => 0,
+            ];
+        }
+
+        $parentDataObjectRows = 0;
+        $hasParentDataObjectCode = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode');
+
+        if ($hasParentDataObjectCode && $this->tableExists('dbo.tblDataObjectCodes')) {
+            $stmt = $this->pdo->prepare("
+                WITH ChildRows AS (
+                    SELECT
+                        child.SegmentValueID,
+                        child.FiscalYearID,
+                        child.DataObjectCode,
+                        child.ParentSegmentNo,
+                        child.ParentSegmentCode
+                    FROM dbo.tblSegmentValues child
+                    WHERE child.FiscalYearID = :fy
+                      AND (:segmentNo IS NULL OR child.SegmentNo = :segmentNoFilter)
+                      AND child.ParentSegmentNo IS NOT NULL
+                      AND NULLIF(LTRIM(RTRIM(ISNULL(child.ParentSegmentCode, N''))), N'') IS NOT NULL
+                ),
+                DataObjectScope AS (
+                    SELECT
+                        child.SegmentValueID,
+                        ScopeDataObjectCode = CONVERT(nvarchar(50), child.DataObjectCode),
+                        ScopeDepth = 0
+                    FROM ChildRows child
+
+                    UNION ALL
+
+                    SELECT
+                        scope.SegmentValueID,
+                        ScopeDataObjectCode = CONVERT(nvarchar(50), doc.DataObjectCodeParent),
+                        ScopeDepth = scope.ScopeDepth + 1
+                    FROM DataObjectScope scope
+                    INNER JOIN dbo.tblDataObjectCodes doc
+                        ON doc.FiscalYearID = :fyScope
+                       AND doc.DataObjectCode = scope.ScopeDataObjectCode
+                    WHERE NULLIF(LTRIM(RTRIM(ISNULL(doc.DataObjectCodeParent, N''))), N'') IS NOT NULL
+                      AND doc.DataObjectCodeParent <> scope.ScopeDataObjectCode
+                      AND scope.ScopeDepth < 20
+                ),
+                ParentCandidates AS (
+                    SELECT
+                        child.SegmentValueID,
+                        ParentSegmentDataObjectCode = parent.DataObjectCode,
+                        rn = ROW_NUMBER() OVER (
+                            PARTITION BY child.SegmentValueID
+                            ORDER BY
+                                CASE WHEN scope.ScopeDataObjectCode IS NOT NULL THEN 0 ELSE 1 END,
+                                ISNULL(scope.ScopeDepth, 999),
+                                CASE WHEN parent.DataObjectCode = child.DataObjectCode THEN 0 ELSE 1 END,
+                                parent.SegmentValueID
+                        )
+                    FROM ChildRows child
+                    INNER JOIN dbo.tblSegmentValues parent
+                        ON parent.FiscalYearID = child.FiscalYearID
+                       AND parent.SegmentNo = child.ParentSegmentNo
+                       AND parent.SegmentCode = child.ParentSegmentCode
+                       AND parent.ActiveFlag = 1
+                    LEFT JOIN DataObjectScope scope
+                        ON scope.SegmentValueID = child.SegmentValueID
+                       AND scope.ScopeDataObjectCode = parent.DataObjectCode
+                )
+                UPDATE child
+                SET child.ParentSegmentDataObjectCode = candidate.ParentSegmentDataObjectCode
+                FROM dbo.tblSegmentValues child
+                INNER JOIN ParentCandidates candidate
+                    ON candidate.SegmentValueID = child.SegmentValueID
+                   AND candidate.rn = 1
+                WHERE ISNULL(child.ParentSegmentDataObjectCode, N'') <> ISNULL(candidate.ParentSegmentDataObjectCode, N'')
+                OPTION (MAXRECURSION 100)
+            ");
+            $stmt->execute([
+                ':fy' => $fiscalYearId,
+                ':fyScope' => $fiscalYearId,
+                ':segmentNo' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+                ':segmentNoFilter' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+            ]);
+            $parentDataObjectRows = $stmt->rowCount();
+        }
+
+        $dataObjectPredicate = $hasParentDataObjectCode
+            ? "AND (
+                    NULLIF(LTRIM(RTRIM(ISNULL(child.ParentSegmentDataObjectCode, N''))), N'') IS NULL
+                    OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+               )"
+            : '';
+        $dataObjectOrder = $hasParentDataObjectCode
+            ? "CASE WHEN parent.DataObjectCode = child.ParentSegmentDataObjectCode THEN 0 ELSE 1 END,"
+            : '';
+
+        $stmt = $this->pdo->prepare("
+            WITH ParentMatches AS (
+                SELECT
+                    child.SegmentValueID AS ChildSegmentValueID,
+                    parent.SegmentValueID AS ParentSegmentValueID,
+                    rn = ROW_NUMBER() OVER (
+                        PARTITION BY child.SegmentValueID
+                        ORDER BY
+                            {$dataObjectOrder}
+                            parent.SegmentValueID
+                    ),
+                    match_count = COUNT(parent.SegmentValueID) OVER (PARTITION BY child.SegmentValueID)
+                FROM dbo.tblSegmentValues child
+                INNER JOIN dbo.tblSegmentValues parent
+                    ON parent.FiscalYearID = child.FiscalYearID
+                   AND parent.SegmentNo = child.ParentSegmentNo
+                   AND parent.SegmentCode = child.ParentSegmentCode
+                   AND parent.ActiveFlag = 1
+                   {$dataObjectPredicate}
+                WHERE child.FiscalYearID = :fy
+                  AND (:segmentNo IS NULL OR child.SegmentNo = :segmentNoFilter)
+                  AND child.ParentSegmentNo IS NOT NULL
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(child.ParentSegmentCode, N''))), N'') IS NOT NULL
+            )
+            UPDATE child
+            SET child.ParentSegmentValueID = matches.ParentSegmentValueID
+            FROM dbo.tblSegmentValues child
+            INNER JOIN ParentMatches matches
+                ON matches.ChildSegmentValueID = child.SegmentValueID
+               AND matches.rn = 1
+               AND matches.match_count = 1
+            WHERE ISNULL(child.ParentSegmentValueID, 0) <> matches.ParentSegmentValueID
+        ");
+        $stmt->execute([
+            ':fy' => $fiscalYearId,
+            ':segmentNo' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+            ':segmentNoFilter' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+        ]);
+        $parentValueRows = $stmt->rowCount();
+
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM dbo.tblSegmentValues child
+            WHERE child.FiscalYearID = :fy
+              AND (:segmentNo IS NULL OR child.SegmentNo = :segmentNoFilter)
+              AND child.ParentSegmentNo IS NOT NULL
+              AND NULLIF(LTRIM(RTRIM(ISNULL(child.ParentSegmentCode, N''))), N'') IS NOT NULL
+              AND child.ParentSegmentValueID IS NULL
+        ");
+        $stmt->execute([
+            ':fy' => $fiscalYearId,
+            ':segmentNo' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+            ':segmentNoFilter' => $segmentNo !== null && $segmentNo > 0 ? $segmentNo : null,
+        ]);
+
+        return [
+            'FiscalYearID' => $fiscalYearId,
+            'SegmentNo' => $segmentNo,
+            'ParentDataObjectRowsUpdated' => $parentDataObjectRows,
+            'ParentValueRowsUpdated' => $parentValueRows,
+            'MissingParentValueIDRows' => (int) ($stmt->fetchColumn() ?: 0),
+        ];
+    }
+
+    private function tableExists(string $qualifiedName): bool
+    {
+        $parts = explode('.', str_replace(['[', ']'], '', $qualifiedName));
+        $schema = count($parts) > 1 ? $parts[0] : 'dbo';
+        $table = count($parts) > 1 ? $parts[1] : $parts[0];
+
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM sys.tables t
+            INNER JOIN sys.schemas s
+                ON s.schema_id = t.schema_id
+            WHERE s.name = :schemaName
+              AND t.name = :tableName
+        ");
+        $stmt->execute([
+            ':schemaName' => $schema,
+            ':tableName' => $table,
+        ]);
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function columnExists(string $qualifiedName, string $columnName): bool
+    {
+        $parts = explode('.', str_replace(['[', ']'], '', $qualifiedName));
+        $schema = count($parts) > 1 ? $parts[0] : 'dbo';
+        $table = count($parts) > 1 ? $parts[1] : $parts[0];
+
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM sys.columns c
+            INNER JOIN sys.tables t
+                ON t.object_id = c.object_id
+            INNER JOIN sys.schemas s
+                ON s.schema_id = t.schema_id
+            WHERE s.name = :schemaName
+              AND t.name = :tableName
+              AND c.name = :columnName
+        ");
+        $stmt->execute([
+            ':schemaName' => $schema,
+            ':tableName' => $table,
+            ':columnName' => $columnName,
+        ]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function procedureExists(string $qualifiedName): bool
+    {
+        $parts = explode('.', str_replace(['[', ']'], '', $qualifiedName));
+        $schema = count($parts) > 1 ? $parts[0] : 'dbo';
+        $procedure = count($parts) > 1 ? $parts[1] : $parts[0];
+
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM sys.procedures p
+            INNER JOIN sys.schemas s
+                ON s.schema_id = p.schema_id
+            WHERE s.name = :schemaName
+              AND p.name = :procedureName
+        ");
+        $stmt->execute([
+            ':schemaName' => $schema,
+            ':procedureName' => $procedure,
+        ]);
+
         return (int) $stmt->fetchColumn() > 0;
     }
 

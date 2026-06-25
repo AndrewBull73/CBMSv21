@@ -236,6 +236,7 @@ return [
     'dataobjectcodes/uploadProcess' => 'DataObjectCodesController@uploadProcess',
     'dataobjectcodes/downloadTemplate' => 'DataObjectCodesController@downloadTemplate',
     'dataobjectcodes/rebuildHierarchy' => 'DataObjectCodesController@rebuildHierarchy',
+    'dataobjectcodes/syncOrgFromSegments' => 'DataObjectCodesController@syncOrgFromSegments',
     'dataobjectcodes/hierarchy' => 'DataObjectCodesController@hierarchy',
 
 
@@ -291,6 +292,7 @@ return [
     // Strategy / Strategic Budgeting
     'strategy/index' => 'StrategyController@index',
     'strategy'       => 'StrategyController@index',
+    'strategy/framework-guide' => 'StrategyController@frameworkGuide',
     'strategy-reports/summary' => 'StrategyController@summary',
     'strategy-reports/readiness' => 'StrategyController@readiness',
     'strategy-reports/submission-readiness' => 'StrategyController@submissionReadiness',
@@ -298,6 +300,10 @@ return [
     'strategy-reports/program-budget' => 'StrategyController@programBudget',
     'strategy-reports/project-budget' => 'StrategyController@projectBudget',
     'strategy-reports/program-structure' => 'StrategyController@programStructure',
+    'strategy-reports/segment-parent-child' => 'StrategyController@segmentParentChild',
+    'strategy-reports/segment-parent-child/issue-lookup' => 'StrategyController@segmentParentChildIssueLookup',
+    'strategy-reports/segment-parent-child/delete-issue-row' => 'StrategyController@deleteSegmentParentChildIssueRow',
+    'strategy-reports/segment-parent-child/resolve-parent-links' => 'StrategyController@resolveSegmentParentLinks',
     'strategy-reports/mtff' => 'StrategyController@mtff',
     'strategy-reports/performance' => 'StrategyController@performance',
     'strategy-fiscal/overview' => 'StrategyController@fiscalOverview',

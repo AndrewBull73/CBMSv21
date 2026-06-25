@@ -28,6 +28,15 @@ $exportUrl = 'index.php?' . http_build_query(array_merge(['route' => 'segment-va
         <div class="small text-muted mt-1">Maintain source segment values and parent links for the base configuration.</div>
       </div>
       <div class="d-inline-flex gap-2">
+        <form method="post" action="index.php?route=segment-values/resolveParentLinks">
+          <?= csrf_field() ?>
+          <input type="hidden" name="FiscalYearID" value="<?= h((string) ($filters['fy'] ?? '')) ?>">
+          <input type="hidden" name="SegmentNo" value="">
+          <input type="hidden" name="return_to" value="<?= h($returnTo) ?>">
+          <button type="submit" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-link-45deg me-1"></i>Resolve Parent Links
+          </button>
+        </form>
         <a href="index.php?route=segment-values/downloadTemplate" class="btn btn-sm btn-outline-primary"><i class="bi bi-download me-1"></i>Template</a>
         <a href="<?= h($exportUrl) ?>" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-excel me-1"></i>Export Excel</a>
         <a href="index.php?route=segment-values/upload" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload</a>
@@ -130,6 +139,7 @@ $exportUrl = 'index.php?' . http_build_query(array_merge(['route' => 'segment-va
                   <td>
                     <?php if (!empty($row['ParentSegmentValueID'])): ?><div>ID: <?= h((string) ($row['ParentSegmentValueID'] ?? '')) ?></div><?php endif; ?>
                     <?php if (!empty($row['ParentSegmentNo'])): ?><div class="small text-muted">Seg <?= h((string) ($row['ParentSegmentNo'] ?? '')) ?><?= !empty($row['ParentSegmentLabel']) ? ' - ' . h((string) ($row['ParentSegmentLabel'] ?? '')) : '' ?></div><?php endif; ?>
+                    <?php if (!empty($row['ParentSegmentDataObjectCode'])): ?><div class="small text-muted">Org: <?= h((string) ($row['ParentSegmentDataObjectCode'] ?? '')) ?></div><?php endif; ?>
                     <?php if (!empty($row['ParentSegmentCode'])): ?><div class="small text-muted">Code: <?= h((string) ($row['ParentSegmentCode'] ?? '')) ?></div><?php endif; ?>
                   </td>
                   <td>

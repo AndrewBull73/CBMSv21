@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\AuditModel;
 use App\Models\StrategicBudgetingAdminModel;
+use App\Models\StrategicBudgetingModel;
 use App\Shared\SessionHelper;
 
 final class StrategySetupController extends BaseController
@@ -532,7 +533,7 @@ final class StrategySetupController extends BaseController
 
         $this->render('strategy/ProjectList', [
             'title' => 'Project Register',
-            'contextLabels' => $fy > 0 && $ver > 0 ? $model->getContextLabels($fy, $ver) : ['YearLabel' => $fy > 0 ? 'FY ' . $fy : 'Not set', 'VersionLabel' => ''],
+            'contextLabels' => $this->getStrategyContextLabels($fy, $ver),
             'records' => $model->listSegmentBackedProjects($fy, $q, $scope),
             'q' => $q,
             'scope' => $scope,
@@ -630,7 +631,7 @@ final class StrategySetupController extends BaseController
 
         $this->render('strategy/ProjectUsage', [
             'title' => 'Project Usage',
-            'contextLabels' => $fy > 0 && $ver > 0 ? $model->getContextLabels($fy, $ver) : ['YearLabel' => 'Not set', 'VersionLabel' => ''],
+            'contextLabels' => $this->getStrategyContextLabels($fy, $ver),
             'record' => $record,
             'usageSummary' => $model->getProjectUsageSummary($id),
             'sourceMappings' => $model->listProjectSourceMappings($id),
@@ -1275,6 +1276,32 @@ final class StrategySetupController extends BaseController
         }
 
         return new StrategicBudgetingAdminModel($this->db);
+    }
+
+    private function buildReportingModel(): StrategicBudgetingModel
+    {
+        if (!$this->db instanceof \PDO) {
+            require __DIR__ . '/../../config/db.php';
+            $this->db = $GLOBALS['conn'] ?? null;
+        }
+
+        if (!$this->db instanceof \PDO) {
+            throw new \RuntimeException('Database connection is not available.');
+        }
+
+        return new StrategicBudgetingModel($this->db);
+    }
+
+    private function getStrategyContextLabels(int $fiscalYearId, int $versionId): array
+    {
+        if ($fiscalYearId <= 0 || $versionId <= 0) {
+            return [
+                'YearLabel' => $fiscalYearId > 0 ? 'FY ' . $fiscalYearId : 'Not set',
+                'VersionLabel' => '',
+            ];
+        }
+
+        return $this->buildReportingModel()->getContextLabels($fiscalYearId, $versionId);
     }
 
     protected function assertPostWithCsrf(string $redirectUrl = 'index.php?route=strategy-setup/sectors'): void

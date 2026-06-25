@@ -5,12 +5,17 @@ namespace App\Controllers;
 
 use App\Models\StrategicBudgetingAdminModel;
 use App\Models\StrategicBudgetingModel;
+use App\Models\SegmentValuesAdminModel;
+use App\Shared\SessionHelper;
 
 final class StrategyController extends BaseController
 {
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['STRATEGY_VIEW', 'STRATEGY_REPORT_VIEW', 'STRATEGY_FISCAL_EDIT', 'STRATEGY_WORKFLOW_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'workflowTransition' => ['auth' => true, 'permsAny' => ['STRATEGY_WORKFLOW_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'segmentParentChildIssueLookup' => ['auth' => true, 'permsAny' => ['STRATEGY_VIEW', 'STRATEGY_REPORT_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'deleteSegmentParentChildIssueRow' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'resolveSegmentParentLinks' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     protected bool $requiresContext = true;
@@ -45,6 +50,19 @@ final class StrategyController extends BaseController
     public function summary(): void
     {
         $this->index();
+    }
+
+    public function frameworkGuide(): void
+    {
+        $model = $this->buildModel();
+        $ctx = $this->context();
+        $fy = (int) ($ctx['FiscalYearID'] ?? 0);
+        $ver = (int) ($ctx['VersionID'] ?? 0);
+
+        $this->render('strategy/FrameworkGuide', [
+            'title' => 'Strategic Budget Framework Guide',
+            'contextLabels' => $model->getContextLabels($fy, $ver),
+        ]);
     }
 
     public function sectorBudget(): void
@@ -118,6 +136,215 @@ final class StrategyController extends BaseController
             'subProgramCodeConflicts' => $diagnostics['sub_program_code_conflicts'] ?? [],
             'subProgramPrefixIssues' => $diagnostics['sub_program_prefix_issues'] ?? [],
         ]);
+    }
+
+    public function segmentParentChild(): void
+    {
+        $model = $this->buildModel();
+        $ctx = $this->context();
+        $fy = (int) ($ctx['FiscalYearID'] ?? 0);
+        $ver = (int) ($ctx['VersionID'] ?? 0);
+
+        $sessionKey = 'strategy.segment_parent_child.' . $fy;
+        $hasSubmittedSegments = array_key_exists('child_segment_no', $_GET)
+            || array_key_exists('parent_segment_no', $_GET);
+        $lastSelectionRaw = SessionHelper::get($sessionKey, []);
+        $lastSelection = is_array($lastSelectionRaw) ? $lastSelectionRaw : [];
+
+        if ($hasSubmittedSegments) {
+            $childSegmentNo = (int) ($_GET['child_segment_no'] ?? 0);
+            $parentSegmentNo = (int) ($_GET['parent_segment_no'] ?? 0);
+            $requireSameDataObjectCode = !isset($_GET['same_data_object']) || (string) ($_GET['same_data_object'] ?? '1') === '1';
+            $checkCodePrefix = !isset($_GET['check_prefix']) || (string) ($_GET['check_prefix'] ?? '1') === '1';
+
+            if ($childSegmentNo > 0 && $parentSegmentNo > 0) {
+                SessionHelper::set($sessionKey, [
+                    'child_segment_no' => $childSegmentNo,
+                    'parent_segment_no' => $parentSegmentNo,
+                    'same_data_object' => $requireSameDataObjectCode ? 1 : 0,
+                    'check_prefix' => $checkCodePrefix ? 1 : 0,
+                ]);
+            } else {
+                SessionHelper::forget($sessionKey);
+            }
+        } else {
+            $childSegmentNo = (int) ($lastSelection['child_segment_no'] ?? 0);
+            $parentSegmentNo = (int) ($lastSelection['parent_segment_no'] ?? 0);
+            $requireSameDataObjectCode = (int) ($lastSelection['same_data_object'] ?? 1) === 1;
+            $checkCodePrefix = (int) ($lastSelection['check_prefix'] ?? 1) === 1;
+        }
+
+        $diagnostics = $model->getSegmentParentChildDiagnostics(
+            $fy,
+            $childSegmentNo,
+            $parentSegmentNo,
+            $requireSameDataObjectCode,
+            $checkCodePrefix
+        );
+
+        $this->render('strategy/ReportSegmentParentChild', [
+            'title' => 'Segment Parent-Child Check',
+            'contextLabels' => $model->getContextLabels($fy, $ver),
+            'summary' => $diagnostics['summary'] ?? [],
+            'segmentOptions' => $diagnostics['segment_options'] ?? [],
+            'issueCounts' => $diagnostics['issue_counts'] ?? [],
+            'issues' => $diagnostics['issues'] ?? [],
+            'resolvedLinks' => $diagnostics['resolved_links'] ?? [],
+        ]);
+    }
+
+    public function resolveSegmentParentLinks(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=strategy-reports/segment-parent-child');
+            return;
+        }
+
+        $ctx = $this->context();
+        $fy = (int) ($ctx['FiscalYearID'] ?? 0);
+        $childSegmentNo = (int) ($_POST['child_segment_no'] ?? 0);
+        $parentSegmentNo = (int) ($_POST['parent_segment_no'] ?? 0);
+        $sameDataObject = (string) ($_POST['same_data_object'] ?? '1');
+        $checkPrefix = (string) ($_POST['check_prefix'] ?? '1');
+
+        try {
+            $resolver = new SegmentValuesAdminModel($this->db);
+            $result = $resolver->resolveParentSegmentValueIds($fy);
+            $parentDataObjectRows = (int) ($result['ParentDataObjectRowsUpdated'] ?? 0);
+            $parentValueRows = (int) ($result['ParentValueRowsUpdated'] ?? 0);
+            $missingRows = (int) ($result['MissingParentValueIDRows'] ?? 0);
+
+            $message = "Parent links resolved. Parent data-object rows updated: {$parentDataObjectRows}. Parent value IDs updated: {$parentValueRows}.";
+            if ($missingRows > 0) {
+                $message .= " Rows still missing ParentSegmentValueID: {$missingRows}.";
+                $this->flashError($message);
+            } else {
+                $this->flashSuccess($message);
+            }
+            $this->auditEvent('RESOLVE_PARENT_LINKS', 'SegmentValue', (string) $fy, [
+                'FiscalYearID' => $fy,
+                'ParentSegmentNo' => $parentSegmentNo,
+                'ChildSegmentNo' => $childSegmentNo,
+                'ParentDataObjectRowsUpdated' => $parentDataObjectRows,
+                'ParentValueRowsUpdated' => $parentValueRows,
+                'MissingParentValueIDRows' => $missingRows,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logHandledException('StrategyController::resolveSegmentParentLinks failed', $e, [
+                'fiscalYearId' => $fy,
+                'parentSegmentNo' => $parentSegmentNo,
+                'childSegmentNo' => $childSegmentNo,
+            ]);
+            $this->flashError('Parent link resolution failed: ' . $e->getMessage());
+        }
+
+        $query = http_build_query([
+            'route' => 'strategy-reports/segment-parent-child',
+            'parent_segment_no' => $parentSegmentNo,
+            'child_segment_no' => $childSegmentNo,
+            'same_data_object' => $sameDataObject,
+            'check_prefix' => $checkPrefix,
+        ]);
+        header('Location: index.php?' . $query);
+    }
+
+    public function segmentParentChildIssueLookup(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            $segmentValueId = (int) ($_GET['segment_value_id'] ?? 0);
+            if ($segmentValueId <= 0) {
+                http_response_code(400);
+                echo json_encode([
+                    'ok' => false,
+                    'message' => 'SegmentValueID is required.',
+                ]);
+                return;
+            }
+
+            $model = $this->buildModel();
+            echo json_encode([
+                'ok' => true,
+                'lookup' => $model->getSegmentParentChildIssueLookup($segmentValueId),
+            ]);
+        } catch (\Throwable $e) {
+            $this->logHandledException('StrategyController::segmentParentChildIssueLookup failed', $e, [
+                'segmentValueId' => (int) ($_GET['segment_value_id'] ?? 0),
+            ]);
+            http_response_code(500);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Lookup failed: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function deleteSegmentParentChildIssueRow(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo json_encode([
+                'ok' => false,
+                'message' => __t('method_not_allowed'),
+            ]);
+            return;
+        }
+
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            http_response_code(403);
+            echo json_encode([
+                'ok' => false,
+                'message' => __t('security_check_failed'),
+            ]);
+            return;
+        }
+
+        $segmentValueId = (int) ($_POST['segment_value_id'] ?? 0);
+        if ($segmentValueId <= 0) {
+            http_response_code(400);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'SegmentValueID is required.',
+            ]);
+            return;
+        }
+
+        try {
+            $model = new SegmentValuesAdminModel($this->db);
+            $deleted = $model->deleteById($segmentValueId);
+            $this->auditEvent('DELETE', 'SegmentValue', (string) $segmentValueId, [
+                'FiscalYearID' => (int) ($deleted['FiscalYearID'] ?? 0),
+                'DataObjectCode' => (string) ($deleted['DataObjectCode'] ?? ''),
+                'SegmentNo' => (int) ($deleted['SegmentNo'] ?? 0),
+                'SegmentCode' => (string) ($deleted['SegmentCode'] ?? ''),
+                'Source' => 'Segment Parent-Child Check',
+            ]);
+
+            echo json_encode([
+                'ok' => true,
+                'message' => 'Segment value deleted.',
+                'deleted_segment_value_id' => $segmentValueId,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logHandledException('StrategyController::deleteSegmentParentChildIssueRow failed', $e, [
+                'segmentValueId' => $segmentValueId,
+            ]);
+            http_response_code(500);
+            echo json_encode([
+                'ok' => false,
+                'message' => 'Delete failed: ' . $e->getMessage(),
+            ]);
+        }
     }
 
     public function mtff(): void

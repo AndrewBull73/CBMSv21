@@ -22,6 +22,7 @@ final class DataObjectCodesController extends BaseController
         'uploadProcess' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
         'downloadTemplate' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
         'rebuildHierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        'syncOrgFromSegments' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
         'hierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
     ];
 
@@ -365,6 +366,95 @@ final class DataObjectCodesController extends BaseController
         }
 
         header('Location: index.php?route=dataobjectcodes/index');
+    }
+
+    public function syncOrgFromSegments(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            http_response_code(405);
+            echo 'Method Not Allowed';
+            return;
+        }
+
+        require_once __DIR__ . '/../../shared/csrf.php';
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError('Security check failed.');
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        if (!isset($conn) || !($conn instanceof \PDO)) {
+            require __DIR__ . '/../../config/db.php';
+        }
+        require_once __DIR__ . '/../Models/DataObjectCodesModel.php';
+
+        $fy = (int)SessionHelper::get('FiscalYearID', 0);
+        $userId = (int)SessionHelper::get('auth.user_id', 0);
+        $rootCode = strtoupper(trim((string)($_POST['root_code'] ?? 'GOV')));
+        $rootName = trim((string)($_POST['root_name'] ?? 'Government'));
+        $includeInactive = !empty($_POST['include_inactive']);
+        $apply = !empty($_POST['apply']);
+
+        if ($fy <= 0) {
+            $this->flashError('Select a fiscal year before loading Data Object Codes from segment values.');
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        if ($userId <= 0) {
+            $this->flashError('Your session could not be identified. Please sign in again before loading Data Object Codes.');
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        $model = new DataObjectCodesModel($conn);
+        try {
+            $result = $model->syncOrgStructureFromSegmentValues(
+                $fy,
+                $userId,
+                $rootCode,
+                $rootName,
+                $includeInactive,
+                $apply
+            );
+
+            if ($apply) {
+                $summary = $result['summary'] ?? [];
+                $this->auditEvent('SYNC_ORG_SEGMENTS', 'DataObjectCode', (string)$fy, [
+                    'FiscalYearID' => $fy,
+                    'RootDataObjectCode' => $rootCode,
+                    'CandidateRows' => $summary['CandidateRows'] ?? 0,
+                    'RejectedRows' => $summary['RejectedRows'] ?? 0,
+                    'CreatedRows' => $summary['CreatedRows'] ?? 0,
+                    'UpdatedRows' => $summary['UpdatedRows'] ?? 0,
+                ]);
+                $this->flashSuccess('Data Object Codes loaded from segment values and hierarchy rebuilt.');
+            }
+        } catch (\Throwable $e) {
+            $this->logHandledException('DataObjectCodesController::syncOrgFromSegments failed', $e, [
+                'fiscalYearId' => $fy,
+                'rootCode' => $rootCode,
+                'apply' => $apply,
+            ]);
+            $this->flashError('Load failed: ' . $e->getMessage());
+            header('Location: index.php?route=dataobjectcodes/index');
+            return;
+        }
+
+        $this->render('dataobjectcodes/DataObjectCodesOrgSegmentSync', [
+            'title' => 'Load Data Object Codes from Segment Values',
+            'fiscalYearId' => $fy,
+            'rootCode' => $rootCode,
+            'rootName' => $rootName,
+            'includeInactive' => $includeInactive,
+            'applied' => $apply,
+            'summary' => $result['summary'] ?? [],
+            'rootType' => $result['root_type'] ?? [],
+            'segmentTypes' => $result['segment_types'] ?? [],
+            'candidates' => $result['candidates'] ?? [],
+            'rejected' => $result['rejected'] ?? [],
+            '_csrf' => csrf_token(),
+        ]);
     }
 
     public function hierarchy(): void

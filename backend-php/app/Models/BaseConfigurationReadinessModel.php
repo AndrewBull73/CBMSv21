@@ -19,6 +19,7 @@ final class BaseConfigurationReadinessModel
         $checks = [];
 
         $checks[] = $this->checkFiscalYears();
+        $checks[] = $this->checkFiscalYearLabels();
         $checks[] = $this->checkVersionTypes();
         $checks[] = $this->checkVersions();
         $checks[] = $this->checkVersionDefaultCoverage();
@@ -36,6 +37,9 @@ final class BaseConfigurationReadinessModel
 
         $checks[] = $this->checkDataObjectTypes();
         $checks[] = $this->checkDataObjectCodes($fiscalYearId);
+        $checks[] = $this->checkDataObjectSegmentValueSync($fiscalYearId);
+        $checks[] = $this->checkDataObjectParentReferences($fiscalYearId);
+        $checks[] = $this->checkDataObjectContainerChildren($fiscalYearId);
         $checks[] = $this->checkDataObjectTree($fiscalYearId);
         $checks[] = $this->checkDataObjectWorkflowStatus($fiscalYearId, $versionId);
 
@@ -131,6 +135,93 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             $activeCount . ' active fiscal year(s) are available for context selection.',
+            'index.php?route=fiscal-years/list',
+            'Fiscal Years',
+            ''
+        );
+    }
+
+    private function checkFiscalYearLabels(): array
+    {
+        if (!$this->tableExists('dbo.tblFiscalYears')) {
+            return $this->buildCheck(
+                'Fiscal Context',
+                'Fiscal Year Labels',
+                0,
+                1,
+                'critical',
+                'The fiscal year table does not exist, so fiscal year labels cannot be checked.',
+                'index.php?route=fiscal-years/list',
+                'Fiscal Years',
+                'Create the fiscal year base table and load labelled fiscal year records.'
+            );
+        }
+
+        if (!$this->columnExists('dbo.tblFiscalYears', 'YearLabel')) {
+            return $this->buildCheck(
+                'Fiscal Context',
+                'Fiscal Year Labels',
+                0,
+                1,
+                'warning',
+                'The fiscal year table does not expose a YearLabel column.',
+                'index.php?route=fiscal-years/list',
+                'Fiscal Years',
+                'Add or restore the YearLabel column so context selectors and readiness screens can show readable fiscal year names.'
+            );
+        }
+
+        $activePredicate = $this->columnExists('dbo.tblFiscalYears', 'IsActive')
+            ? 'ISNULL(IsActive, 1) = 1'
+            : '1 = 1';
+        $activeCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblFiscalYears
+            WHERE {$activePredicate}
+        ");
+
+        if ($activeCount <= 0) {
+            return $this->buildCheck(
+                'Fiscal Context',
+                'Fiscal Year Labels',
+                0,
+                0,
+                'info',
+                'No active fiscal years exist yet, so fiscal year labels are not currently in scope.',
+                'index.php?route=fiscal-years/list',
+                'Fiscal Years',
+                'Activate at least one fiscal year, then rerun readiness to validate fiscal year labels.'
+            );
+        }
+
+        $missingLabelCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblFiscalYears
+            WHERE {$activePredicate}
+              AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), YearLabel))), N'') IS NULL
+        ");
+
+        if ($missingLabelCount > 0) {
+            return $this->buildCheck(
+                'Fiscal Context',
+                'Fiscal Year Labels',
+                $activeCount,
+                $missingLabelCount,
+                'warning',
+                $missingLabelCount . ' active fiscal year(s) are missing a fiscal year label.',
+                'index.php?route=fiscal-years/list',
+                'Fiscal Years',
+                'Open Fiscal Years, populate YearLabel for every active fiscal year, save, and rerun readiness.'
+            );
+        }
+
+        return $this->buildCheck(
+            'Fiscal Context',
+            'Fiscal Year Labels',
+            $activeCount,
+            0,
+            'ready',
+            $activeCount . ' active fiscal year label(s) are populated.',
             'index.php?route=fiscal-years/list',
             'Fiscal Years',
             ''
@@ -1019,7 +1110,7 @@ final class BaseConfigurationReadinessModel
                 'Data Object Codes Loaded',
                 $count,
                 $missingTypeCoverageCount,
-                'warning',
+                'critical',
                 $missingTypeCoverageCount . ' data object type(s) have no organisation codes loaded for the current fiscal year' . ($preview !== '' ? ': ' . $preview . '.' : '.'),
                 'index.php?route=dataobjectcodes/index',
                 'Data Object Codes',
@@ -1034,6 +1125,127 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             $count . ' organisation code(s) are loaded for the current fiscal year and each has a valid type.',
+            'index.php?route=dataobjectcodes/index',
+            'Data Object Codes',
+            ''
+        );
+    }
+
+    private function checkDataObjectSegmentValueSync(int $fiscalYearId): array
+    {
+        if (!$this->tableExists('dbo.tblDataObjectCodes')
+            || !$this->tableExists('dbo.tblDataObjectTypes')
+            || !$this->tableExists('dbo.tblSegmentValues')) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Segment Value Sync',
+                0,
+                0,
+                'info',
+                'Segment-to-data-object sync coverage cannot be checked until data object codes, data object types, and segment values are available.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Load data object types and current fiscal year segment values first, then rerun readiness.'
+            );
+        }
+
+        if ($fiscalYearId <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Segment Value Sync',
+                0,
+                0,
+                'info',
+                'No current fiscal year is selected, so segment-to-data-object sync coverage cannot be checked.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Set a fiscal year context first, then rerun readiness to validate segment-backed organisation codes.'
+            );
+        }
+
+        $mappedSegmentValueCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblSegmentValues sv
+            INNER JOIN dbo.tblDataObjectTypes dot
+                ON dot.SegmentNo = sv.SegmentNo
+            WHERE sv.FiscalYearID = :fy
+              AND sv.ActiveFlag = 1
+              AND NULLIF(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N''))), N'') IS NOT NULL
+        ", [':fy' => $fiscalYearId]);
+
+        if ($mappedSegmentValueCount <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Segment Value Sync',
+                0,
+                0,
+                'info',
+                'No active segment values currently match segment-backed data object types.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Confirm tblDataObjectTypes.SegmentNo is set for Head, Cost Centre, and Sub Cost Centre, then load segment values for the current fiscal year.'
+            );
+        }
+
+        $missingDataObjectCodeCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblSegmentValues sv
+            INNER JOIN dbo.tblDataObjectTypes dot
+                ON dot.SegmentNo = sv.SegmentNo
+            LEFT JOIN dbo.tblDataObjectCodes doc
+                ON doc.FiscalYearID = sv.FiscalYearID
+               AND doc.DataObjectCode = sv.DataObjectCode
+            WHERE sv.FiscalYearID = :fy
+              AND sv.ActiveFlag = 1
+              AND NULLIF(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N''))), N'') IS NOT NULL
+              AND doc.DataObjectCode IS NULL
+        ", [':fy' => $fiscalYearId]);
+
+        $staleDataObjectCodeCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblDataObjectCodes doc
+            INNER JOIN dbo.tblDataObjectTypes dot
+                ON dot.DataObjectTypeID = doc.DataObjectTypeID
+               AND dot.SegmentNo IS NOT NULL
+            LEFT JOIN dbo.tblSegmentValues sv
+                ON sv.FiscalYearID = doc.FiscalYearID
+               AND sv.DataObjectCode = doc.DataObjectCode
+               AND sv.SegmentNo = dot.SegmentNo
+               AND sv.ActiveFlag = 1
+            WHERE doc.FiscalYearID = :fy
+              AND sv.SegmentValueID IS NULL
+        ", [':fy' => $fiscalYearId]);
+
+        $issueCount = $missingDataObjectCodeCount + $staleDataObjectCodeCount;
+        if ($issueCount > 0) {
+            $parts = [];
+            if ($missingDataObjectCodeCount > 0) {
+                $parts[] = $missingDataObjectCodeCount . ' active segment value(s) are not loaded as Data Object Codes';
+            }
+            if ($staleDataObjectCodeCount > 0) {
+                $parts[] = $staleDataObjectCodeCount . ' segment-backed Data Object Code(s) no longer match an active segment value';
+            }
+
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Segment Value Sync',
+                $mappedSegmentValueCount,
+                $issueCount,
+                'warning',
+                implode(', and ', $parts) . '.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Use Load Org Structure on the Data Object Codes screen to preview and load missing segment-backed codes. Review stale codes manually before archiving or deleting them.'
+            );
+        }
+
+        return $this->buildCheck(
+            'Organisation Structure',
+            'Data Object Segment Value Sync',
+            $mappedSegmentValueCount,
+            0,
+            'ready',
+            'Active segment values for segment-backed data object types are represented in Data Object Codes for the current fiscal year.',
             'index.php?route=dataobjectcodes/index',
             'Data Object Codes',
             ''
@@ -1136,6 +1348,234 @@ final class BaseConfigurationReadinessModel
             $treeCount . ' hierarchy link row(s) are available for the current fiscal year.',
             'index.php?route=dataobjectcodes/hierarchy',
             'Data Object Hierarchy',
+            ''
+        );
+    }
+
+    private function checkDataObjectParentReferences(int $fiscalYearId): array
+    {
+        if (!$this->tableExists('dbo.tblDataObjectCodes')) {
+            return $this->missingTableCheck(
+                'Organisation Structure',
+                'Data Object Parent References',
+                'The data object codes table is missing.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Create the data object codes table and load parent-child organisation code relationships.'
+            );
+        }
+
+        if ($fiscalYearId <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Parent References',
+                0,
+                0,
+                'info',
+                'No current fiscal year is selected, so data object parent references cannot be checked.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Set a fiscal year context first, then rerun readiness to validate parent references.'
+            );
+        }
+
+        $codeCount = $this->fetchCount('SELECT COUNT(*) FROM dbo.tblDataObjectCodes WHERE FiscalYearID = :fy', [':fy' => $fiscalYearId]);
+        if ($codeCount <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Parent References',
+                0,
+                0,
+                'info',
+                'No organisation codes exist for the current fiscal year, so parent-reference checks are not yet in scope.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Load the current fiscal year organisation codes first, then rerun readiness.'
+            );
+        }
+
+        if (!$this->tableExists('dbo.tblDataObjectTypes')) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Parent References',
+                $codeCount,
+                1,
+                'warning',
+                'Data object parent levels cannot be checked because data object types are not available.',
+                'index.php?route=dataobject-types/list',
+                'Data Object Types',
+                'Load data object types so parent-child level rules can be validated.'
+            );
+        }
+
+        $invalidParentCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblDataObjectCodes child
+            LEFT JOIN dbo.tblDataObjectCodes parent
+                ON parent.FiscalYearID = child.FiscalYearID
+               AND parent.DataObjectCode = child.DataObjectCodeParent
+            LEFT JOIN dbo.tblDataObjectTypes childType
+                ON childType.DataObjectTypeID = child.DataObjectTypeID
+            LEFT JOIN dbo.tblDataObjectTypes parentType
+                ON parentType.DataObjectTypeID = parent.DataObjectTypeID
+            WHERE child.FiscalYearID = :fy
+              AND (
+                    child.DataObjectCodeParent = child.DataObjectCode
+                    OR (
+                        NULLIF(LTRIM(RTRIM(ISNULL(child.DataObjectCodeParent, N''))), N'') IS NOT NULL
+                        AND parent.DataObjectCode IS NULL
+                    )
+                    OR (
+                        NULLIF(LTRIM(RTRIM(ISNULL(child.DataObjectCodeParent, N''))), N'') IS NULL
+                        AND childType.[Level] > (
+                            SELECT MIN(rootType.[Level])
+                            FROM dbo.tblDataObjectTypes rootType
+                        )
+                    )
+                    OR (
+                        parent.DataObjectCode IS NOT NULL
+                        AND ISNULL(parentType.DataContainer, 1) = 0
+                    )
+                    OR (
+                        parent.DataObjectCode IS NOT NULL
+                        AND childType.[Level] IS NOT NULL
+                        AND parentType.[Level] IS NOT NULL
+                        AND parentType.[Level] >= childType.[Level]
+                    )
+                  )
+        ", [':fy' => $fiscalYearId]);
+
+        if ($invalidParentCount > 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Parent References',
+                $codeCount,
+                $invalidParentCount,
+                'critical',
+                $invalidParentCount . ' organisation code parent reference(s) are invalid, missing, blank for a child level, self-referencing, terminal, or not above the child level.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Review Data Object Codes and correct parent values so every child points to an existing higher-level container code in the same fiscal year.'
+            );
+        }
+
+        return $this->buildCheck(
+            'Organisation Structure',
+            'Data Object Parent References',
+            $codeCount,
+            0,
+            'ready',
+            'Organisation code parent references resolve to valid higher-level container codes.',
+            'index.php?route=dataobjectcodes/index',
+            'Data Object Codes',
+            ''
+        );
+    }
+
+    private function checkDataObjectContainerChildren(int $fiscalYearId): array
+    {
+        if (!$this->tableExists('dbo.tblDataObjectCodes') || !$this->tableExists('dbo.tblDataObjectTypes')) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Container Children',
+                0,
+                0,
+                'info',
+                'Container-child coverage cannot be checked until data object codes and data object types are available.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Load data object types and current fiscal year data object codes first, then rerun readiness.'
+            );
+        }
+
+        if ($fiscalYearId <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Container Children',
+                0,
+                0,
+                'info',
+                'No current fiscal year is selected, so container-child coverage cannot be checked.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Set a fiscal year context first, then rerun readiness to validate container-child coverage.'
+            );
+        }
+
+        $containerTypeCodeCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM (
+                SELECT parent.DataObjectTypeID
+                FROM dbo.tblDataObjectCodes parent
+                INNER JOIN dbo.tblDataObjectTypes parentType
+                    ON parentType.DataObjectTypeID = parent.DataObjectTypeID
+                WHERE parent.FiscalYearID = :fy
+                  AND ISNULL(parentType.DataContainer, 1) = 1
+                GROUP BY parent.DataObjectTypeID
+            ) typed
+        ", [':fy' => $fiscalYearId]);
+
+        if ($containerTypeCodeCount <= 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Container Children',
+                0,
+                0,
+                'info',
+                'No current fiscal year organisation codes use a container data object type.',
+                'index.php?route=dataobject-types/list',
+                'Data Object Types',
+                'Mark parent-capable data object types as containers if this hierarchy should include parent nodes.'
+            );
+        }
+
+        $containerTypesWithoutAnyParentCount = $this->fetchCount("
+            SELECT COUNT(*)
+            FROM dbo.tblDataObjectTypes parentType
+            WHERE ISNULL(parentType.DataContainer, 1) = 1
+              AND EXISTS (
+                    SELECT 1
+                    FROM dbo.tblDataObjectCodes typeCode
+                    WHERE typeCode.FiscalYearID = :fyType
+                      AND typeCode.DataObjectTypeID = parentType.DataObjectTypeID
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM dbo.tblDataObjectCodes parent
+                    INNER JOIN dbo.tblDataObjectCodes child
+                        ON child.FiscalYearID = parent.FiscalYearID
+                       AND child.DataObjectCodeParent = parent.DataObjectCode
+                    WHERE parent.FiscalYearID = :fyParent
+                      AND parent.DataObjectTypeID = parentType.DataObjectTypeID
+              )
+        ", [
+            ':fyType' => $fiscalYearId,
+            ':fyParent' => $fiscalYearId,
+        ]);
+
+        if ($containerTypesWithoutAnyParentCount > 0) {
+            return $this->buildCheck(
+                'Organisation Structure',
+                'Data Object Container Children',
+                $containerTypeCodeCount,
+                $containerTypesWithoutAnyParentCount,
+                'warning',
+                $containerTypesWithoutAnyParentCount . ' container data object type(s) have codes loaded, but none of those codes currently act as parents.',
+                'index.php?route=dataobjectcodes/index',
+                'Data Object Codes',
+                'Review parent-capable data object types. Add child codes where that type should include parent nodes, or mark the type as terminal if it should never contain children.'
+            );
+        }
+
+        return $this->buildCheck(
+            'Organisation Structure',
+            'Data Object Container Children',
+            $containerTypeCodeCount,
+            0,
+            'ready',
+            'Every loaded container data object type has at least one organisation code acting as a parent in the current fiscal year.',
+            'index.php?route=dataobjectcodes/index',
+            'Data Object Codes',
             ''
         );
     }
@@ -1698,8 +2138,8 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'Required parent-link coverage cannot be checked until both tblSegments and tblSegmentValues are available.',
-                'index.php?route=segment-values/list',
-                'Segment Values',
+                'index.php?route=strategy-reports/segment-parent-child',
+                'Parent Child Check',
                 'Make sure both segment definitions and segment values are loaded, then rerun readiness.'
             );
         }
@@ -1712,8 +2152,8 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'No current fiscal year is selected, so required parent-link coverage cannot be checked for a specific year.',
-                'index.php?route=segment-values/list',
-                'Segment Values',
+                'index.php?route=strategy-reports/segment-parent-child',
+                'Parent Child Check',
                 'Set a fiscal year context first, then rerun readiness to check parent coverage for that year.'
             );
         }
@@ -1726,11 +2166,13 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'Parent-link columns are not available, so required parent coverage cannot be checked.',
-                'index.php?route=segment-values/list',
-                'Segment Values',
+                'index.php?route=strategy-reports/segment-parent-child',
+                'Parent Child Check',
                 'Run the parent-segment migration first, then rerun readiness to validate required parent links.'
             );
         }
+
+        $hasParentSegmentValueID = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentValueID');
 
         $requiredRows = $this->fetchCount("
             SELECT COUNT(*)
@@ -1740,20 +2182,78 @@ final class BaseConfigurationReadinessModel
             WHERE sv.FiscalYearID = :fy
               AND sv.ActiveFlag = 1
               AND ISNULL(s.ParentRequired, 0) = 1
+              AND ISNULL(s.ParentSegmentNoDefault, 0) > 0
         ", [':fy' => $fiscalYearId]);
+
+        $actionRoute = 'index.php?route=strategy-reports/segment-parent-child';
+        $firstPairRows = $this->fetchRows("
+            SELECT TOP 1
+                ChildSegmentNo = sv.SegmentNo,
+                ParentSegmentNo = s.ParentSegmentNoDefault
+            FROM dbo.tblSegmentValues sv
+            INNER JOIN dbo.tblSegments s
+                ON s.SegmentID = sv.SegmentNo
+            " . ($hasParentSegmentValueID ? "
+            LEFT JOIN dbo.tblSegmentValues parent
+                ON parent.SegmentValueID = sv.ParentSegmentValueID
+               AND parent.FiscalYearID = sv.FiscalYearID
+               AND parent.ActiveFlag = 1
+            " : "") . "
+            WHERE sv.FiscalYearID = :fy
+              AND sv.ActiveFlag = 1
+              AND ISNULL(s.ParentRequired, 0) = 1
+              AND ISNULL(s.ParentSegmentNoDefault, 0) > 0
+              AND (
+                    (
+                        sv.ParentSegmentNo IS NULL
+                        OR sv.ParentSegmentNo = 0
+                        OR sv.ParentSegmentNo <> s.ParentSegmentNoDefault
+                        OR NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, ''))), '') IS NULL
+                    )
+                    " . ($hasParentSegmentValueID ? "
+                    AND parent.SegmentValueID IS NULL
+                    " : "") . "
+              )
+            ORDER BY sv.SegmentNo
+        ", [':fy' => $fiscalYearId]);
+        $firstPair = $firstPairRows[0] ?? [];
+        $firstChildSegmentNo = (int) ($firstPair['ChildSegmentNo'] ?? 0);
+        $firstParentSegmentNo = (int) ($firstPair['ParentSegmentNo'] ?? 0);
+        if ($firstChildSegmentNo > 0 && $firstParentSegmentNo > 0) {
+            $actionRoute = 'index.php?' . http_build_query([
+                'route' => 'strategy-reports/segment-parent-child',
+                'child_segment_no' => $firstChildSegmentNo,
+                'parent_segment_no' => $firstParentSegmentNo,
+                'same_data_object' => 1,
+                'check_prefix' => 1,
+            ]);
+        }
 
         $missingParents = $this->fetchCount("
             SELECT COUNT(*)
             FROM dbo.tblSegmentValues sv
             INNER JOIN dbo.tblSegments s
                 ON s.SegmentID = sv.SegmentNo
+            " . ($hasParentSegmentValueID ? "
+            LEFT JOIN dbo.tblSegmentValues parent
+                ON parent.SegmentValueID = sv.ParentSegmentValueID
+               AND parent.FiscalYearID = sv.FiscalYearID
+               AND parent.ActiveFlag = 1
+            " : "") . "
             WHERE sv.FiscalYearID = :fy
               AND sv.ActiveFlag = 1
               AND ISNULL(s.ParentRequired, 0) = 1
+              AND ISNULL(s.ParentSegmentNoDefault, 0) > 0
               AND (
-                    sv.ParentSegmentNo IS NULL
-                    OR sv.ParentSegmentNo = 0
-                    OR NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, ''))), '') IS NULL
+                    (
+                        sv.ParentSegmentNo IS NULL
+                        OR sv.ParentSegmentNo = 0
+                        OR sv.ParentSegmentNo <> s.ParentSegmentNoDefault
+                        OR NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, ''))), '') IS NULL
+                    )
+                    " . ($hasParentSegmentValueID ? "
+                    AND parent.SegmentValueID IS NULL
+                    " : "") . "
               )
         ", [':fy' => $fiscalYearId]);
 
@@ -1765,8 +2265,8 @@ final class BaseConfigurationReadinessModel
                 0,
                 'info',
                 'No active current-year segment values currently require a parent link.',
-                'index.php?route=segment-values/list',
-                'Segment Values',
+                $actionRoute,
+                'Parent Child Check',
                 'This check will become active when parent-required segment rows are loaded for the fiscal year.'
             );
         }
@@ -1779,9 +2279,9 @@ final class BaseConfigurationReadinessModel
                 $missingParents,
                 'warning',
                 $missingParents . ' parent-required segment value row(s) are missing a usable parent segment link.',
-                'index.php?route=segment-values/list',
-                'Segment Values',
-                'Review the current fiscal year segment values and fill in ParentSegmentNo and ParentSegmentCode where a parent is required.'
+                $actionRoute,
+                'Parent Child Check',
+                'Open the Segment Parent-Child Check screen and use Resolve Parent Links, then review any remaining issue rows.'
             );
         }
 
@@ -1792,8 +2292,8 @@ final class BaseConfigurationReadinessModel
             0,
             'ready',
             'All parent-required current-year segment values have a usable parent link.',
-            'index.php?route=segment-values/list',
-            'Segment Values',
+            $actionRoute,
+            'Parent Child Check',
             ''
         );
     }

@@ -598,6 +598,356 @@ SQL;
         }
     }
 
+    public function syncOrgStructureFromSegmentValues(
+        int $fiscalYearID,
+        int $userId,
+        string $rootCode = 'GOV',
+        string $rootName = 'Government',
+        bool $includeInactiveSegmentValues = false,
+        bool $apply = false
+    ): array {
+        $rootCode = trim($rootCode);
+        $rootName = trim($rootName);
+
+        if ($fiscalYearID <= 0) {
+            throw new \RuntimeException('Fiscal year is required.');
+        }
+        if ($userId <= 0) {
+            throw new \RuntimeException('A valid user context is required.');
+        }
+        if ($rootCode === '' || $rootName === '') {
+            throw new \RuntimeException('Root DataObjectCode and name are required.');
+        }
+
+        $rootType = $this->fetchRootDataObjectType();
+        if ($rootType === null) {
+            throw new \RuntimeException('No root DataObjectType found. Set Government SegmentNo to NULL.');
+        }
+
+        $segmentTypes = $this->fetchSegmentBackedDataObjectTypes();
+        if ($segmentTypes === []) {
+            throw new \RuntimeException('No segment-backed DataObjectTypes found.');
+        }
+
+        $sourceRows = $this->fetchOrgSegmentValueRows($fiscalYearID, $includeInactiveSegmentValues);
+        $sourceCodeCounts = [];
+        foreach ($sourceRows as $row) {
+            $code = trim((string) ($row['DataObjectCode'] ?? ''));
+            if ($code !== '') {
+                $sourceCodeCounts[$code] = ($sourceCodeCounts[$code] ?? 0) + 1;
+            }
+        }
+
+        $candidates = [];
+        $rejected = [];
+        $rootLevel = (int) ($rootType['Level'] ?? 1);
+
+        foreach ($sourceRows as $row) {
+            $segmentNo = (int) ($row['SegmentNo'] ?? 0);
+            $type = $segmentTypes[$segmentNo] ?? null;
+            if ($type === null) {
+                continue;
+            }
+
+            $code = trim((string) ($row['DataObjectCode'] ?? ''));
+            $name = trim((string) ($row['SegmentName'] ?? ''));
+            $parentCode = trim((string) ($row['ParentDataObjectCode'] ?? ''));
+            $typeLevel = (int) ($type['Level'] ?? 0);
+            $reason = '';
+
+            if ($code === '') {
+                $reason = 'Missing DataObjectCode';
+            } elseif ($name === '') {
+                $reason = 'Missing DataObjectName';
+            } elseif ($code === $rootCode) {
+                $reason = 'Segment value conflicts with root DataObjectCode';
+            } elseif (($sourceCodeCounts[$code] ?? 0) > 1) {
+                $reason = 'Duplicate segment rows for DataObjectCode';
+            } elseif ($parentCode === '' && $typeLevel > $rootLevel + 1) {
+                $reason = 'Missing parent DataObjectCode from ParentSegmentValueID';
+            }
+
+            if ($reason !== '') {
+                $rejected[] = $row + [
+                    'RejectionReason' => $reason,
+                    'DataObjectTypeID' => $type['DataObjectTypeID'] ?? null,
+                    'DataObjectTypeName' => $type['DataObjectTypeName'] ?? '',
+                    'DuplicateRowsForCode' => $sourceCodeCounts[$code] ?? 0,
+                ];
+                continue;
+            }
+
+            if ($parentCode === '' && $typeLevel === $rootLevel + 1) {
+                $parentCode = $rootCode;
+            }
+
+            $candidates[] = [
+                'FiscalYearID' => $fiscalYearID,
+                'DataObjectCode' => $code,
+                'DataObjectName' => $name,
+                'DataObjectCodeParent' => $parentCode,
+                'DataObjectTypeID' => (int) ($type['DataObjectTypeID'] ?? 0),
+                'DataObjectTypeName' => (string) ($type['DataObjectTypeName'] ?? ''),
+                'DataObjectDesc' => trim((string) ($row['SegmentExternalID'] ?? '')) ?: null,
+                'DataObjectCodeStatus' => ((int) ($row['ActiveFlag'] ?? 0)) === 1 ? 'Active' : 'Inactive',
+                'SegmentValueID' => (int) ($row['SegmentValueID'] ?? 0),
+                'SegmentNo' => $segmentNo,
+                'SegmentCode' => (string) ($row['SegmentCode'] ?? ''),
+                'ParentSegmentValueID' => $row['ParentSegmentValueID'] ?? null,
+                'ParentDataObjectCode' => $parentCode,
+                'TypeLevel' => $typeLevel,
+            ];
+        }
+
+        $candidateCodeCounts = [];
+        foreach ($candidates as $candidate) {
+            $candidateCodeCounts[$candidate['DataObjectCode']] = ($candidateCodeCounts[$candidate['DataObjectCode']] ?? 0) + 1;
+        }
+        $dedupedCandidates = [];
+        foreach ($candidates as $candidate) {
+            if (($candidateCodeCounts[$candidate['DataObjectCode']] ?? 0) > 1) {
+                $rejected[] = $candidate + [
+                    'RejectionReason' => 'Duplicate candidate DataObjectCode',
+                    'DuplicateRowsForCode' => $candidateCodeCounts[$candidate['DataObjectCode']],
+                ];
+                continue;
+            }
+            $dedupedCandidates[] = $candidate;
+        }
+        $candidates = $dedupedCandidates;
+
+        $existing = $this->fetchExistingCodeMap($fiscalYearID);
+        $availableCodes = $existing;
+        $availableCodes[$rootCode] = true;
+        foreach ($candidates as $candidate) {
+            $availableCodes[(string) $candidate['DataObjectCode']] = true;
+        }
+
+        $parentCheckedCandidates = [];
+        foreach ($candidates as $candidate) {
+            $parentCode = trim((string) ($candidate['DataObjectCodeParent'] ?? ''));
+            if ($parentCode !== '' && !isset($availableCodes[$parentCode])) {
+                $rejected[] = $candidate + [
+                    'RejectionReason' => 'Parent DataObjectCode is not available to load',
+                ];
+                continue;
+            }
+            $parentCheckedCandidates[] = $candidate;
+        }
+        $candidates = $parentCheckedCandidates;
+
+        usort($candidates, static function (array $a, array $b): int {
+            $levelCompare = ((int) ($a['TypeLevel'] ?? 0)) <=> ((int) ($b['TypeLevel'] ?? 0));
+            if ($levelCompare !== 0) {
+                return $levelCompare;
+            }
+            return strcmp((string) ($a['DataObjectCode'] ?? ''), (string) ($b['DataObjectCode'] ?? ''));
+        });
+
+        $created = 0;
+        $updated = 0;
+
+        if ($apply) {
+            $startedTransaction = !$this->pdo->inTransaction();
+            if ($startedTransaction) {
+                $this->pdo->beginTransaction();
+            }
+
+            try {
+                $rootCreated = !$this->codeExists($fiscalYearID, $rootCode);
+                $this->upsertDataObjectCodeRow($fiscalYearID, [
+                    'DataObjectCode' => $rootCode,
+                    'DataObjectName' => $rootName,
+                    'DataObjectCodeParent' => '',
+                    'DataObjectTypeID' => (int) ($rootType['DataObjectTypeID'] ?? 0),
+                    'DataObjectDesc' => null,
+                    'DataObjectCodeStatus' => 'Active',
+                ], $userId);
+                $rootCreated ? $created++ : $updated++;
+
+                foreach ($candidates as $candidate) {
+                    $wasCreated = !$this->codeExists($fiscalYearID, (string) $candidate['DataObjectCode']);
+                    $this->upsertDataObjectCodeRow($fiscalYearID, $candidate, $userId);
+                    $wasCreated ? $created++ : $updated++;
+                }
+
+                $this->rebuildTreeForFiscalYear($fiscalYearID);
+
+                if ($startedTransaction && $this->pdo->inTransaction()) {
+                    $this->pdo->commit();
+                }
+            } catch (\Throwable $e) {
+                if ($startedTransaction && $this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+
+        $existingToUpdate = isset($existing[$rootCode]) ? 1 : 0;
+        $newToInsert = isset($existing[$rootCode]) ? 0 : 1;
+        foreach ($candidates as $candidate) {
+            if (isset($existing[(string) $candidate['DataObjectCode']])) {
+                $existingToUpdate++;
+            } else {
+                $newToInsert++;
+            }
+        }
+
+        return [
+            'summary' => [
+                'FiscalYearID' => $fiscalYearID,
+                'RootDataObjectCode' => $rootCode,
+                'RootDataObjectName' => $rootName,
+                'RootDataObjectTypeID' => (int) ($rootType['DataObjectTypeID'] ?? 0),
+                'SourceRows' => count($sourceRows),
+                'CandidateRows' => count($candidates),
+                'RejectedRows' => count($rejected),
+                'ExistingRowsToUpdate' => $existingToUpdate,
+                'NewRowsToInsert' => $newToInsert,
+                'CreatedRows' => $created,
+                'UpdatedRows' => $updated,
+                'Applied' => $apply ? 1 : 0,
+            ],
+            'root_type' => $rootType,
+            'segment_types' => array_values($segmentTypes),
+            'candidates' => $candidates,
+            'rejected' => $rejected,
+        ];
+    }
+
+    private function fetchRootDataObjectType(): ?array
+    {
+        $stmt = $this->pdo->query("
+            SELECT TOP 1 DataObjectTypeID, DataObjectTypeName, SegmentNo, [Level]
+            FROM dbo.tblDataObjectTypes
+            WHERE SegmentNo IS NULL
+            ORDER BY [Level], DataObjectTypeID
+        ");
+        $row = $stmt ? $stmt->fetch(\PDO::FETCH_ASSOC) : false;
+        return $row ?: null;
+    }
+
+    private function fetchSegmentBackedDataObjectTypes(): array
+    {
+        $stmt = $this->pdo->query("
+            SELECT DataObjectTypeID, DataObjectTypeName, SegmentNo, [Level]
+            FROM dbo.tblDataObjectTypes
+            WHERE SegmentNo IS NOT NULL
+            ORDER BY [Level], DataObjectTypeID
+        ");
+        $rows = $stmt ? ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []) : [];
+        $bySegment = [];
+        foreach ($rows as $row) {
+            $segmentNo = (int) ($row['SegmentNo'] ?? 0);
+            if ($segmentNo > 0 && !isset($bySegment[$segmentNo])) {
+                $bySegment[$segmentNo] = $row;
+            }
+        }
+        return $bySegment;
+    }
+
+    private function fetchOrgSegmentValueRows(int $fiscalYearID, bool $includeInactive): array
+    {
+        $sql = "
+            SELECT
+                sv.SegmentValueID,
+                sv.FiscalYearID,
+                sv.DataObjectCode,
+                sv.SegmentNo,
+                sv.SegmentCode,
+                sv.SegmentName,
+                sv.SegmentExternalID,
+                sv.ParentSegmentValueID,
+                sv.ParentSegmentNo,
+                sv.ParentSegmentCode,
+                sv.ActiveFlag,
+                parent.DataObjectCode AS ParentDataObjectCode
+            FROM dbo.tblSegmentValues sv
+            INNER JOIN dbo.tblDataObjectTypes dot
+                ON dot.SegmentNo = sv.SegmentNo
+            LEFT JOIN dbo.tblSegmentValues parent
+                ON parent.SegmentValueID = sv.ParentSegmentValueID
+            WHERE sv.FiscalYearID = :fy
+        ";
+        if (!$includeInactive) {
+            $sql .= " AND sv.ActiveFlag = 1";
+        }
+        $sql .= " ORDER BY dot.[Level], sv.DataObjectCode, sv.SegmentNo, sv.SegmentCode, sv.SegmentValueID";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':fy' => $fiscalYearID]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    }
+
+    private function fetchExistingCodeMap(int $fiscalYearID): array
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT DataObjectCode
+            FROM dbo.tblDataObjectCodes
+            WHERE FiscalYearID = :fy
+        ");
+        $stmt->execute([':fy' => $fiscalYearID]);
+        $map = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+            $code = trim((string) ($row['DataObjectCode'] ?? ''));
+            if ($code !== '') {
+                $map[$code] = true;
+            }
+        }
+        return $map;
+    }
+
+    private function upsertDataObjectCodeRow(int $fiscalYearID, array $data, int $userId): void
+    {
+        $stmt = $this->pdo->prepare("
+            MERGE dbo.tblDataObjectCodes AS target
+            USING (SELECT FiscalYearID = :fy, DataObjectCode = :code) AS source
+                ON target.FiscalYearID = source.FiscalYearID
+               AND target.DataObjectCode = source.DataObjectCode
+            WHEN MATCHED THEN
+                UPDATE SET
+                    DataObjectName = :name,
+                    DataObjectCodeParent = :parent,
+                    DataObjectTypeID = :typeId,
+                    DataObjectDesc = :description,
+                    DataObjectCodeStatus = :status,
+                    UpdatedBy = :updatedBy,
+                    DateUpdated = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN
+                INSERT (FiscalYearID, DataObjectCode, DataObjectName, DataObjectCodeParent,
+                        DataObjectTypeID, DataObjectDesc, DataObjectCodeStatus, UpdatedBy, DateUpdated)
+                VALUES (:fyInsert, :codeInsert, :nameInsert, :parentInsert,
+                        :typeIdInsert, :descriptionInsert, :statusInsert, :updatedByInsert, SYSUTCDATETIME());
+        ");
+
+        $parent = trim((string) ($data['DataObjectCodeParent'] ?? ''));
+        $description = $data['DataObjectDesc'] ?? null;
+        $status = trim((string) ($data['DataObjectCodeStatus'] ?? 'Active'));
+        if ($status !== 'Active' && $status !== 'Inactive') {
+            $status = 'Active';
+        }
+
+        $stmt->execute([
+            ':fy' => $fiscalYearID,
+            ':code' => (string) $data['DataObjectCode'],
+            ':name' => (string) $data['DataObjectName'],
+            ':parent' => $parent !== '' ? $parent : null,
+            ':typeId' => (int) $data['DataObjectTypeID'],
+            ':description' => $description,
+            ':status' => $status,
+            ':updatedBy' => $userId,
+            ':fyInsert' => $fiscalYearID,
+            ':codeInsert' => (string) $data['DataObjectCode'],
+            ':nameInsert' => (string) $data['DataObjectName'],
+            ':parentInsert' => $parent !== '' ? $parent : null,
+            ':typeIdInsert' => (int) $data['DataObjectTypeID'],
+            ':descriptionInsert' => $description,
+            ':statusInsert' => $status,
+            ':updatedByInsert' => $userId,
+        ]);
+    }
+
     /* ------------------------------------------------------------------ */
     /*  CUSTOM ATTRIBUTES                                                 */
     /* ------------------------------------------------------------------ */

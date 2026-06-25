@@ -18,6 +18,7 @@ ADD CONSTRAINT CK_tblSbSegmentConfig_StrategicDimensionCode CHECK (
     StrategicDimensionCode IN (
         N'PROGRAM',
         N'SUBPROGRAM',
+        N'PROJECT',
         N'SECTOR',
         N'ECONOMIC',
         N'FUNDING_TYPE',

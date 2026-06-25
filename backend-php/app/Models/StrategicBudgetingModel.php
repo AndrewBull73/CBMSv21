@@ -848,6 +848,7 @@ final class StrategicBudgetingModel
             'total_checks' => count($checks),
             'ready_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'ready')),
             'warning_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'warning')),
+            'critical_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'critical')),
             'info_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'info')),
             'open_items' => array_sum(array_map(static fn(array $check): int => (int) $check['issue_count'], $checks)),
         ];
@@ -897,6 +898,7 @@ final class StrategicBudgetingModel
             'index.php?route=strategy-config/segment-mapping',
             'Review Decisions'
         );
+        $checks[] = $this->checkMappedSegmentValuesLoaded($fiscalYearId);
 
         $sectorSegmentNo = $this->getMappedSegmentNo($fiscalYearId, 'SECTOR');
         $programSegmentNo = $this->getMappedSegmentNo($fiscalYearId, 'PROGRAM');
@@ -1403,6 +1405,7 @@ final class StrategicBudgetingModel
             'total_checks' => count($checks),
             'ready_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'ready')),
             'warning_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'warning')),
+            'critical_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'critical')),
             'info_checks' => count(array_filter($checks, static fn(array $check): bool => $check['status'] === 'info')),
             'open_items' => array_sum(array_map(static fn(array $check): int => (int) $check['issue_count'], $checks)),
         ];
@@ -1801,6 +1804,32 @@ final class StrategicBudgetingModel
         return ((int) ($stmt->fetchColumn() ?: 0)) > 0;
     }
 
+    private function columnExists(string $qualifiedName, string $columnName): bool
+    {
+        $parts = explode('.', str_replace(['[', ']'], '', $qualifiedName));
+        $schema = count($parts) > 1 ? $parts[0] : 'dbo';
+        $table = count($parts) > 1 ? $parts[1] : $parts[0];
+
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(*)
+            FROM sys.columns c
+            INNER JOIN sys.tables t
+                ON t.object_id = c.object_id
+            INNER JOIN sys.schemas s
+                ON s.schema_id = t.schema_id
+            WHERE s.name = :schemaName
+              AND t.name = :tableName
+              AND c.name = :columnName
+        ");
+        $stmt->execute([
+            ':schemaName' => $schema,
+            ':tableName' => $table,
+            ':columnName' => $columnName,
+        ]);
+
+        return ((int) ($stmt->fetchColumn() ?: 0)) > 0;
+    }
+
     private function getStrategicWorkflowHistory(int $fiscalYearId, int $versionId): array
     {
         $stmt = $this->conn->prepare("
@@ -1909,6 +1938,116 @@ final class StrategicBudgetingModel
         )));
     }
 
+    private function checkMappedSegmentValuesLoaded(int $fiscalYearId): array
+    {
+        if ($fiscalYearId <= 0) {
+            return $this->buildOutOfScopeReadinessCheck(
+                'Mappings',
+                'Mapped segment values loaded',
+                'Set a fiscal year context before checking mapped segment value coverage.',
+                'index.php?route=segment-values/list',
+                'Segment Values'
+            );
+        }
+
+        if (!$this->tableExists('dbo.tblSbSegmentConfig')) {
+            return $this->buildOutOfScopeReadinessCheck(
+                'Mappings',
+                'Mapped segment values loaded',
+                'Strategic segment mappings are not available yet.',
+                'index.php?route=strategy-config/segment-mapping',
+                'Manage Mapping'
+            );
+        }
+
+        if (!$this->tableExists('dbo.tblSegmentValues')) {
+            return [
+                'category' => 'Mappings',
+                'title' => 'Mapped segment values loaded',
+                'total_count' => 0,
+                'issue_count' => 1,
+                'status' => 'critical',
+                'message' => 'Segment values cannot be checked because tblSegmentValues does not exist.',
+                'instruction' => 'Create the segment values table and load source values for the active fiscal year before using source-backed strategic mappings.',
+                'action_route' => 'index.php?route=segment-values/list',
+                'action_label' => 'Segment Values',
+            ];
+        }
+
+        $rows = $this->queryAll("
+            SELECT
+                c.StrategicDimensionCode,
+                c.SegmentNo,
+                COUNT(DISTINCT sv.SegmentCode) AS ValueCount
+            FROM dbo.tblSbSegmentConfig c
+            LEFT JOIN dbo.tblSegmentValues sv
+                ON sv.FiscalYearID = c.FiscalYearID
+               AND sv.SegmentNo = c.SegmentNo
+               AND sv.ActiveFlag = 1
+            WHERE c.FiscalYearID = :fyMappedValues
+              AND c.ActiveFlag = 1
+              AND ISNULL(c.SegmentNo, 0) > 0
+            GROUP BY c.StrategicDimensionCode, c.SegmentNo
+            ORDER BY c.StrategicDimensionCode
+        ", [':fyMappedValues' => $fiscalYearId]);
+
+        if ($rows === []) {
+            return $this->buildOutOfScopeReadinessCheck(
+                'Mappings',
+                'Mapped segment values loaded',
+                'No strategic dimensions are currently mapped to source segments.',
+                'index.php?route=strategy-config/segment-mapping',
+                'Manage Mapping'
+            );
+        }
+
+        $missing = [];
+        foreach ($rows as $row) {
+            $valueCount = (int) ($row['ValueCount'] ?? 0);
+            if ($valueCount > 0) {
+                continue;
+            }
+
+            $dimensionCode = strtoupper(trim((string) ($row['StrategicDimensionCode'] ?? '')));
+            $segmentNo = (int) ($row['SegmentNo'] ?? 0);
+            $missing[] = $dimensionCode . ' (segment ' . $segmentNo . ')';
+        }
+
+        if ($missing === []) {
+            return [
+                'category' => 'Mappings',
+                'title' => 'Mapped segment values loaded',
+                'total_count' => count($rows),
+                'issue_count' => 0,
+                'status' => 'ready',
+                'message' => 'Every mapped strategic segment has at least one active segment value for the current fiscal year.',
+                'instruction' => '',
+                'action_route' => 'index.php?route=segment-values/list',
+                'action_label' => 'Segment Values',
+            ];
+        }
+
+        $shownMissing = array_slice($missing, 0, 8);
+        $remainingCount = count($missing) - count($shownMissing);
+        $message = 'Mapped segment(s) have no active values for the current fiscal year: ' . implode(', ', $shownMissing);
+        if ($remainingCount > 0) {
+            $message .= ', plus ' . $remainingCount . ' more';
+        }
+        $message .= '.';
+
+        return [
+            'category' => 'Mappings',
+            'title' => 'Mapped segment values loaded',
+            'total_count' => count($rows),
+            'issue_count' => count($missing),
+            'status' => 'critical',
+            'message' => $message,
+            'instruction' => 'Open Segment Values and load active values for each mapped segment in the current fiscal year, or remove the mapping if that dimension should be maintained directly in Strategy.',
+            'action_route' => 'index.php?route=segment-values/list',
+            'action_label' => 'Segment Values',
+        ];
+    }
+
     /**
      * @return list<string>
      */
@@ -1966,7 +2105,7 @@ final class StrategicBudgetingModel
         string $actionLabel
     ): array {
         if ($totalCount <= 0) {
-            $status = 'info';
+            $status = strtoupper(trim($category)) === 'HIERARCHY' ? 'critical' : 'info';
             $message = 'No active records are in scope for this check yet.';
         } elseif ($issueCount > 0) {
             $status = 'warning';
@@ -2652,6 +2791,860 @@ final class StrategicBudgetingModel
             'program_name_conflicts' => $programNameConflicts,
             'sub_program_code_conflicts' => $subProgramCodeConflicts,
             'sub_program_prefix_issues' => $subProgramPrefixIssues,
+        ];
+    }
+
+    public function getSegmentParentChildDiagnostics(
+        int $fiscalYearId,
+        int $childSegmentNo,
+        int $parentSegmentNo,
+        bool $requireSameDataObjectCode,
+        bool $checkCodePrefix
+    ): array {
+        $programSegmentNo = $this->getMappedSegmentNo($fiscalYearId, 'PROGRAM');
+        $subProgramSegmentNo = $this->getMappedSegmentNo($fiscalYearId, 'SUBPROGRAM');
+
+        $segmentOptions = $this->queryAll("
+            SELECT SegmentID AS SegmentNo, SegmentName
+            FROM dbo.tblSegments
+            ORDER BY SegmentID
+        ", []);
+
+        $summary = [
+            'fiscal_year_id' => $fiscalYearId,
+            'parent_segment_no' => $parentSegmentNo,
+            'child_segment_no' => $childSegmentNo,
+            'mapped_program_segment_no' => $programSegmentNo,
+            'mapped_sub_program_segment_no' => $subProgramSegmentNo,
+            'require_same_data_object_code' => $requireSameDataObjectCode ? 1 : 0,
+            'check_code_prefix' => $checkCodePrefix ? 1 : 0,
+            'parent_rows' => 0,
+            'child_rows' => 0,
+            'issue_rows' => 0,
+            'error_rows' => 0,
+            'warning_rows' => 0,
+            'ready' => false,
+        ];
+
+        if ($fiscalYearId <= 0 || $childSegmentNo <= 0 || $parentSegmentNo <= 0 || !$this->tableExists('dbo.tblSegmentValues')) {
+            return [
+                'summary' => $summary,
+                'segment_options' => $segmentOptions,
+                'issue_counts' => [],
+                'issues' => [],
+                'resolved_links' => [],
+            ];
+        }
+
+        $hasParentColumns = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentNo')
+            && $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentCode');
+        $parentSegmentDataObjectCodeExpression = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode')
+            ? 'sv.ParentSegmentDataObjectCode'
+            : "CONVERT(nvarchar(50), NULL)";
+        $childParentSegmentDataObjectCodeExpression = $this->columnExists('dbo.tblSegmentValues', 'ParentSegmentDataObjectCode')
+            ? 'child.ParentSegmentDataObjectCode'
+            : "CONVERT(nvarchar(50), NULL)";
+        if (!$hasParentColumns) {
+            $issues = [[
+                'Severity' => 'ERROR',
+                'IssueType' => 'Parent columns missing',
+                'FiscalYearID' => $fiscalYearId,
+                'DataObjectCode' => '',
+                'SegmentValueID' => null,
+                'SegmentNo' => $childSegmentNo,
+                'SegmentCode' => '',
+                'SegmentName' => '',
+                'ParentSegmentNo' => $parentSegmentNo,
+                'ParentSegmentCode' => '',
+                'MatchingParentCount' => 0,
+                'Detail' => 'tblSegmentValues must have ParentSegmentNo and ParentSegmentCode before parent-child relationships can be checked.',
+            ]];
+            $summary['issue_rows'] = 1;
+            $summary['error_rows'] = 1;
+
+            return [
+                'summary' => $summary,
+                'segment_options' => $segmentOptions,
+                'issue_counts' => [['Severity' => 'ERROR', 'IssueType' => 'Parent columns missing', 'IssueRows' => 1]],
+                'issues' => $issues,
+                'resolved_links' => [],
+            ];
+        }
+
+        $summaryRows = $this->queryAll("
+            SELECT
+                ParentRows = SUM(CASE WHEN SegmentNo = :parentSegmentNoSummary THEN 1 ELSE 0 END),
+                ChildRows = SUM(CASE WHEN SegmentNo = :childSegmentNoSummary THEN 1 ELSE 0 END)
+            FROM dbo.tblSegmentValues
+            WHERE FiscalYearID = :fySummary
+              AND ActiveFlag = 1
+              AND SegmentNo IN (:parentSegmentNoSummaryIn, :childSegmentNoSummaryIn)
+        ", [
+            ':fySummary' => $fiscalYearId,
+            ':parentSegmentNoSummary' => $parentSegmentNo,
+            ':childSegmentNoSummary' => $childSegmentNo,
+            ':parentSegmentNoSummaryIn' => $parentSegmentNo,
+            ':childSegmentNoSummaryIn' => $childSegmentNo,
+        ]);
+        $summaryRow = $summaryRows[0] ?? [];
+        $summary['parent_rows'] = (int) ($summaryRow['ParentRows'] ?? 0);
+        $summary['child_rows'] = (int) ($summaryRow['ChildRows'] ?? 0);
+
+        $sharedCte = "
+            WITH active_values AS (
+                SELECT
+                    sv.SegmentValueID,
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentValueID,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    ParentSegmentDataObjectCode = {$parentSegmentDataObjectCodeExpression},
+                    sv.ActiveFlag
+                FROM dbo.tblSegmentValues sv
+                WHERE sv.FiscalYearID = :fy
+                  AND sv.ActiveFlag = 1
+                  AND sv.SegmentNo IN (:parentSegmentNoForActive, :childSegmentNoForActive)
+            ),
+            child_values AS (
+                SELECT *
+                FROM active_values
+                WHERE SegmentNo = :childSegmentNoForChild
+            ),
+            data_object_scope AS (
+                SELECT
+                    child.SegmentValueID,
+                    ScopeDataObjectCode = CAST(child.DataObjectCode AS NVARCHAR(50)),
+                    ScopeDepth = 0
+                FROM child_values child
+
+                UNION ALL
+
+                SELECT
+                    scope.SegmentValueID,
+                    ScopeDataObjectCode = CAST(parentDoc.DataObjectCodeParent AS NVARCHAR(50)),
+                    ScopeDepth = scope.ScopeDepth + 1
+                FROM data_object_scope scope
+                INNER JOIN dbo.tblDataObjectCodes parentDoc
+                    ON parentDoc.FiscalYearID = :fyScope
+                   AND parentDoc.DataObjectCode = scope.ScopeDataObjectCode
+                WHERE NULLIF(LTRIM(RTRIM(ISNULL(parentDoc.DataObjectCodeParent, N''))), N'') IS NOT NULL
+                  AND parentDoc.DataObjectCodeParent <> scope.ScopeDataObjectCode
+                  AND scope.ScopeDepth < 20
+            ),
+            parent_matches AS (
+                SELECT
+                    child.SegmentValueID,
+                    MatchingParentCount = COUNT(parent.SegmentValueID),
+                    ActiveParentCount = SUM(CASE WHEN parent.ActiveFlag = 1 THEN 1 ELSE 0 END),
+                    SameDataObjectParentCount = SUM(CASE
+                        WHEN parent.ActiveFlag = 1
+                         AND parent.DataObjectCode = child.DataObjectCode THEN 1
+                        ELSE 0
+                    END),
+                    ScopedParentCount = SUM(CASE
+                        WHEN parent.ActiveFlag = 1
+                         AND (
+                            scope.ScopeDataObjectCode IS NOT NULL
+                            OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                            OR parent.DataObjectCode = child.ParentSegmentCode
+                            OR parent.SegmentValueID = child.ParentSegmentValueID
+                            OR (
+                                LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) > 2
+                                AND parent.DataObjectCode = LEFT(
+                                    LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                                    LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                                )
+                            )
+                         ) THEN 1
+                        ELSE 0
+                    END),
+                    NearestScopedParentDepth = MIN(CASE
+                        WHEN parent.ActiveFlag = 1
+                         AND (
+                            scope.ScopeDataObjectCode IS NOT NULL
+                            OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                            OR parent.DataObjectCode = child.ParentSegmentCode
+                            OR parent.SegmentValueID = child.ParentSegmentValueID
+                            OR (
+                                LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) > 2
+                                AND parent.DataObjectCode = LEFT(
+                                    LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                                    LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                                )
+                            )
+                         ) THEN ISNULL(scope.ScopeDepth, 0)
+                        ELSE NULL
+                    END)
+                FROM child_values child
+                LEFT JOIN dbo.tblSegmentValues parent
+                    ON parent.FiscalYearID = child.FiscalYearID
+                   AND (
+                        (
+                            child.ParentSegmentValueID IS NOT NULL
+                            AND parent.SegmentValueID = child.ParentSegmentValueID
+                        )
+                        OR (
+                            parent.SegmentNo = child.ParentSegmentNo
+                            AND parent.SegmentCode = child.ParentSegmentCode
+                            AND (
+                                child.ParentSegmentDataObjectCode IS NULL
+                                OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                            )
+                        )
+                   )
+                LEFT JOIN data_object_scope scope
+                    ON scope.SegmentValueID = child.SegmentValueID
+                   AND scope.ScopeDataObjectCode = parent.DataObjectCode
+                GROUP BY child.SegmentValueID
+            ),
+            duplicate_keys AS (
+                SELECT
+                    FiscalYearID,
+                    DataObjectCode,
+                    SegmentNo,
+                    SegmentCode,
+                    DuplicateCount = COUNT(*)
+                FROM dbo.tblSegmentValues
+                WHERE FiscalYearID = :fyDuplicate
+                  AND ActiveFlag = 1
+                  AND SegmentNo IN (:parentSegmentNoDuplicate, :childSegmentNoDuplicate)
+                GROUP BY FiscalYearID, DataObjectCode, SegmentNo, SegmentCode
+                HAVING COUNT(*) > 1
+            ),
+            issue_rows AS (
+                SELECT
+                    Severity = N'ERROR',
+                    IssueType = N'Child parent segment number is missing or wrong',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    MatchingParentCount = CONVERT(INT, NULL),
+                    Detail = N'Active child rows must point to the selected parent SegmentNo.'
+                FROM child_values sv
+                WHERE (sv.ParentSegmentNo IS NULL OR sv.ParentSegmentNo <> :parentSegmentNoWrong)
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.tblSegmentValues parentById
+                        WHERE parentById.SegmentValueID = sv.ParentSegmentValueID
+                          AND parentById.FiscalYearID = sv.FiscalYearID
+                          AND parentById.SegmentNo = :parentSegmentNoWrongById
+                          AND parentById.ActiveFlag = 1
+                  )
+
+                UNION ALL
+
+                SELECT
+                    N'ERROR',
+                    N'Child parent code is missing',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    CONVERT(INT, NULL),
+                    N'Active child rows must have a non-blank ParentSegmentCode.'
+                FROM child_values sv
+                WHERE NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, N''))), N'') IS NULL
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.tblSegmentValues parentById
+                        WHERE parentById.SegmentValueID = sv.ParentSegmentValueID
+                          AND parentById.FiscalYearID = sv.FiscalYearID
+                          AND parentById.SegmentNo = :parentSegmentNoMissingCodeById
+                          AND parentById.ActiveFlag = 1
+                  )
+
+                UNION ALL
+
+                SELECT
+                    N'ERROR',
+                    N'ParentSegmentValueID is missing',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    ISNULL(pm.ScopedParentCount, ISNULL(pm.ActiveParentCount, 0)),
+                    N'ParentSegmentNo and ParentSegmentCode are populated, but ParentSegmentValueID is not set. Run Resolve Parent Links so the child points to one exact parent row.'
+                FROM child_values sv
+                LEFT JOIN parent_matches pm
+                    ON pm.SegmentValueID = sv.SegmentValueID
+                WHERE sv.ParentSegmentNo = :parentSegmentNoMissingParentId
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, N''))), N'') IS NOT NULL
+                  AND sv.ParentSegmentValueID IS NULL
+
+                UNION ALL
+
+                SELECT
+                    N'ERROR',
+                    N'Parent row not found',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    ISNULL(pm.ActiveParentCount, 0),
+                    N'No active parent row exists for the child ParentSegmentNo/ParentSegmentCode.'
+                FROM child_values sv
+                LEFT JOIN parent_matches pm
+                    ON pm.SegmentValueID = sv.SegmentValueID
+                WHERE sv.ParentSegmentNo = :parentSegmentNoMissing
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, N''))), N'') IS NOT NULL
+                  AND ISNULL(pm.ActiveParentCount, 0) = 0
+
+                UNION ALL
+
+                SELECT
+                    N'ERROR',
+                    N'Parent row not found in data-object scope',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    ISNULL(pm.ScopedParentCount, 0),
+                    N'No active parent row exists in the child DataObjectCode, one of its parent DataObjectCodes, the explicit ParentSegmentValueID, the derived parent DataObjectCode, or the parent link code scope.'
+                FROM child_values sv
+                LEFT JOIN parent_matches pm
+                    ON pm.SegmentValueID = sv.SegmentValueID
+                WHERE :requireSameDataObjectCode = 1
+                  AND sv.ParentSegmentNo = :parentSegmentNoSameScope
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, N''))), N'') IS NOT NULL
+                  AND ISNULL(pm.ScopedParentCount, 0) = 0
+
+                UNION ALL
+
+                SELECT
+                    N'WARNING',
+                    N'Parent reference is ambiguous',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    ISNULL(pm.ActiveParentCount, 0),
+                    N'More than one active parent row matches this parent code in the selected match scope.'
+                FROM child_values sv
+                INNER JOIN parent_matches pm
+                    ON pm.SegmentValueID = sv.SegmentValueID
+                WHERE pm.ActiveParentCount > 1
+                  AND (:requireSameDataObjectCodeAmbiguous = 0 OR pm.ScopedParentCount <> 1)
+
+                UNION ALL
+
+                SELECT
+                    N'WARNING',
+                    N'Child DataObjectCode does not start with parent DataObjectCode',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    CONVERT(INT, NULL),
+                    N'Child DataObjectCode is expected to begin with the resolved parent DataObjectCode.'
+                FROM child_values sv
+                WHERE :checkCodePrefix = 1
+                  AND NULLIF(LTRIM(RTRIM(ISNULL(sv.ParentSegmentCode, N''))), N'') IS NOT NULL
+                  AND EXISTS (
+                        SELECT 1
+                        FROM dbo.tblSegmentValues parent
+                        LEFT JOIN data_object_scope scope
+                            ON scope.SegmentValueID = sv.SegmentValueID
+                           AND scope.ScopeDataObjectCode = parent.DataObjectCode
+                        WHERE parent.FiscalYearID = sv.FiscalYearID
+                          AND (
+                                parent.SegmentValueID = sv.ParentSegmentValueID
+                                OR (
+                                    parent.SegmentNo = sv.ParentSegmentNo
+                                    AND parent.SegmentCode = sv.ParentSegmentCode
+                                )
+                          )
+                          AND parent.ActiveFlag = 1
+                          AND (
+                                scope.ScopeDataObjectCode IS NOT NULL
+                                OR parent.DataObjectCode = sv.ParentSegmentDataObjectCode
+                                OR parent.DataObjectCode = sv.ParentSegmentCode
+                                OR parent.SegmentValueID = sv.ParentSegmentValueID
+                                OR (
+                                    LEN(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N'')))) > 2
+                                    AND parent.DataObjectCode = LEFT(
+                                        LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N''))),
+                                        LEN(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N'')))) - 2
+                                    )
+                                )
+                          )
+                  )
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.tblSegmentValues parent
+                        LEFT JOIN data_object_scope scope
+                            ON scope.SegmentValueID = sv.SegmentValueID
+                           AND scope.ScopeDataObjectCode = parent.DataObjectCode
+                        WHERE parent.FiscalYearID = sv.FiscalYearID
+                          AND (
+                                parent.SegmentValueID = sv.ParentSegmentValueID
+                                OR (
+                                    parent.SegmentNo = sv.ParentSegmentNo
+                                    AND parent.SegmentCode = sv.ParentSegmentCode
+                                )
+                          )
+                          AND parent.ActiveFlag = 1
+                          AND (
+                                scope.ScopeDataObjectCode IS NOT NULL
+                                OR parent.DataObjectCode = sv.ParentSegmentDataObjectCode
+                                OR parent.DataObjectCode = sv.ParentSegmentCode
+                                OR parent.SegmentValueID = sv.ParentSegmentValueID
+                                OR (
+                                    LEN(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N'')))) > 2
+                                    AND parent.DataObjectCode = LEFT(
+                                        LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N''))),
+                                        LEN(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N'')))) - 2
+                                    )
+                                )
+                          )
+                          AND LEFT(LTRIM(RTRIM(ISNULL(sv.DataObjectCode, N''))), LEN(LTRIM(RTRIM(ISNULL(parent.DataObjectCode, N''))))) = LTRIM(RTRIM(ISNULL(parent.DataObjectCode, N'')))
+                  )
+
+                UNION ALL
+
+                SELECT
+                    N'ERROR',
+                    N'Duplicate active segment key',
+                    sv.FiscalYearID,
+                    sv.DataObjectCode,
+                    sv.SegmentValueID,
+                    sv.SegmentNo,
+                    sv.SegmentCode,
+                    sv.SegmentName,
+                    sv.ParentSegmentNo,
+                    sv.ParentSegmentCode,
+                    dk.DuplicateCount,
+                    N'More than one active row has the same FiscalYearID, DataObjectCode, SegmentNo, and SegmentCode.'
+                FROM active_values sv
+                INNER JOIN duplicate_keys dk
+                    ON dk.FiscalYearID = sv.FiscalYearID
+                   AND dk.DataObjectCode = sv.DataObjectCode
+                   AND dk.SegmentNo = sv.SegmentNo
+                   AND dk.SegmentCode = sv.SegmentCode
+
+                UNION ALL
+
+                SELECT
+                    N'WARNING',
+                    N'ParentSegmentValueID points to a different parent',
+                    child.FiscalYearID,
+                    child.DataObjectCode,
+                    child.SegmentValueID,
+                    child.SegmentNo,
+                    child.SegmentCode,
+                    child.SegmentName,
+                    child.ParentSegmentNo,
+                    child.ParentSegmentCode,
+                    CONVERT(INT, NULL),
+                    N'ParentSegmentValueID is populated but does not match ParentSegmentNo/ParentSegmentCode.'
+                FROM child_values child
+                INNER JOIN dbo.tblSegmentValues parent
+                    ON parent.SegmentValueID = child.ParentSegmentValueID
+                WHERE child.ParentSegmentValueID IS NOT NULL
+                  AND (
+                        parent.FiscalYearID <> child.FiscalYearID
+                        OR (
+                            child.ParentSegmentNo IS NOT NULL
+                            AND parent.SegmentNo <> child.ParentSegmentNo
+                        )
+                        OR (
+                            NULLIF(LTRIM(RTRIM(ISNULL(child.ParentSegmentCode, N''))), N'') IS NOT NULL
+                            AND parent.SegmentCode <> child.ParentSegmentCode
+                        )
+                        OR (
+                            :requireSameDataObjectCodeParentId = 1
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM data_object_scope parentScope
+                                WHERE parentScope.SegmentValueID = child.SegmentValueID
+                                  AND parentScope.ScopeDataObjectCode = parent.DataObjectCode
+                            )
+                            AND parent.DataObjectCode <> child.ParentSegmentCode
+                            AND (
+                                child.ParentSegmentDataObjectCode IS NULL
+                                OR parent.DataObjectCode <> child.ParentSegmentDataObjectCode
+                            )
+                            AND parent.SegmentValueID <> child.ParentSegmentValueID
+                            AND (
+                                LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) <= 2
+                                OR parent.DataObjectCode <> LEFT(
+                                    LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                                    LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                                )
+                            )
+                        )
+                  )
+            )
+        ";
+
+        $params = [
+            ':fy' => $fiscalYearId,
+            ':fyScope' => $fiscalYearId,
+            ':parentSegmentNoForActive' => $parentSegmentNo,
+            ':childSegmentNoForActive' => $childSegmentNo,
+            ':childSegmentNoForChild' => $childSegmentNo,
+            ':fyDuplicate' => $fiscalYearId,
+            ':parentSegmentNoDuplicate' => $parentSegmentNo,
+            ':childSegmentNoDuplicate' => $childSegmentNo,
+            ':parentSegmentNoWrong' => $parentSegmentNo,
+            ':parentSegmentNoWrongById' => $parentSegmentNo,
+            ':parentSegmentNoMissingCodeById' => $parentSegmentNo,
+            ':parentSegmentNoMissingParentId' => $parentSegmentNo,
+            ':parentSegmentNoMissing' => $parentSegmentNo,
+            ':parentSegmentNoSameScope' => $parentSegmentNo,
+            ':requireSameDataObjectCode' => $requireSameDataObjectCode ? 1 : 0,
+            ':requireSameDataObjectCodeAmbiguous' => $requireSameDataObjectCode ? 1 : 0,
+            ':requireSameDataObjectCodeParentId' => $requireSameDataObjectCode ? 1 : 0,
+            ':checkCodePrefix' => $checkCodePrefix ? 1 : 0,
+        ];
+
+        $issues = $this->queryAll($sharedCte . "
+            SELECT
+                Severity,
+                IssueType,
+                FiscalYearID,
+                DataObjectCode,
+                SegmentValueID,
+                SegmentNo,
+                SegmentCode,
+                SegmentName,
+                ParentSegmentNo,
+                ParentSegmentCode,
+                MatchingParentCount,
+                Detail
+            FROM issue_rows
+            ORDER BY
+                CASE Severity WHEN N'ERROR' THEN 1 WHEN N'WARNING' THEN 2 ELSE 3 END,
+                IssueType,
+                DataObjectCode,
+                SegmentCode,
+                SegmentValueID
+        ", $params);
+
+        $issueCounts = [];
+        foreach ($issues as $issue) {
+            $severity = (string) ($issue['Severity'] ?? '');
+            $issueType = (string) ($issue['IssueType'] ?? '');
+            $key = $severity . "\n" . $issueType;
+            if (!isset($issueCounts[$key])) {
+                $issueCounts[$key] = [
+                    'Severity' => $severity,
+                    'IssueType' => $issueType,
+                    'IssueRows' => 0,
+                ];
+            }
+            $issueCounts[$key]['IssueRows']++;
+        }
+        $issueCounts = array_values($issueCounts);
+        usort($issueCounts, static function (array $a, array $b): int {
+            $severityOrder = ['ERROR' => 1, 'WARNING' => 2];
+            $left = $severityOrder[(string) ($a['Severity'] ?? '')] ?? 3;
+            $right = $severityOrder[(string) ($b['Severity'] ?? '')] ?? 3;
+            if ($left !== $right) {
+                return $left <=> $right;
+            }
+            return strcmp((string) ($a['IssueType'] ?? ''), (string) ($b['IssueType'] ?? ''));
+        });
+
+        $summary['issue_rows'] = count($issues);
+        $summary['error_rows'] = count(array_filter($issues, static fn(array $row): bool => (string) ($row['Severity'] ?? '') === 'ERROR'));
+        $summary['warning_rows'] = count(array_filter($issues, static fn(array $row): bool => (string) ($row['Severity'] ?? '') === 'WARNING'));
+        $summary['ready'] = $summary['child_rows'] > 0 && $summary['error_rows'] === 0;
+
+        $resolvedLinks = $this->queryAll("
+            WITH child_values AS (
+                SELECT
+                    child.SegmentValueID,
+                    child.FiscalYearID,
+                    child.DataObjectCode,
+                    child.SegmentNo,
+                    child.SegmentCode,
+                    child.SegmentName,
+                    child.ParentSegmentValueID,
+                    child.ParentSegmentNo,
+                    child.ParentSegmentCode,
+                    ParentSegmentDataObjectCode = {$childParentSegmentDataObjectCodeExpression}
+                FROM dbo.tblSegmentValues child
+                WHERE child.FiscalYearID = :fyResolved
+                  AND child.ActiveFlag = 1
+                  AND child.SegmentNo = :childSegmentNoResolved
+            ),
+            data_object_scope AS (
+                SELECT
+                    child.SegmentValueID,
+                    ScopeDataObjectCode = CAST(child.DataObjectCode AS NVARCHAR(50)),
+                    ScopeDepth = 0
+                FROM child_values child
+
+                UNION ALL
+
+                SELECT
+                    scope.SegmentValueID,
+                    ScopeDataObjectCode = CAST(parentDoc.DataObjectCodeParent AS NVARCHAR(50)),
+                    ScopeDepth = scope.ScopeDepth + 1
+                FROM data_object_scope scope
+                INNER JOIN dbo.tblDataObjectCodes parentDoc
+                    ON parentDoc.FiscalYearID = :fyResolvedScope
+                   AND parentDoc.DataObjectCode = scope.ScopeDataObjectCode
+                WHERE NULLIF(LTRIM(RTRIM(ISNULL(parentDoc.DataObjectCodeParent, N''))), N'') IS NOT NULL
+                  AND parentDoc.DataObjectCodeParent <> scope.ScopeDataObjectCode
+                  AND scope.ScopeDepth < 20
+            ),
+            ranked_parents AS (
+                SELECT
+                    child.SegmentValueID AS ChildSegmentValueID,
+                    ParentSegmentValueID = parent.SegmentValueID,
+                    ParentDataObjectCode = parent.DataObjectCode,
+                    ParentSegmentCode = parent.SegmentCode,
+                    ParentSegmentName = parent.SegmentName,
+                    ParentScopeDepth = scope.ScopeDepth,
+                    rn = ROW_NUMBER() OVER (
+                        PARTITION BY child.SegmentValueID
+                        ORDER BY
+                            CASE
+                                WHEN :requireSameDataObjectCodeResolved = 1
+                                 AND scope.ScopeDepth IS NULL
+                                 AND parent.DataObjectCode <> child.ParentSegmentDataObjectCode
+                                 AND parent.DataObjectCode <> child.ParentSegmentCode
+                                 AND parent.SegmentValueID <> child.ParentSegmentValueID
+                                 AND (
+                                    LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) <= 2
+                                    OR parent.DataObjectCode <> LEFT(
+                                        LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                                        LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                                    )
+                                 ) THEN 1
+                                ELSE 0
+                            END,
+                            COALESCE(scope.ScopeDepth, CASE
+                                WHEN parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                                  OR parent.DataObjectCode = child.ParentSegmentCode
+                                  OR parent.SegmentValueID = child.ParentSegmentValueID
+                                  OR (
+                                    LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) > 2
+                                    AND parent.DataObjectCode = LEFT(
+                                        LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                                        LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                                    )
+                                  )
+                                THEN 0
+                                ELSE 999
+                            END),
+                            parent.SegmentValueID
+                    )
+                FROM child_values child
+                INNER JOIN dbo.tblSegmentValues parent
+                    ON parent.FiscalYearID = child.FiscalYearID
+                   AND (
+                        (
+                            child.ParentSegmentValueID IS NOT NULL
+                            AND parent.SegmentValueID = child.ParentSegmentValueID
+                        )
+                        OR (
+                            parent.SegmentNo = child.ParentSegmentNo
+                            AND parent.SegmentCode = child.ParentSegmentCode
+                            AND (
+                                child.ParentSegmentDataObjectCode IS NULL
+                                OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                            )
+                        )
+                   )
+                   AND parent.ActiveFlag = 1
+                LEFT JOIN data_object_scope scope
+                    ON scope.SegmentValueID = child.SegmentValueID
+                   AND scope.ScopeDataObjectCode = parent.DataObjectCode
+                WHERE :requireSameDataObjectCodeResolvedAny = 0
+                   OR scope.ScopeDataObjectCode IS NOT NULL
+                   OR parent.DataObjectCode = child.ParentSegmentDataObjectCode
+                   OR parent.DataObjectCode = child.ParentSegmentCode
+                   OR parent.SegmentValueID = child.ParentSegmentValueID
+                   OR (
+                        LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) > 2
+                        AND parent.DataObjectCode = LEFT(
+                            LTRIM(RTRIM(ISNULL(child.DataObjectCode, N''))),
+                            LEN(LTRIM(RTRIM(ISNULL(child.DataObjectCode, N'')))) - 2
+                        )
+                   )
+            )
+            SELECT TOP (200)
+                ChildSegmentValueID = child.SegmentValueID,
+                child.DataObjectCode,
+                ChildSegmentNo = child.SegmentNo,
+                ChildSegmentCode = child.SegmentCode,
+                ChildSegmentName = child.SegmentName,
+                child.ParentSegmentNo,
+                child.ParentSegmentCode,
+                parent.ParentSegmentValueID,
+                parent.ParentDataObjectCode,
+                parent.ParentSegmentCode,
+                parent.ParentSegmentName,
+                parent.ParentScopeDepth
+            FROM child_values child
+            LEFT JOIN ranked_parents parent
+                ON parent.ChildSegmentValueID = child.SegmentValueID
+               AND parent.rn = 1
+            ORDER BY child.DataObjectCode, child.ParentSegmentCode, child.SegmentCode, child.SegmentValueID
+        ", [
+            ':requireSameDataObjectCodeResolved' => $requireSameDataObjectCode ? 1 : 0,
+            ':requireSameDataObjectCodeResolvedAny' => $requireSameDataObjectCode ? 1 : 0,
+            ':fyResolved' => $fiscalYearId,
+            ':fyResolvedScope' => $fiscalYearId,
+            ':childSegmentNoResolved' => $childSegmentNo,
+        ]);
+
+        return [
+            'summary' => $summary,
+            'segment_options' => $segmentOptions,
+            'issue_counts' => $issueCounts,
+            'issues' => $issues,
+            'resolved_links' => $resolvedLinks,
+        ];
+    }
+
+    public function getSegmentParentChildIssueLookup(int $segmentValueId): array
+    {
+        if ($segmentValueId <= 0 || !$this->tableExists('dbo.tblSegmentValues')) {
+            return [
+                'child' => [],
+                'child_key_matches' => [],
+                'active_duplicate_rows' => [],
+                'possible_parent_rows' => [],
+                'resolved_parent_rows' => [],
+            ];
+        }
+
+        $childRows = $this->queryAll("
+            SELECT TOP (1)
+                sv.*
+            FROM dbo.tblSegmentValues sv
+            WHERE sv.SegmentValueID = :segmentValueId
+        ", [
+            ':segmentValueId' => $segmentValueId,
+        ]);
+
+        if ($childRows === []) {
+            return [
+                'child' => [],
+                'child_key_matches' => [],
+                'active_duplicate_rows' => [],
+                'possible_parent_rows' => [],
+                'resolved_parent_rows' => [],
+            ];
+        }
+
+        $child = $childRows[0];
+        $fiscalYearId = (int) ($child['FiscalYearID'] ?? 0);
+        $dataObjectCode = (string) ($child['DataObjectCode'] ?? '');
+        $segmentNo = (int) ($child['SegmentNo'] ?? 0);
+        $segmentCode = (string) ($child['SegmentCode'] ?? '');
+        $parentSegmentNo = (int) ($child['ParentSegmentNo'] ?? 0);
+        $parentSegmentCode = (string) ($child['ParentSegmentCode'] ?? '');
+
+        $childKeyMatches = $this->queryAll("
+            SELECT
+                sv.*
+            FROM dbo.tblSegmentValues sv
+            WHERE sv.FiscalYearID = :fyChildKey
+              AND ISNULL(sv.DataObjectCode, N'') = :dataObjectCodeChildKey
+              AND sv.SegmentNo = :segmentNoChildKey
+              AND ISNULL(sv.SegmentCode, N'') = :segmentCodeChildKey
+            ORDER BY sv.ActiveFlag DESC, sv.SegmentValueID
+        ", [
+            ':fyChildKey' => $fiscalYearId,
+            ':dataObjectCodeChildKey' => $dataObjectCode,
+            ':segmentNoChildKey' => $segmentNo,
+            ':segmentCodeChildKey' => $segmentCode,
+        ]);
+
+        $activeDuplicateRows = $this->queryAll("
+            SELECT
+                sv.*
+            FROM dbo.tblSegmentValues sv
+            WHERE sv.FiscalYearID = :fyDuplicate
+              AND ISNULL(sv.DataObjectCode, N'') = :dataObjectCodeDuplicate
+              AND sv.SegmentNo = :segmentNoDuplicate
+              AND ISNULL(sv.SegmentCode, N'') = :segmentCodeDuplicate
+              AND sv.ActiveFlag = 1
+            ORDER BY sv.DataObjectCode, sv.SegmentNo, sv.SegmentCode, sv.SegmentValueID
+        ", [
+            ':fyDuplicate' => $fiscalYearId,
+            ':dataObjectCodeDuplicate' => $dataObjectCode,
+            ':segmentNoDuplicate' => $segmentNo,
+            ':segmentCodeDuplicate' => $segmentCode,
+        ]);
+
+        $possibleParentRows = [];
+        if ($parentSegmentNo > 0 && $parentSegmentCode !== '') {
+            $possibleParentRows = $this->queryAll("
+                SELECT
+                    parent.*
+                FROM dbo.tblSegmentValues parent
+                WHERE parent.FiscalYearID = :fyParent
+                  AND parent.SegmentNo = :parentSegmentNo
+                  AND ISNULL(parent.SegmentCode, N'') = :parentSegmentCode
+                ORDER BY
+                    CASE WHEN parent.DataObjectCode = :childDataObjectForSort THEN 0 ELSE 1 END,
+                    parent.ActiveFlag DESC,
+                    parent.DataObjectCode,
+                    parent.SegmentValueID
+            ", [
+                ':fyParent' => $fiscalYearId,
+                ':parentSegmentNo' => $parentSegmentNo,
+                ':parentSegmentCode' => $parentSegmentCode,
+                ':childDataObjectForSort' => $dataObjectCode,
+            ]);
+        }
+
+        $resolvedParentRows = $this->queryAll("
+            SELECT
+                parent.*
+            FROM dbo.tblSegmentValues child
+            INNER JOIN dbo.tblSegmentValues parent
+                ON parent.SegmentValueID = child.ParentSegmentValueID
+            WHERE child.SegmentValueID = :segmentValueIdResolved
+            ORDER BY parent.SegmentValueID
+        ", [
+            ':segmentValueIdResolved' => $segmentValueId,
+        ]);
+
+        return [
+            'child' => $childRows,
+            'child_key_matches' => $childKeyMatches,
+            'active_duplicate_rows' => $activeDuplicateRows,
+            'possible_parent_rows' => $possibleParentRows,
+            'resolved_parent_rows' => $resolvedParentRows,
         ];
     }
 }

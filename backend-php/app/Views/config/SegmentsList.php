@@ -13,6 +13,7 @@ $filters = is_array($filters ?? null) ? $filters : [];
 $dimensions = is_array($dimensions ?? null) ? $dimensions : [];
 $groups = is_array($groups ?? null) ? $groups : [];
 $_csrf = $_csrf ?? csrf_token();
+$segmentsWithoutValues = array_values(array_filter($rows, static fn(array $row): bool => (int) ($row['ValueCount'] ?? 0) === 0));
 ?>
 
 <div class="container mt-4">
@@ -65,6 +66,13 @@ $_csrf = $_csrf ?? csrf_token();
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div class="small text-muted">Use this register to review the segment master structure. Open a segment to maintain its lengths, ranges, grouping, and attribute names.</div>
       </div>
+
+      <?php if ($segmentsWithoutValues !== []): ?>
+        <div class="alert alert-warning py-2 mb-3">
+          <div class="fw-semibold">Some segments have no segment values loaded.</div>
+          <div class="small">Rows marked <span class="badge text-bg-warning">No values loaded</span> need values in <code>tblSegmentValues</code> before they can be used by imports, hierarchy checks, or transaction setup.</div>
+        </div>
+      <?php endif; ?>
 
       <div class="table-responsive">
         <table class="table table-striped table-hover align-middle">
@@ -125,7 +133,19 @@ $_csrf = $_csrf ?? csrf_token();
                       <?= h((string) ($row['MinLength'] ?? '')) ?>-<?= h((string) ($row['MaxLength'] ?? '')) ?>
                     <?php endif; ?>
                   </td>
-                  <td><?= (int) ($row['ValueCount'] ?? 0) ?></td>
+                  <td>
+                    <?php $valueCount = (int) ($row['ValueCount'] ?? 0); ?>
+                    <?php if ($valueCount > 0): ?>
+                      <a class="badge text-bg-success text-decoration-none" href="index.php?route=segment-values/list&segment_no=<?= (int) ($row['SegmentID'] ?? 0) ?>" title="Review loaded segment values">
+                        <?= $valueCount ?> loaded
+                      </a>
+                    <?php else: ?>
+                      <div class="d-flex flex-column align-items-start gap-1">
+                        <span class="badge text-bg-warning">No values loaded</span>
+                        <a class="small" href="index.php?route=segment-values/list&segment_no=<?= (int) ($row['SegmentID'] ?? 0) ?>">Load values</a>
+                      </div>
+                    <?php endif; ?>
+                  </td>
                   <td class="text-end">
                     <a class="btn btn-sm btn-outline-secondary" href="index.php?route=segments/form&id=<?= (int) ($row['SegmentID'] ?? 0) ?>">
                       <i class="bi bi-pencil-square"></i>

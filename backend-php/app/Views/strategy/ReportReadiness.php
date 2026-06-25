@@ -30,6 +30,7 @@ $statusBadge = static function (string $status): string {
     return match ($status) {
         'ready' => 'text-bg-success',
         'warning' => 'text-bg-warning',
+        'critical' => 'text-bg-danger',
         default => 'text-bg-secondary',
     };
 };
@@ -66,7 +67,7 @@ $screenHeader = [
       <div class="card shadow-sm h-100">
         <div class="card-body">
           <div class="text-muted small"><?= h(__t('strategy_needs_attention')) ?></div>
-          <div class="fs-4 fw-semibold"><?= (int) ($summary['warning_checks'] ?? 0) ?></div>
+          <div class="fs-4 fw-semibold"><?= (int) ($summary['critical_checks'] ?? 0) + (int) ($summary['warning_checks'] ?? 0) ?></div>
         </div>
       </div>
     </div>
