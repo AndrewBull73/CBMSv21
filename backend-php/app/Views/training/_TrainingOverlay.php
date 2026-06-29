@@ -21,9 +21,13 @@ $isCompleted = (bool) ($trainingGuide['isCompleted'] ?? false);
 $sampleValue = (string) ($trainingGuide['sampleValue'] ?? '');
 $currentStepNumber = (int) ($trainingState['current_step'] ?? 0);
 $totalSteps = (int) ($trainingState['total_steps'] ?? count($steps));
+$stopReturnUrl = $isCompleted
+    ? 'index.php?route=training/scenarios'
+    : (string) ($trainingGuide['runnerUrl'] ?? 'index.php?route=training/scenarios');
 
 $overlayPayload = [
     'completeUrl' => (string) ($trainingGuide['completeUrl'] ?? ''),
+    'stuckUrl' => (string) ($trainingGuide['stuckUrl'] ?? 'index.php?route=training/stuck'),
     'csrf' => (string) ($trainingGuide['csrf'] ?? ''),
     'isCompleted' => $isCompleted,
     'state' => $trainingState,
@@ -116,10 +120,13 @@ $overlayPayload = [
         <button type="button" id="training-step-continue" class="btn btn-sm btn-warning d-none">
           <i class="bi bi-arrow-right-circle me-1"></i><?= __t('training_continue') ?>
         </button>
+        <button type="button" id="training-step-stuck" class="btn btn-sm btn-outline-secondary<?= $isCompleted ? ' d-none' : '' ?>">
+          <i class="bi bi-question-circle me-1"></i>I'm stuck
+        </button>
         <form method="post" action="<?= h((string) ($trainingGuide['stopUrl'] ?? 'index.php?route=training/stop')) ?>" class="d-inline">
           <input type="hidden" name="_csrf" value="<?= h((string) ($trainingGuide['csrf'] ?? '')) ?>">
           <input type="hidden" name="scenario_id" value="<?= h((string) ($trainingState['scenario_id'] ?? '')) ?>">
-          <input type="hidden" name="return" value="<?= h((string) ($trainingGuide['runnerUrl'] ?? 'index.php?route=training/scenarios')) ?>">
+          <input type="hidden" name="return" value="<?= h($stopReturnUrl) ?>">
           <button type="submit" class="btn btn-sm <?= $isCompleted ? 'btn-outline-secondary' : 'btn-outline-danger' ?>">
             <i class="bi <?= $isCompleted ? 'bi-check2-circle' : 'bi-x-circle' ?> me-1"></i><?= $isCompleted ? __t('training_finish_scenario') : __t('training_leave_scenario') ?>
           </button>
@@ -153,6 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sampleWrap = document.getElementById('training-sample-wrap');
   const sampleValue = document.getElementById('training-sample-value');
   const continueBtn = document.getElementById('training-step-continue');
+  const stuckBtn = document.getElementById('training-step-stuck');
   const stopForm = panel.querySelector('form');
   const stopButton = stopForm ? stopForm.querySelector('button[type="submit"]') : null;
   const stopButtonIcon = stopButton ? stopButton.querySelector('i') : null;
@@ -222,6 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
         continueBtn.classList.add('d-none');
         continueBtn.onclick = null;
       }
+      if (stuckBtn) {
+        stuckBtn.classList.add('d-none');
+        stuckBtn.onclick = null;
+      }
       clearHighlights();
       return;
     }
@@ -251,12 +263,61 @@ document.addEventListener('DOMContentLoaded', () => {
         : null;
     }
 
+    if (stuckBtn) {
+      stuckBtn.classList.remove('d-none');
+      stuckBtn.onclick = () => postStuckEvent(step);
+    }
+
     highlightElement(step);
     bindStepHandlers(step);
   };
 
-  const postStepComplete = async (stepNumber) => {
-    if (pending) { return; }
+  const postStuckEvent = async (step) => {
+    if (!stuckBtn || !step) { return; }
+    const previousHtml = stuckBtn.innerHTML;
+    stuckBtn.disabled = true;
+    stuckBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Recording';
+
+    try {
+      const body = new URLSearchParams();
+      body.set('_csrf', String(config.csrf || ''));
+      body.set('scenario_id', String(config.scenarioId || ''));
+      body.set('step_number', String(step.number || state.current_step || ''));
+      body.set('route', String(step.route || ''));
+      body.set('target', String(step.target || ''));
+      body.set('message', 'Learner requested help from the training overlay.');
+
+      const response = await fetch(String(config.stuckUrl || ''), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: body.toString(),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload && payload.message ? String(payload.message) : 'Request failed');
+      }
+      stuckBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Recorded';
+      window.setTimeout(() => {
+        if (!stuckBtn) { return; }
+        stuckBtn.innerHTML = previousHtml;
+        stuckBtn.disabled = false;
+      }, 1800);
+    } catch (error) {
+      console.error('Training stuck event failed.', error);
+      stuckBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Try again';
+      window.setTimeout(() => {
+        if (!stuckBtn) { return; }
+        stuckBtn.innerHTML = previousHtml;
+        stuckBtn.disabled = false;
+      }, 2200);
+    }
+  };
+
+  const postStepComplete = async (stepNumber, options = {}) => {
+    if (pending) { return null; }
     pending = true;
 
     try {
@@ -277,22 +338,75 @@ document.addEventListener('DOMContentLoaded', () => {
       const payload = await response.json();
       if (!response.ok || !payload.ok) {
         console.warn('Training step completion failed.', payload);
-        return;
+        return null;
       }
 
       state = payload.state || state;
       if (payload.completed) {
-        const nextUrl = new URL(window.location.href);
-        nextUrl.searchParams.set('training_scenario_id', String(config.scenarioId || ''));
-        window.location.replace(nextUrl.toString());
-        return;
+        if (!options.deferCompletedReload) {
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set('training_scenario_id', String(config.scenarioId || ''));
+          window.location.replace(nextUrl.toString());
+        }
+        return payload;
       }
-      updatePanel();
+      if (!options.skipPanelUpdate) {
+        updatePanel();
+      }
+      return payload;
     } catch (error) {
       console.error('Training step completion request failed.', error);
+      return null;
     } finally {
       pending = false;
     }
+  };
+
+  const isPlainPrimaryClick = (event) => {
+    return event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+  };
+
+  const findNavigationAnchor = (element) => {
+    const source = element && typeof element.closest === 'function' ? element : null;
+    const anchor = source ? source.closest('a[href]') : null;
+    if (!anchor) { return null; }
+
+    const href = String(anchor.getAttribute('href') || '').trim();
+    if (href === '' || href === '#' || href.charAt(0) === '#' || href.toLowerCase().startsWith('javascript:')) {
+      return null;
+    }
+    if ((anchor.getAttribute('target') || '').trim() !== '') {
+      return null;
+    }
+    if (anchor.hasAttribute('data-bs-toggle') || anchor.hasAttribute('data-toggle')) {
+      return null;
+    }
+
+    return anchor;
+  };
+
+  const findSubmitControl = (element) => {
+    const source = element && typeof element.closest === 'function' ? element : null;
+    const control = source ? source.closest('button,input') : null;
+    if (!control) { return null; }
+
+    const tagName = String(control.tagName || '').toLowerCase();
+    const type = String(control.getAttribute('type') || (tagName === 'button' ? 'submit' : '')).toLowerCase();
+    if (type !== 'submit') { return null; }
+
+    const form = control.form || (typeof control.closest === 'function' ? control.closest('form') : null);
+    return form ? { control, form } : null;
+  };
+
+  const resumeSubmit = (submitDetails) => {
+    if (!submitDetails || !submitDetails.form) { return; }
+
+    if (typeof submitDetails.form.requestSubmit === 'function') {
+      submitDetails.form.requestSubmit(submitDetails.control || undefined);
+      return;
+    }
+
+    submitDetails.form.submit();
   };
 
   const bindStepHandlers = (step) => {
@@ -369,10 +483,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (completionMode === 'click_target') {
-      const maybeAdvance = () => {
-        postStepComplete(Number(step.number || 0));
+      let completingClickTarget = false;
+      let completedClickTarget = false;
+
+      const maybeAdvance = async (event) => {
+        if (completingClickTarget || completedClickTarget) {
+          return;
+        }
+
+        const clickSource = event.target && typeof event.target.closest === 'function' ? event.target : target;
+        const anchor = findNavigationAnchor(clickSource) || findNavigationAnchor(target);
+        const submitDetails = findSubmitControl(clickSource) || findSubmitControl(target);
+
+        if ((!anchor && !submitDetails) || !isPlainPrimaryClick(event)) {
+          completingClickTarget = true;
+          const payload = await postStepComplete(Number(step.number || 0));
+          completedClickTarget = !!payload;
+          completingClickTarget = false;
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        completingClickTarget = true;
+        const payload = await postStepComplete(Number(step.number || 0), { deferCompletedReload: true });
+        completingClickTarget = false;
+        if (!payload) { return; }
+
+        completedClickTarget = true;
+
+        if (anchor) {
+          window.location.assign(anchor.href);
+          return;
+        }
+
+        resumeSubmit(submitDetails);
       };
-      target.addEventListener('click', maybeAdvance, { once: true });
+      target.addEventListener('click', maybeAdvance);
     }
   };
 

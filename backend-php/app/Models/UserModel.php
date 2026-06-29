@@ -308,7 +308,7 @@ final class UserModel
     /**
      * Create a new user
      */
-    public function create(array $data): bool
+    public function create(array $data): int
     {
         $passwordHash = isset($data['Password'])
             ? password_hash($data['Password'], PASSWORD_BCRYPT)
@@ -320,6 +320,7 @@ final class UserModel
                  Phone, Department, JobTitle, Notes, IsActive,
                  ForcePasswordReset, MustChangePassword,
                  PasswordHash, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy)
+            OUTPUT INSERTED.UserID
             VALUES
                 (:Username, :Email, :FirstName, :LastName, :DisplayName,
                  :Phone, :Department, :JobTitle, :Notes, :IsActive,
@@ -329,7 +330,7 @@ final class UserModel
 
         try {
             $st = $this->conn->prepare($sql);
-            return $st->execute([
+            $st->execute([
                 ':Username'           => $data['Username'] ?? '',
                 ':Email'              => $data['Email'] ?? null,
                 ':FirstName'          => $data['FirstName'] ?? '',
@@ -346,9 +347,10 @@ final class UserModel
                 ':CreatedBy'          => $data['CreatedBy'] ?? null,
                 ':UpdatedBy'          => $data['UpdatedBy'] ?? null,
             ]);
+            return (int)($st->fetchColumn() ?: 0);
         } catch (\Throwable $e) {
             $this->lastError = $e->getMessage();
-            return false;
+            return 0;
         }
     }
 
@@ -401,6 +403,34 @@ final class UserModel
             }
 
             return $executed;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
+    }
+
+    public function updatePassword(int $id, string $passwordHash, ?int $updatedBy = null): bool
+    {
+        if ($id <= 0 || trim($passwordHash) === '') {
+            $this->lastError = 'Invalid user or password hash.';
+            return false;
+        }
+
+        try {
+            $st = $this->conn->prepare("
+                UPDATE dbo.tblUsers
+                SET PasswordHash = :passwordHash,
+                    ForcePasswordReset = 0,
+                    MustChangePassword = 0,
+                    UpdatedAt = SYSUTCDATETIME(),
+                    UpdatedBy = :updatedBy
+                WHERE UserID = :id
+            ");
+            return $st->execute([
+                ':id' => $id,
+                ':passwordHash' => $passwordHash,
+                ':updatedBy' => $updatedBy,
+            ]);
         } catch (\Throwable $e) {
             $this->lastError = $e->getMessage();
             return false;

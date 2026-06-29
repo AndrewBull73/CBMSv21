@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\AuditModel;
+use App\Models\TrainingManagementModel;
 use App\Models\TrainingProgressModel;
 use App\Models\UserModel;
 use App\Shared\SessionHelper;
@@ -16,8 +17,9 @@ final class TrainingController extends BaseController
 {
     protected array $acl = [
         '*' => ['auth' => true],
-        'users' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN']],
-        'usersEdit' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN']],
+        'users' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'users-edit' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'usersEdit' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'scenarios' => ['auth' => true],
         'runner' => ['auth' => true],
         'summary' => ['auth' => true, 'permsAny' => ['USERS_VIEW', 'USERS_ADMIN']],
@@ -25,6 +27,7 @@ final class TrainingController extends BaseController
         'manage' => ['auth' => true, 'permsAny' => ['USERS_ADMIN']],
         'saveNote' => ['auth' => true],
         'reset' => ['auth' => true, 'permsAny' => ['USERS_ADMIN']],
+        'stuck' => ['auth' => true],
     ];
 
     public function __construct()
@@ -50,6 +53,17 @@ final class TrainingController extends BaseController
             $userScenarioStates = $model->listUserStates($userId);
         } else {
             $setupRequired = true;
+        }
+
+        $userAssignmentsByScenario = [];
+        $managementModel = $this->trainingManagementModel();
+        if ($managementModel instanceof TrainingManagementModel && $managementModel->supportsManagementTables() && $userId > 0) {
+            foreach ($managementModel->listUserAssignments($userId) as $assignment) {
+                $assignedScenarioCode = trim((string) ($assignment['EffectiveScenarioCode'] ?? ''));
+                if ($assignedScenarioCode !== '' && !isset($userAssignmentsByScenario[$assignedScenarioCode])) {
+                    $userAssignmentsByScenario[$assignedScenarioCode] = $assignment;
+                }
+            }
         }
 
         $moduleOptions = [];
@@ -111,6 +125,7 @@ final class TrainingController extends BaseController
             'title' => __t('training_scenarios_title'),
             'scenarios' => $scenarios,
             'userScenarioStates' => $userScenarioStates,
+            'userAssignmentsByScenario' => $userAssignmentsByScenario,
             'setupRequired' => $setupRequired,
             'filters' => $filters,
             'moduleOptions' => $moduleOptions,
@@ -306,6 +321,9 @@ final class TrainingController extends BaseController
         SessionHelper::forget('training.requested_scenario_id');
 
         $return = trim((string) ($_POST['return'] ?? 'index.php?route=training/scenarios'));
+        if (is_array($state) && (string) ($state['status'] ?? '') === 'completed') {
+            $return = 'index.php?route=training/scenarios';
+        }
         header('Location: ' . $return);
         exit;
     }
@@ -339,6 +357,13 @@ final class TrainingController extends BaseController
         SessionHelper::set('training.active', $advancedState);
         SessionHelper::set('training.requested_scenario_id', (string) ($advancedState['scenario_id'] ?? ''));
         $this->persistTrainingState($advancedState);
+        if ((string) ($advancedState['status'] ?? '') === 'completed') {
+            $managementModel = $this->trainingManagementModel();
+            if ($managementModel instanceof TrainingManagementModel) {
+                $userId = (int) SessionHelper::get('auth.user_id', 0);
+                $managementModel->markAssignmentsCompleted($userId, (string) ($advancedState['scenario_id'] ?? ''), $userId);
+            }
+        }
 
         $nextStep = ($advancedState['status'] ?? '') === 'completed' ? null : TrainingScenarioCatalog::getStep($advancedState);
         $this->json([
@@ -423,6 +448,43 @@ final class TrainingController extends BaseController
         $this->flashSuccess('Training note saved.');
         header('Location: ' . $return);
         exit;
+    }
+
+    public function stuck(): void
+    {
+        $this->ensureTrainingEnabled();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->json(['ok' => false, 'message' => 'Invalid request.'], 400);
+            return;
+        }
+
+        $state = $this->getTrainingState(trim((string) ($_POST['scenario_id'] ?? '')));
+        if ($state === null) {
+            $this->json(['ok' => false, 'message' => 'No active training scenario.'], 400);
+            return;
+        }
+
+        $step = TrainingScenarioCatalog::getStep($state);
+        if (!is_array($step)) {
+            $this->json(['ok' => false, 'message' => 'No active training step.'], 400);
+            return;
+        }
+
+        $model = $this->trainingManagementModel();
+        if ($model === null || !$model->supportsManagementTables()) {
+            $this->json(['ok' => true, 'recorded' => false, 'message' => 'Training support queue is not installed.']);
+            return;
+        }
+
+        $model->recordStuckEvent((int) SessionHelper::get('auth.user_id', 0), [
+            'ScenarioCode' => (string) ($state['scenario_id'] ?? ''),
+            'StepNo' => (int) ($step['number'] ?? $state['current_step'] ?? 0),
+            'Route' => trim((string) ($step['route'] ?? '')),
+            'TargetElementID' => trim((string) ($step['target'] ?? '')),
+            'Message' => trim((string) ($_POST['message'] ?? '')),
+        ]);
+
+        $this->json(['ok' => true, 'recorded' => true]);
     }
 
     private function getTrainingState(?string $scenarioId = null): ?array
@@ -528,6 +590,15 @@ final class TrainingController extends BaseController
         return new TrainingProgressModel($this->db);
     }
 
+    private function trainingManagementModel(): ?TrainingManagementModel
+    {
+        if (!$this->db instanceof \PDO) {
+            return null;
+        }
+
+        return new TrainingManagementModel($this->db);
+    }
+
     private function renderScenarioRunner(string $scenarioId): void
     {
         $this->ensureTrainingEnabled();
@@ -601,6 +672,7 @@ final class TrainingController extends BaseController
             'isCompleted' => $isCompleted,
             'sampleValue' => $sampleValue,
             'completeUrl' => 'index.php?route=training/complete',
+            'stuckUrl' => 'index.php?route=training/stuck',
             'runnerUrl' => TrainingScenarioCatalog::startRoute($scenarioId),
             'stopUrl' => 'index.php?route=training/stop',
             'csrf' => csrf_token(),

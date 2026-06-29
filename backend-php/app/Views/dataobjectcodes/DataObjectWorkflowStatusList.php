@@ -12,6 +12,8 @@
 /** @var array $statusOptions */
 /** @var string $_csrf */
 
+use App\Shared\SessionHelper;
+
 require_once __DIR__ . '/../../../shared/csrf.php';
 
 if (!function_exists('h')) {
@@ -50,6 +52,11 @@ $returnQuery = http_build_query([
     'page' => $page,
     'pageSize' => $pageSize,
 ]);
+$perms = SessionHelper::get('auth.perms', []);
+$canEdit = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true)
+        || in_array('DATAOBJECTCODES_ADMIN', $perms, true)
+        || in_array('DATAOBJECTCODES_EDIT', $perms, true));
 ?>
 
 <div class="container mt-4">
@@ -129,12 +136,13 @@ $returnQuery = http_build_query([
       <div class="card shadow-sm mb-4">
         <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
           <h5 class="mb-0">Workflow Status Register</h5>
-          <div class="d-flex gap-2">
-            <a href="index.php?route=dataobjectcodes/index" class="btn btn-sm btn-outline-secondary">Data Object Codes</a>
-            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#buildWorkflowStatusModal">
-              Build Missing
-            </button>
-          </div>
+          <?php if ($canEdit): ?>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#buildWorkflowStatusModal">
+                Build Missing
+              </button>
+            </div>
+          <?php endif; ?>
         </div>
         <div class="card-body">
           <form method="post" action="index.php?route=dataobjectworkflow/saveStatuses">
@@ -168,7 +176,7 @@ $returnQuery = http_build_query([
                         <td><?= h((string)($row['DataObjectCodeParent'] ?? '')) ?></td>
                         <td><?= h((string)($row['DataObjectTypeName'] ?? $row['DataObjectTypeID'] ?? '')) ?></td>
                         <td>
-                          <select class="form-select form-select-sm" name="statuses[<?= h($code) ?>]">
+                          <select class="form-select form-select-sm" name="statuses[<?= h($code) ?>]" <?= $canEdit ? '' : 'disabled' ?>>
                             <?php foreach ($statusOptions as $option): ?>
                               <?php $option = strtoupper((string)$option); ?>
                               <option value="<?= h($option) ?>" <?= $currentStatus === $option ? 'selected' : '' ?>><?= h($option) ?></option>
@@ -188,9 +196,11 @@ $returnQuery = http_build_query([
 
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
               <div class="small text-muted">Showing <?= count($rows) ?> of <?= $total ?> data object code(s).</div>
-              <button type="submit" class="btn btn-sm btn-primary" <?= $rows === [] ? 'disabled' : '' ?>>
-                Save Statuses
-              </button>
+              <?php if ($canEdit): ?>
+                <button type="submit" class="btn btn-sm btn-primary" <?= $rows === [] ? 'disabled' : '' ?>>
+                  Save Statuses
+                </button>
+              <?php endif; ?>
             </div>
           </form>
 
@@ -217,6 +227,7 @@ $returnQuery = http_build_query([
   </div>
 </div>
 
+<?php if ($canEdit): ?>
 <div class="modal fade" id="buildWorkflowStatusModal" tabindex="-1" aria-labelledby="buildWorkflowStatusModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -249,3 +260,4 @@ $returnQuery = http_build_query([
     </div>
   </div>
 </div>
+<?php endif; ?>

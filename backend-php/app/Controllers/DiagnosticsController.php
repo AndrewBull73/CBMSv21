@@ -98,22 +98,44 @@ class DiagnosticsController extends BaseController
         try {
             $settings = new SystemSettingsModel($conn);
             $to   = $settings->get('EMAIL_ERROR_TO', '');
-            $from = $settings->get('EMAIL_ERROR_FROM', 'noreply@cbmsv2.local');
+            $from = trim((string) $settings->get('EMAIL_ERROR_FROM', ''));
+            $from = $from !== '' ? $from : null;
 
             if ($to) {
                 $mailer = new MailService($conn);
-                $mailer->sendEmail(
+                $sent = $mailer->sendEmail(
                     $to,
                     '[' . __t('diagnostics_title') . '] ' . __t('test_email_subject'),
                     '<p>' . __t('test_email_body') . '</p>',
                     $from
                 );
-                $this->flashSuccess(__t('test_email_sent', ['to' => $to]));
+                if ($sent) {
+                    app_log('Diagnostics test email sent', [
+                        'to' => $to,
+                        'from' => $from,
+                    ], 'info');
+                    $this->flashSuccess(__t('test_email_sent', ['to' => $to]));
+                } else {
+                    $detail = $mailer->getLastError() !== '' ? $mailer->getLastError() : 'The mail server did not accept the message.';
+                    app_log('Diagnostics test email failed', [
+                        'to' => $to,
+                        'from' => $from,
+                        'error' => $detail,
+                    ], 'error');
+                    $this->flashError(__t('mail_test_failed_detail', ['msg' => $detail]));
+                }
             } else {
+                app_log('Diagnostics test email skipped: recipient setting is blank', [
+                    'setting' => 'EMAIL_ERROR_TO',
+                ], 'warn');
                 $this->flashError(__t('no_error_email_to'));
             }
         } catch (\Throwable $e) {
             // Use placeholder for better translations
+            app_log('Diagnostics test email exception', [
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+            ], 'error');
             $this->flashError(__t('mail_test_failed_detail', ['msg' => $e->getMessage()]));
         }
 

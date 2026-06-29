@@ -73,7 +73,7 @@ final class LoginTokenModel
             $upd->execute([':id' => (int)$row['LoginTokenID']]);
 
             $userSt = $this->db->prepare("
-                SELECT UserID, Username, PasswordHash, IsActive
+                SELECT UserID, Username, PasswordHash, IsActive, ForcePasswordReset, MustChangePassword
                 FROM dbo.tblUsers
                 WHERE UserID = :id
             ");

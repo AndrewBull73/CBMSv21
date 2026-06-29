@@ -7,7 +7,11 @@ declare(strict_types=1);
 
 use App\Shared\SessionHelper;
 
-$canGrant = in_array('DATAOBJECTCODES_ADMIN', SessionHelper::get('auth.perms', []));
+$perms = SessionHelper::get('auth.perms', []);
+$canGrant = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true)
+        || in_array('DATAOBJECTCODES_ADMIN', $perms, true)
+        || in_array('DATAOBJECTCODES_ACCESS_ADMIN', $perms, true));
 
 // Filters
 $qUser = trim($_GET['q_user'] ?? '');

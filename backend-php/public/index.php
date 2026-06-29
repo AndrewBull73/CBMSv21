@@ -43,6 +43,42 @@ if (!function_exists('_et')) {
     }
 }
 
+function cbms_public_error_return_url(): string {
+    $candidates = [
+        $_SERVER['HTTP_REFERER'] ?? '',
+        $_SERVER['REQUEST_URI'] ?? '',
+    ];
+
+    foreach ($candidates as $candidate) {
+        $candidate = trim((string) $candidate);
+        if ($candidate === '') {
+            continue;
+        }
+
+        $parts = parse_url($candidate);
+        if ($parts === false) {
+            continue;
+        }
+
+        if (isset($parts['host'])) {
+            $requestHost = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+            if ($requestHost === '' || strtolower((string) $parts['host']) !== $requestHost) {
+                continue;
+            }
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        $query = isset($parts['query']) ? '?' . (string) $parts['query'] : '';
+        if ($path === '' && $query === '') {
+            continue;
+        }
+
+        return $path . $query;
+    }
+
+    return 'index.php?route=home/index';
+}
+
 function renderHttpError(int $code, string $titleKey, string $messageKey, ?string $detail = null): void {
     http_response_code($code);
 
@@ -53,6 +89,7 @@ function renderHttpError(int $code, string $titleKey, string $messageKey, ?strin
 
     // If request id helper is available, show it
     $rid = function_exists('cbms_request_id') ? cbms_request_id() : null;
+    $returnUrl = cbms_public_error_return_url();
 
     // Minimal, self-contained box (no Bootstrap dependency)
     echo "<div style='max-width:640px;margin:2rem auto;padding:1rem;
@@ -73,10 +110,14 @@ function renderHttpError(int $code, string $titleKey, string $messageKey, ?strin
     }
 
     $home = _et('home', 'Home');
+    $back = _et('back', 'Back');
     echo "  <div style='margin-top:.75rem'>
-              <a href='index.php?route=home/index'
+              <a href='" . htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') . "'
                  style='display:inline-block;padding:.4rem .75rem;margin-right:.5rem;
-                        background:#0d6efd;color:#fff;text-decoration:none;border-radius:4px'>{$home}</a>
+                        background:#0d6efd;color:#fff;text-decoration:none;border-radius:4px'>" . htmlspecialchars($back, ENT_QUOTES, 'UTF-8') . "</a>
+              <a href='index.php?route=home/index'
+                 style='display:inline-block;padding:.4rem .75rem;
+                        background:#6c757d;color:#fff;text-decoration:none;border-radius:4px'>" . htmlspecialchars($home, ENT_QUOTES, 'UTF-8') . "</a>
             </div>
           </div>";
 }
@@ -230,6 +271,9 @@ try {
     }
 
     $refId = function_exists('cbms_request_id') ? cbms_request_id() : uniqid('ERR');
+    $returnUrl = cbms_public_error_return_url();
+    $backLabel = _et('back', 'Back');
+    $homeLabel = _et('home', 'Home');
 
     echo "<!doctype html>
 <html lang='" . htmlspecialchars(\App\Shared\Lang::getActiveLang(), ENT_QUOTES, 'UTF-8') . "'>
@@ -250,8 +294,11 @@ try {
       <p class='small text-muted mb-1'>File: " . htmlspecialchars($e->getFile(), ENT_QUOTES, 'UTF-8') . " (line " . $e->getLine() . ")</p>
       <p class='small text-muted'>Reference ID: " . htmlspecialchars($refId, ENT_QUOTES, 'UTF-8') . "</p>
     </div>
-    <a href='index.php?route=home/index' class='btn btn-outline-primary'>
-      <i class='bi bi-house-door'></i> Back to Home
+    <a href='" . htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') . "' class='btn btn-primary me-2'>
+      <i class='bi bi-arrow-left'></i> " . htmlspecialchars($backLabel, ENT_QUOTES, 'UTF-8') . "
+    </a>
+    <a href='index.php?route=home/index' class='btn btn-outline-secondary'>
+      <i class='bi bi-house-door'></i> " . htmlspecialchars($homeLabel, ENT_QUOTES, 'UTF-8') . "
     </a>
   </div>
 </body>

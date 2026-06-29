@@ -1,195 +1,304 @@
 # CBMSv21 Screen UI Standard
 
-## Canonical Reference
+This file is the agreed reference for CBMSv21 screen layout consistency. Use it before changing or creating any admin, setup, readiness, inquiry, diagnostic, or operational screen.
 
-The canonical screen style for new CBMSv21 module pages is:
+## Canonical References
 
-- Route: `strategy-config/configuration-readiness`
-- View: `backend-php/app/Views/strategy/ReportReadiness.php`
-- Mode: `readinessType = 'configuration'`
+Use these screens as the visual and structural references:
 
-This screen should be treated as the primary reference when building:
+- Primary reference: `base-config/readiness`
+- Primary view: `backend-php/app/Views/config/BaseConfigurationReadiness.php`
+- Operational reference: `emailqueue/index`
+- Operational view: `backend-php/app/Views/diagnostics/EmailQueueView.php`
+- Diagnostic reference: `application-log/index`
+- Diagnostic view: `backend-php/app/Views/diagnostics/ApplicationLogView.php`
+- Readiness report reference: `strategy-config/configuration-readiness`
+- Readiness report view: `backend-php/app/Views/strategy/ReportReadiness.php`
 
-- module landing pages
-- setup dashboards
-- readiness screens
-- inquiry screens
-- review/monitoring screens
-
-Do not use the Budget Execution screens themselves as the style reference.
+Do not use Budget Execution transaction screens as the general style reference. They can have workflow-specific needs that do not apply to setup, diagnostic, or admin screens.
 
 ## Goal
 
-The purpose of this standard is to stop each new screen from introducing a slightly different:
+Every standard CBMSv21 screen should feel like it belongs to the same application. Avoid one-off differences in:
 
-- page header
-- quick link layout
-- helper instruction block
-- metric card style
-- card header style
-- table spacing
+- page header size and placement
+- card header labels
+- quick links
+- helper instructions
+- metric cards
+- filter/control layout
+- table header styling
+- button sizing and colour
 
-The objective is predictable visual consistency across modules.
+## Standard Page Anatomy
 
-## Standard Page Shell
+Use this order unless the screen has a strong workflow reason not to:
 
-Use this structure in this order:
+1. `<div class="container mt-4">`
+2. One main `<div class="card shadow-sm">`
+3. Shared screen card header
+4. `<div class="card-body">`
+5. Current context line
+6. Metric summary cards, when useful
+7. Helper or runbook alert, when useful
+8. One or more section cards
+9. Tables, forms, or detailed content inside section cards
 
-1. `container mt-4`
-2. one main `card shadow-sm`
-3. top `card-header d-flex justify-content-between align-items-center gap-2 flex-wrap`
-4. page title in `h3.mb-0`
-5. page navigation comes from the shared Quick Links bar when used
-6. `card-body`
-7. current context line
-8. metric summary cards
-9. optional helper / instructional alert
-10. one or more content section cards
+The shared UI CSS scope is applied globally by:
 
-This is the target pattern used by `strategy-config/configuration-readiness`.
+- `backend-php/app/Views/layouts/main.php`
+- `<body class="bg-light strategy-ui">`
+
+Do not make `strategy-ui` route-specific. It is the common CBMSv21 screen styling baseline and should be present throughout the application.
+
+Standard skeleton:
+
+```php
+$screenHeader = [
+    'title' => 'Screen Title',
+    'icon' => 'bi-example',
+];
+?>
+
+<div class="container mt-4">
+  <div class="card shadow-sm">
+    <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
+    <div class="card-body">
+      <div class="small text-muted mb-3">
+        Current context:
+        <strong><?= h($contextSummary) ?></strong>
+      </div>
+
+      <!-- metric cards -->
+      <!-- helper/runbook alert -->
+      <!-- section cards -->
+    </div>
+  </div>
+</div>
+```
 
 ## Header Standard
 
-The top header must follow this pattern:
-
-- title inside the main card header, not floating outside the card
-- `h3.mb-0`
-- optional icon before title
-
-Use the shared partial:
+Always use:
 
 - `backend-php/app/Views/shared/_ScreenCardHeader.php`
+- title in the shared card header
+- `h3.mb-0` from the shared partial
+- optional Bootstrap icon through `$screenHeader['icon']`
 
-The shared card header is for the page title area only. It should not duplicate quick-link navigation.
+Do not put:
 
-Quick Links definitions should come from:
+- a custom `h3.mb-1` header in the view
+- descriptive subtitle text inside the main card header
+- one-off action button rows inside the main header unless the shared partial supports them
+
+The main header is for the screen title only. Put operational text in the helper/runbook alert or section cards.
+
+## Current Context Standard
+
+The current context line belongs immediately inside the main `card-body`.
+
+Use:
+
+```html
+<div class="small text-muted mb-3">
+  Current context:
+  <strong>...</strong>
+</div>
+```
+
+Examples:
+
+- `Current context: FY 2026 / Original Budget`
+- `Current context: Email delivery queue`
+- `Current context: app-2026-06-27.log`
+
+Use labels rather than raw IDs where labels are available.
+
+## Metric Card Standard
+
+Metric cards appear immediately below the context line.
+
+Use:
+
+- wrapper: `row g-3 mb-4`
+- column: `col-6 col-xl-3`
+- card: `card shadow-sm h-100`
+- body: `card-body`
+- label: `text-muted small`
+- value: `fs-4 fw-semibold`
+
+Example:
+
+```html
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="text-muted small">Displayed</div>
+        <div class="fs-4 fw-semibold">123</div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+Do not use bordered metric blocks such as `border rounded p-3 h-100` for standard screens.
+
+## Helper And Runbook Standard
+
+Use one helper/runbook alert after the metrics when the screen needs guidance.
+
+Use:
+
+- `alert alert-info border-0 shadow-sm mb-4`
+- title line: `fw-semibold mb-1`
+- short operational text
+- optional muted supporting line
+
+Example:
+
+```html
+<div id="screen-runbook" class="alert alert-info border-0 shadow-sm mb-4">
+  <div class="fw-semibold mb-1">Screen Runbook</div>
+  <div class="mb-2">Explain what the screen is for.</div>
+  <div class="small text-muted mb-2">Explain what the user should check first.</div>
+  <div class="small">Explain the next safe action.</div>
+</div>
+```
+
+Use helper/runbook alerts for:
+
+- setup-heavy screens
+- workflow-heavy screens
+- operationally sensitive screens
+- diagnostic screens
+- screens that are new or easy to misunderstand
+
+Avoid helper/runbook alerts on very simple lists unless the list has sensitive actions.
+
+## Shared Helper Instructions
+
+The shared route helper is:
+
+- `backend-php/app/Views/strategy/_RouteHelp.php`
+
+If a route uses the shared helper area, it must have route-specific wording when generic text would be misleading.
+
+Rules:
+
+- Do not let non-Strategy screens display Strategy-specific help.
+- Add route-specific entries for operational screens such as Email Queue, Application Log, Diagnostics, and Health.
+- The generic fallback should be neutral, such as `Screen Help`, not module-specific.
+
+## Quick Links Standard
+
+Quick Links definitions belong in:
 
 - `backend-php/config/quick_links.php`
 
-The shared Quick Links renderer currently lives at:
+The shared Quick Links renderer is:
 
 - `backend-php/app/Views/strategy/_QuickNav.php`
 
-Quick links must use:
+Quick Links are optional. Use them when a screen is part of a small workflow group where users move frequently between related screens.
+
+Quick links must use the shared renderer. Do not duplicate quick links inside local card headers.
+
+Standard button styles:
 
 - inactive link: `btn btn-sm btn-outline-secondary`
 - active/current page link: `btn btn-sm btn-primary`
 
-Do not mix:
-
-- `btn-outline-primary`
-- standalone top-page button rows outside the header
-- different quick-link styles on the same screen
-
-Quick links are optional.
-
-Use them when:
-
-- the screen is part of a small workflow cluster
-- users need to move frequently between related screens
-- the module has a clear “hub and spoke” navigation pattern
-
-Do not force quick links onto every screen.
-
-When quick links are used, they should be rendered through the shared Quick Links bar, not duplicated again inside the card header.
-
-## Context Standard
-
-The context line belongs inside the top card body and should use:
-
-- `small text-muted mb-3`
-
-Format:
-
-`Current context: <Fiscal Year> / <Version>`
-
-Where labels are available, use labels rather than raw IDs.
-
-## Metric Card Standard
-
-Metric cards should appear immediately below the context line.
-
-Use:
-
-- `row g-3 mb-4`
-- each metric card as `card shadow-sm h-100`
-- metric label as `text-muted small`
-- metric value as `fs-4 fw-semibold`
-
-Do not introduce custom metric sizing unless there is a strong reason.
-
-## Helper Instruction Standard
-
-If helper instructions are needed, use one main helper/instruction block after the metric cards:
-
-- `alert alert-info border-0 shadow-sm mb-4`
-
-This block should explain:
-
-- what the screen is for
-- what the user should verify
-- what the next step is
-
-If extra guidance is needed, prefer adding:
-
-- short explanatory text inside relevant section cards
-
-Do not stack multiple differently-styled helper panels unless truly necessary.
-
-Helper instructions are optional.
-
-Use them when the screen is:
-
-- setup-heavy
-- workflow-heavy
-- new to users
-- operationally sensitive
-- likely to be confusing without guidance
-
-Usually avoid them on:
-
-- simple lists
-- straightforward inquiry screens
-- frequently used transaction-entry screens where users already know the flow
+Do not mix `btn-outline-primary` quick links into the shared quick-link bar.
 
 ## Section Card Standard
 
-Each major section should use:
+Each major area inside the main screen body should be a section card.
 
-- `card shadow-sm mb-4`
+Use:
 
-Section header:
+```html
+<div class="card shadow-sm mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">Section Title</h5>
+  </div>
+  <div class="card-body">
+    ...
+  </div>
+</div>
+```
 
-- `card-header`
-- `h5.mb-0`
+Section card rules:
 
-Section body:
+- header label uses `h5.mb-0`
+- no oversized section headings
+- no custom card-header colours
+- no local card-header padding overrides
+- no gradient or decorative section headers
 
-- `card-body`
+## Filter And Control Card Standard
 
-Do not use:
+Filters and action controls should live in a dedicated section card when there is more than one control.
 
-- custom local card-header colors
-- ad hoc header padding overrides
-- mixed white/gradient header logic within the same module
+Use section titles such as:
 
-If the global layout supplies shared card styles, use them rather than redefining them in the view.
+- `Queue Controls`
+- `Log Controls`
+- `Readiness Filters`
+- `Search Criteria`
+
+Form layout:
+
+- `row g-2 align-items-end`
+- labels use `form-label`
+- selects use `form-select`
+- inputs use `form-control`
+- action buttons are compact
+
+Primary filter button:
+
+- `btn btn-primary btn-sm`
+
+Reset or refresh:
+
+- `btn btn-outline-secondary btn-sm`
 
 ## Table Standard
 
-For inquiry/admin tables use:
+Standard inquiry/admin tables use:
 
 - `table table-sm table-hover align-middle mb-0`
-
-Use `table-admin` only where the module already relies on that shared class and it is visually consistent with the reference screen.
-
-Preferred column behavior:
-
+- `<thead class="table-light">`
 - text columns left-aligned
-- counts and amounts right-aligned
-- action column right-aligned
+- counts, amounts, and action columns right-aligned
+- action header: `class="text-end"`
+- action cell: `class="text-end text-nowrap"`
+
+Example:
+
+```html
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Status</th>
+        <th>Message</th>
+        <th class="text-end">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      ...
+    </tbody>
+  </table>
+</div>
+```
+
+Use expandable detail rows when a table row needs more detail. Do not make an accordion the primary list for standard admin or diagnostic screens.
 
 ## Button Standard
+
+Use compact buttons by default.
 
 Primary actions:
 
@@ -199,60 +308,115 @@ Secondary navigation:
 
 - `btn btn-sm btn-outline-secondary`
 
-Section actions inside tables/cards:
+Section/table actions:
 
 - `btn btn-outline-primary btn-sm`
 
-Shared standardized screens should render buttons at the compact action size by default through the shared layout shell.
+Destructive actions:
 
-Do not add local button font-size overrides in individual views unless there is a genuine exceptional case.
+- `btn btn-sm btn-danger`
+- or `btn btn-sm btn-outline-danger` when the action is secondary and confirmation is present
 
-Avoid mixing button color logic across otherwise similar screens.
+Rules:
+
+- Do not add local button font-size overrides.
+- Do not mix button colour logic across similar controls.
+- Use Bootstrap icons where helpful, especially for refresh, send, reset, open, remove, restore, and details actions.
+
+## Status Badge Standard
+
+Use Bootstrap text background badges:
+
+- success: completed, sent, ready, healthy
+- warning: warning, processing, needs review
+- danger: failed, error, critical
+- secondary: pending, neutral, unknown
+- dark: cancelled or intentionally removed where appropriate
+- light: empty or no context
+
+Use consistent casing for badge labels. Prefer title case for user-facing labels unless the domain convention is uppercase, such as `ERROR`.
+
+## Empty State Standard
+
+Use a simple muted empty state inside the section card body:
+
+```html
+<div class="text-center text-muted py-3">No rows match the current filters.</div>
+```
+
+Avoid large custom empty-state illustrations or differently styled alert blocks unless the absence of data is an actual warning.
 
 ## Copy And Labels
 
-Prefer labels that match the Strategy Configuration Readiness tone:
-
-- short
-- operational
-- plain English
-
-Examples:
+Use short, operational labels:
 
 - `Current context`
-- `Needs attention`
-- `Open items`
+- `Health Score`
+- `Open Items`
+- `Queue Rows`
+- `Log Controls`
+- `Log Entries`
 - `Action`
 - `Detail`
 
-Avoid over-specific labels unless the business need requires them.
+Avoid long labels in table headers and card headers. Put explanatory text in helper/runbook alerts or small muted supporting text inside the section body.
+
+## Do Not Use On Standard Screens
+
+Avoid these patterns on standard CBMSv21 screens:
+
+- custom top headers instead of `_ScreenCardHeader.php`
+- large card header subtitles
+- custom card-header colours
+- bordered metric blocks instead of metric cards
+- accordions as the main list layout
+- inconsistent table header styles
+- `btn-outline-primary` for shared quick links
+- screen-specific CSS for spacing, font size, or header size
+- multiple competing helper panels with different visual styles
 
 ## Implementation Rules For New Screens
 
-When creating a new screen:
+When creating or correcting a screen:
 
-1. Start from the structure of `backend-php/app/Views/strategy/ReportReadiness.php`.
-2. Reuse existing shared classes from `backend-php/app/Views/layouts/main.php`.
-3. Use `backend-php/app/Views/shared/_ScreenCardHeader.php` for the title area.
-4. Use the shared Quick Links pattern when the screen needs related-screen navigation.
-5. Do not introduce screen-specific CSS unless there is no shared option.
-6. If new CSS is genuinely reusable, move it into the shared layout styles.
+1. Start from `backend-php/app/Views/config/BaseConfigurationReadiness.php` for layout.
+2. Use `backend-php/app/Views/shared/_ScreenCardHeader.php` for the page title.
+3. Add a current context line inside the main `card-body`.
+4. Add metric cards only when they help users scan the screen.
+5. Add one helper/runbook alert when the workflow needs guidance.
+6. Put filters and controls in a section card.
+7. Put result lists in a section card.
+8. Use the standard table classes and `thead.table-light`.
+9. Add route-specific shared helper text if the route uses `_RouteHelp.php`.
+10. Add or update Quick Links only in `backend-php/config/quick_links.php`.
+11. Do not introduce local CSS unless no shared option exists.
+12. Run `php -l` on changed PHP view/controller/config files.
 
-## Recommended Next Technical Step
+## Review Checklist
 
-To enforce this standard in code, create shared partials for:
+Before finishing a UI change, verify:
 
-- screen header
-- quick links
-- context line
-- metric cards
-- helper alert
-- section card header
+- The main screen starts with `container mt-4`.
+- There is one main `card shadow-sm`.
+- The page title uses `_ScreenCardHeader.php`.
+- The header title size matches other screens.
+- The page is rendered through the shared layout and receives the global `strategy-ui` body class.
+- The current context line is present where relevant.
+- Metric cards match the standard card structure.
+- Helper/runbook text is route-specific and not from the wrong module.
+- Section card headers use `h5.mb-0`.
+- Table headers use `thead.table-light`.
+- Buttons are compact and use standard colours.
+- Quick Links come from the shared renderer.
+- No local one-off CSS was added for common layout concerns.
 
-Suggested future files:
+## Future Shared Partials
+
+To reduce drift further, prefer creating shared partials for repeated standard pieces:
 
 - `backend-php/app/Views/shared/_ScreenContext.php`
 - `backend-php/app/Views/shared/_ScreenMetrics.php`
 - `backend-php/app/Views/shared/_ScreenHelper.php`
+- `backend-php/app/Views/shared/_SectionCard.php`
 
-This is the recommended way to stop design drift across new module screens.
+Until those exist, follow the exact structure in the reference screens above.

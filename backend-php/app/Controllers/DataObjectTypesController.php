@@ -12,10 +12,10 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class DataObjectTypesController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'list' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'form' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'save' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'list' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'form' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'save' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
     ];
 
     public function list(): void

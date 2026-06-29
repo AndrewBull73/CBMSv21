@@ -8,7 +8,11 @@ declare(strict_types=1);
 
 use App\Shared\SessionHelper;
 
-$canGrant = in_array('DATAOBJECTCODES_ADMIN', SessionHelper::get('auth.perms', []));
+$perms = SessionHelper::get('auth.perms', []);
+$canGrant = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true)
+        || in_array('DATAOBJECTCODES_ADMIN', $perms, true)
+        || in_array('DATAOBJECTCODES_ACCESS_ADMIN', $perms, true));
 ?>
 <div class="card shadow-sm mt-4">
   <div class="card-header d-flex justify-content-between align-items-center">
@@ -16,9 +20,6 @@ $canGrant = in_array('DATAOBJECTCODES_ADMIN', SessionHelper::get('auth.perms', [
       <i class="bi bi-eye me-2"></i><?= __t('user_access_report') ?>
       <small class="text-muted">(<?= count($accessibleCodes) ?> <?= __t('total') ?>)</small>
     </strong>
-    <a href="index.php?route=dataobjectcodes/access" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left me-1"></i> <?= __t('back') ?>
-    </a>
   </div>
 
   <div class="card-body">

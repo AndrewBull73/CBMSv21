@@ -63,4 +63,28 @@ final class WorkflowTaskTypeModel
             return null;
         }
     }
+
+    public function findIdByCode(string $code): ?int
+    {
+        $normalizedCode = strtoupper(trim($code));
+
+        try {
+            $sql = "SELECT TOP 1 TaskTypeID
+                    FROM dbo.tblWorkflowTaskTypes
+                    WHERE UPPER(Code) = UPPER(:code)
+                    ORDER BY TaskTypeID ASC";
+            $st = $this->conn->prepare($sql);
+            $st->bindValue(':code', $normalizedCode);
+            $st->execute();
+            $id = $st->fetchColumn();
+            if ($id !== false) {
+                return (int) $id;
+            }
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+        }
+
+        $fallbackName = ucwords(strtolower(str_replace(['_', '-'], ' ', $normalizedCode)));
+        return $fallbackName !== '' ? $this->findIdByName($fallbackName) : null;
+    }
 }

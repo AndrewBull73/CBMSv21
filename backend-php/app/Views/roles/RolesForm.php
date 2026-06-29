@@ -4,21 +4,42 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../shared/csrf.php';
 
 /** @var array|null $role */
+/** @var array $permissions */
+/** @var array $selectedPermissionIds */
 if (!function_exists('h')) {
     function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 }
-if (!function_exists('t_or')) {
-    // Translate a key; if the key isn't defined, use the provided fallback
-    function t_or(string $key, string $fallback): string {
-        $t = __t($key);
-        return $t === $key ? $fallback : $t;
-    }
-}
-
 $id        = (int)($role['RoleID'] ?? 0);
 $roleName  = (string)($role['RoleName'] ?? '');
 $isActive  = !empty($role['Active']);
 $titleKey  = $id > 0 ? 'edit_role' : 'create_role';
+$permissions = is_array($permissions ?? null) ? $permissions : [];
+$selectedPermissionIds = array_map('intval', is_array($selectedPermissionIds ?? null) ? $selectedPermissionIds : []);
+$selectedPermissionMap = array_fill_keys($selectedPermissionIds, true);
+
+$permissionGroups = [];
+foreach ($permissions as $permission) {
+    if (!is_array($permission)) {
+        continue;
+    }
+    $code = strtoupper(trim((string)($permission['PermissionCode'] ?? '')));
+    if ($code === '') {
+        continue;
+    }
+    $prefix = str_contains($code, '_') ? explode('_', $code, 2)[0] : 'OTHER';
+    $group = match ($prefix) {
+        'ADMIN', 'SYSADMIN', 'USERS', 'ROLES', 'SESSION', 'AUDIT', 'HEALTH', 'METRICS', 'LOGS', 'ERRORLOG', 'DIAG' => 'Administration',
+        'BASE', 'DATAOBJECTCODES' => 'Organisation & Base Configuration',
+        'FIN', 'CALC', 'RATES' => 'Financial & Calculation',
+        'STRATEGY' => 'Budget Strategy',
+        'BUDGET', 'ESTIMATES' => 'Budget Planning & Execution',
+        'DASHBOARD', 'ANALYTICS' => 'Reports & Analysis',
+        'SYSSETTINGS', 'WORKFLOW' => 'System Configuration',
+        default => 'Other',
+    };
+    $permissionGroups[$group][] = $permission;
+}
+ksort($permissionGroups);
 ?>
 <div class="container mt-4">
   <div class="card shadow-sm">
@@ -67,11 +88,59 @@ $titleKey  = $id > 0 ? 'edit_role' : 'create_role';
           <label class="form-check-label" for="Active"><?= __t('active') ?></label>
         </div>
 
+        <section class="mb-4">
+          <h5 class="border-bottom pb-2 mb-3">Permissions</h5>
+          <div class="small text-muted mb-3">
+            Select the technical permissions this business role should grant. Users receive the combined permissions from all roles assigned to them.
+          </div>
+          <?php if ($permissionGroups === []): ?>
+            <div class="alert alert-warning mb-0">No active permissions are available. Run the role-permission sync script before assigning access.</div>
+          <?php else: ?>
+            <div class="row g-3">
+              <?php foreach ($permissionGroups as $groupName => $groupPermissions): ?>
+                <div class="col-12 col-xl-6">
+                  <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold mb-2"><?= h((string)$groupName) ?></div>
+                    <div class="row g-2">
+                      <?php foreach ($groupPermissions as $permission): ?>
+                        <?php
+                          $permissionId = (int)($permission['PermissionID'] ?? 0);
+                          $permissionCode = strtoupper(trim((string)($permission['PermissionCode'] ?? '')));
+                          $permissionDescription = trim((string)($permission['Description'] ?? ''));
+                          $inputId = 'permission_' . $permissionId;
+                        ?>
+                        <div class="col-12">
+                          <div class="form-check">
+                            <input
+                              class="form-check-input"
+                              type="checkbox"
+                              id="<?= h($inputId) ?>"
+                              name="PermissionIDs[]"
+                              value="<?= $permissionId ?>"
+                              <?= isset($selectedPermissionMap[$permissionId]) ? 'checked' : '' ?>
+                            >
+                            <label class="form-check-label" for="<?= h($inputId) ?>">
+                              <code><?= h($permissionCode) ?></code>
+                              <?php if ($permissionDescription !== ''): ?>
+                                <span class="text-muted small d-block"><?= h($permissionDescription) ?></span>
+                              <?php endif; ?>
+                            </label>
+                          </div>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </section>
+
         <!-- Bottom bar: hr + muted info + small buttons (consistent with DataObjectCodesForm) -->
         <hr class="mt-4 mb-2">
         <div class="d-flex justify-content-between align-items-center">
           <p class="text-muted small mb-0">
-            <?= t_or('form_save_hint', 'Changes are not saved until you click Save.') ?>
+            <?= __t('form_save_hint') ?>
           </p>
           <div class="d-flex gap-2">
             <a href="index.php?route=roles/list" class="btn btn-sm btn-outline-secondary">

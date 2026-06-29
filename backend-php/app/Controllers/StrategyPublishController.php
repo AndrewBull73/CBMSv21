@@ -15,7 +15,7 @@ use App\Shared\SessionHelper;
 
 final class StrategyPublishController extends BaseController
 {
-    private const PUBLISH_PERMS = ['STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'];
+    private const PUBLISH_PERMS = ['STRATEGY_SEGMENT_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'];
 
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => self::PUBLISH_PERMS],
@@ -553,11 +553,12 @@ final class StrategyPublishController extends BaseController
 
         try {
             $mailer = new MailService($this->db);
+            $from = trim((string) $settings->get('EMAIL_ERROR_FROM', ''));
             $mailer->sendEmail(
                 $email,
                 $subject,
                 $body,
-                $settings->get('EMAIL_ERROR_FROM', 'noreply@cbmsv2.local')
+                $from !== '' ? $from : null
             );
         } catch (\Throwable $e) {
             app_log('Segment publication workflow task email failed', [

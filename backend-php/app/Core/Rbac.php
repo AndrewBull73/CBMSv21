@@ -106,7 +106,11 @@ final class Rbac
         if (strtoupper($perm) === 'AUTHENTICATED') {
             return (int) SessionHelper::get('auth.user_id', 0) > 0;
         }
-        return in_array(strtoupper($perm), self::perms(), true);
+        $userPerms = self::perms();
+        if (in_array('ADMIN_ALL', $userPerms, true)) {
+            return true;
+        }
+        return in_array(strtoupper($perm), $userPerms, true);
     }
 
     public static function canAny(array $perms): bool

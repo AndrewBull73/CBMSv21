@@ -8,6 +8,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../../shared/csrf.php';  // ADD THIS LINE
 
 use App\Shared\SessionHelper;
+
+$selectedUserId = (int)($selectedUserId ?? 0);
+$returnUserId = (int)($returnUserId ?? 0);
+$cancelHref = $returnUserId > 0
+    ? 'index.php?route=users/edit&id=' . rawurlencode((string)$returnUserId) . '#data-object-access'
+    : 'index.php?route=dataobjectcodes/access';
 ?>
 <div class="card shadow-sm mt-4">
   <div class="card-header">
@@ -18,6 +24,9 @@ use App\Shared\SessionHelper;
   <div class="card-body">
     <form method="post" action="index.php?route=dataobjectcodes/access_save" class="needs-validation" novalidate>
       <input type="hidden" name="_csrf" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+      <?php if ($returnUserId > 0): ?>
+        <input type="hidden" name="return_user" value="<?= htmlspecialchars((string)$returnUserId, ENT_QUOTES, 'UTF-8') ?>">
+      <?php endif; ?>
 
       <div class="row g-3">
         <!-- USER -->
@@ -26,9 +35,11 @@ use App\Shared\SessionHelper;
           <select name="UserID" id="UserID" class="form-select form-select-sm" required>
             <option value=""><?= __t('select_user') ?></option>
             <?php foreach ($users as $u): ?>
-              <option value="<?= $u['UserID'] ?>">
-                <?= htmlspecialchars($u['Username'], ENT_QUOTES, 'UTF-8') ?>
-                <?= $u['FullName'] ? ' (' . htmlspecialchars($u['FullName'], ENT_QUOTES, 'UTF-8') . ')' : '' ?>
+              <?php $optionUserId = (int)($u['UserID'] ?? 0); ?>
+              <?php $optionFullName = trim((string)($u['FullName'] ?? '')); ?>
+              <option value="<?= $optionUserId ?>" <?= $optionUserId === $selectedUserId ? 'selected' : '' ?>>
+                <?= htmlspecialchars((string)($u['Username'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                <?= $optionFullName !== '' ? ' (' . htmlspecialchars($optionFullName, ENT_QUOTES, 'UTF-8') . ')' : '' ?>
               </option>
             <?php endforeach; ?>
           </select>
@@ -81,7 +92,7 @@ use App\Shared\SessionHelper;
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-check2-circle me-1"></i> <?= __t('grant_access') ?>
           </button>
-          <a href="index.php?route=dataobjectcodes/access" class="btn btn-secondary">
+          <a href="<?= htmlspecialchars($cancelHref, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-secondary">
             <i class="bi bi-arrow-left me-1"></i> <?= __t('cancel') ?>
           </a>
         </div>

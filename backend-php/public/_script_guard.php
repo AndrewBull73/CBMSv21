@@ -33,7 +33,7 @@ if (!function_exists('cbms_public_script_guard')) {
             is_array($options['permsAny'] ?? null) ? $options['permsAny'] : []
         )));
         if ($permsAny !== [] && !\App\Core\Rbac::canAny($permsAny)) {
-            cbms_public_script_deny(403, 'You do not have permission to access this utility.');
+            cbms_public_script_deny(403, cbms_public_script_access_message($permsAny), $permsAny);
         }
 
         if (!empty($options['csrfPost']) && strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
@@ -44,19 +44,72 @@ if (!function_exists('cbms_public_script_guard')) {
     }
 }
 
+if (!function_exists('cbms_public_script_access_message')) {
+    function cbms_public_script_access_message(array $permissionCodes): string
+    {
+        $labels = [];
+        foreach ($permissionCodes as $code) {
+            $code = strtoupper(trim((string) $code));
+            if ($code === '') {
+                continue;
+            }
+            $labels[] = cbms_public_script_permission_label($code);
+        }
+        $labels = array_values(array_unique($labels));
+        $required = $labels !== [] ? implode(' or ', $labels) : 'the required access';
+
+        return 'Your account does not include the access needed for this utility. Required access: ' . $required . '. Ask a system administrator to update your assigned roles if this access is required for your work.';
+    }
+}
+
+if (!function_exists('cbms_public_script_permission_label')) {
+    function cbms_public_script_permission_label(string $code): string
+    {
+        $labels = [
+            'ADMIN_ALL' => 'Super Administrator access',
+            'SYSADMIN' => 'System Administrator access',
+            'CALC_ADMIN' => 'Calculation Administration access',
+            'ESTIMATES_EDIT' => 'Budget Planning edit access',
+            'ESTIMATES_VIEW' => 'Budget Planning view access',
+        ];
+
+        return ($labels[$code] ?? ucwords(strtolower(str_replace('_', ' ', $code)))) . ' (' . $code . ')';
+    }
+}
+
 if (!function_exists('cbms_public_script_deny')) {
-    function cbms_public_script_deny(int $statusCode, string $message): void
+    function cbms_public_script_deny(int $statusCode, string $message, array $missingPermissions = []): void
     {
         http_response_code($statusCode);
         if (!headers_sent()) {
             header('Content-Type: text/html; charset=UTF-8');
         }
 
-        $safe = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
         $lang = htmlspecialchars(\App\Shared\Lang::getActiveLang(), ENT_QUOTES, 'UTF-8');
-        $title = htmlspecialchars(\App\Shared\Lang::translateLiteral('Access denied'), ENT_QUOTES, 'UTF-8');
-        $translatedMessage = htmlspecialchars(\App\Shared\Lang::translateLiteral($message), ENT_QUOTES, 'UTF-8');
-        echo "<!doctype html><html lang='{$lang}'><head><meta charset='utf-8'><title>{$title}</title></head><body style='font-family:Segoe UI,Arial,sans-serif;margin:2rem;'><h2>{$title}</h2><p>{$translatedMessage}</p></body></html>";
+        $noticeTitle = $statusCode === 403 ? 'Access Restricted' : \App\Shared\Lang::translateLiteral('Access denied');
+        $noticeText = \App\Shared\Lang::translateLiteral($message);
+        $noticeRequirement = $statusCode === 403
+            ? 'If this access is required for your work, ask a system administrator to update your assigned roles.'
+            : '';
+        $noticeMissingPermissions = array_values(array_unique(array_filter(array_map(
+            static fn ($code): string => strtoupper(trim((string) $code)),
+            $missingPermissions
+        ))));
+
+        ob_start();
+        $noticeVariant = 'compact';
+        $partial = __DIR__ . '/../app/Views/shared/AccessDeniedNotice.php';
+        if (is_file($partial)) {
+            require $partial;
+            $body = (string) ob_get_clean();
+        } else {
+            ob_end_clean();
+            $body = '<h2>' . htmlspecialchars($noticeTitle, ENT_QUOTES, 'UTF-8') . '</h2><p>' . htmlspecialchars($noticeText, ENT_QUOTES, 'UTF-8') . '</p>';
+        }
+
+        echo "<!doctype html><html lang='{$lang}'><head><meta charset='utf-8'><title>"
+            . htmlspecialchars($noticeTitle, ENT_QUOTES, 'UTF-8')
+            . "</title></head><body style='font-family:Segoe UI,Arial,sans-serif;margin:2rem;'>{$body}</body></html>";
         exit;
     }
 }

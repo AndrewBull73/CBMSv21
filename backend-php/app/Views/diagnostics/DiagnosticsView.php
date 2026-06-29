@@ -8,14 +8,6 @@ require_once __DIR__ . '/../../../shared/csrf.php';
 if (!function_exists('h')) {
     function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
 }
-if (!function_exists('t_or')) {
-    // Translate key; if missing in the lang file, fall back to provided default text.
-    function t_or(string $key, string $fallback): string {
-        $t = __t($key);
-        return $t === $key ? $fallback : $t;
-    }
-}
-
 // Safe accessors
 $dbStatus       = $results['db']         ?? null;               // true/false/string(error)
 $logTest        = $results['log_test']   ?? null;               // true/false/string(error)
@@ -130,7 +122,7 @@ $refreshHref = 'index.php?route=diagnostics/index';
       <hr class="mt-4 mb-2">
       <div class="d-flex justify-content-between align-items-center px-3 pb-3">
         <p class="text-muted small mb-0">
-          <?= t_or('form_save_hint', 'Changes are not saved until you click Save.') ?>
+          <?= __t('form_save_hint') ?>
         </p>
         <div class="d-flex gap-2">
           <a href="<?= h($refreshHref) ?>" class="btn btn-sm btn-outline-secondary">
@@ -189,7 +181,7 @@ $refreshHref = 'index.php?route=diagnostics/index';
       <hr class="mt-4 mb-2">
       <div class="d-flex justify-content-between align-items-center px-3 pb-3">
         <p class="text-muted small mb-0">
-          <?= t_or('form_save_hint', 'Changes are not saved until you click Save.') ?>
+          <?= __t('form_save_hint') ?>
         </p>
         <div class="d-flex gap-2">
           <a href="<?= h($refreshHref) ?>" class="btn btn-sm btn-outline-secondary">

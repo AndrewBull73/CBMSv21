@@ -13,6 +13,8 @@ return [
     'auth/logout'        => 'AuthController@logout',  // GET
     'auth/account'       => 'AuthController@account',
     'auth/refreshAccess' => 'AuthController@refreshAccess',
+    'auth/changePassword' => 'AuthController@changePassword',
+    'auth/savePassword'  => 'AuthController@savePassword',
 
     // System Settings
     'system-settings/list' => 'SystemSettingsController@list',
@@ -69,7 +71,34 @@ return [
     'workflow/edit'   => 'WorkflowController@edit',
     'workflow/save'   => 'WorkflowController@save',
     'workflow/transition' => 'WorkflowController@transition',
+    'workflow/respond' => 'WorkflowController@respond',
+    'workflow/forward' => 'WorkflowController@forward',
+    'workflow/send-reminder' => 'WorkflowController@sendReminder',
+    'workflow/save-link' => 'WorkflowController@saveLink',
+    'workflow/delete-link' => 'WorkflowController@deleteLink',
+    'workflow/save-comment' => 'WorkflowController@saveComment',
+    'workflow/delete-comment' => 'WorkflowController@deleteComment',
+    'workflow/upload-attachment' => 'WorkflowController@uploadAttachment',
+    'workflow/download-attachment' => 'WorkflowController@downloadAttachment',
+    'workflow/delete-attachment' => 'WorkflowController@deleteAttachment',
     'workflow/delete' => 'WorkflowController@delete',
+    'workflow-projects/list' => 'WorkflowProjectController@list',
+    'workflow-projects/summary' => 'WorkflowProjectController@summary',
+    'workflow-projects/form' => 'WorkflowProjectController@form',
+    'workflow-projects/save' => 'WorkflowProjectController@save',
+    'workflow-requirements/list' => 'WorkflowRequirementController@list',
+    'workflow-requirements/summary' => 'WorkflowRequirementController@summary',
+    'workflow-requirements/matrix' => 'WorkflowRequirementController@matrix',
+    'workflow-requirements/form' => 'WorkflowRequirementController@form',
+    'workflow-requirements/save' => 'WorkflowRequirementController@save',
+    'workflow-requirements/transition' => 'WorkflowRequirementController@transition',
+    'workflow-requirements/create-task' => 'WorkflowRequirementController@createTask',
+    'workflow-requirements/upload-attachment' => 'WorkflowRequirementController@uploadAttachment',
+    'workflow-requirements/download-attachment' => 'WorkflowRequirementController@downloadAttachment',
+    'workflow-requirements/delete-attachment' => 'WorkflowRequirementController@deleteAttachment',
+    'workflow-user-groups/list' => 'WorkflowUserGroupController@list',
+    'workflow-user-groups/form' => 'WorkflowUserGroupController@form',
+    'workflow-user-groups/save' => 'WorkflowUserGroupController@save',
     'training/runner' => 'TrainingController@runner',
     'training/users' => 'TrainingController@users',
     'training/users-edit' => 'TrainingController@usersEdit',
@@ -84,9 +113,19 @@ return [
     'training-admin/archive-step' => 'TrainingAdminController@archiveStep',
     'training-admin/translations' => 'TrainingAdminController@translations',
     'training-admin/save-translations' => 'TrainingAdminController@saveTranslations',
+    'training-admin/matrix' => 'TrainingAdminController@matrix',
+    'training-admin/operations' => 'TrainingAdminController@operations',
+    'training-admin/save-path' => 'TrainingAdminController@savePath',
+    'training-admin/save-assignment' => 'TrainingAdminController@saveAssignment',
+    'training-admin/save-session' => 'TrainingAdminController@saveSession',
+    'training-admin/session-dashboard' => 'TrainingAdminController@sessionDashboard',
+    'training-admin/save-evidence' => 'TrainingAdminController@saveEvidence',
+    'training-admin/validation' => 'TrainingAdminController@validation',
+    'training-admin/resolve-stuck' => 'TrainingAdminController@resolveStuck',
     'training/state' => 'TrainingController@state',
     'training/start' => 'TrainingController@start',
     'training/complete' => 'TrainingController@complete',
+    'training/stuck' => 'TrainingController@stuck',
     'training/manage' => 'TrainingController@manage',
     'training/save-note' => 'TrainingController@saveNote',
     'training/stop' => 'TrainingController@stop',
@@ -120,7 +159,7 @@ return [
     'integration-admin/download-test-export-csv' => 'IntegrationAdminController@downloadTestExportCsv',
     'integration-admin/download-test-export-package' => 'IntegrationAdminController@downloadTestExportPackage',
     'reports/catalogue' => 'ReportsController@catalogue',
-    'reports/context' => 'ReportsController@context',
+    'reports/context' => 'ReportsController@reportContext',
     'reports/open' => 'ReportsController@open',
     'reports/execute' => 'ReportsController@execute',
     'reports/run' => 'ReportsController@run',
@@ -276,7 +315,15 @@ return [
     'systemmessages/feed'       => 'SystemMessageFeedController@feed',        // GET (JSON)
     'systemmessages/ack'        => 'SystemMessageFeedController@ack',         // POST
 
+    'emailqueue/index'          => 'EmailQueueController@index',
     'emailqueue/process'        => 'EmailQueueController@process',            // GET (can be called by scheduler)
+    'emailqueue/resend'         => 'EmailQueueController@resend',             // POST
+    'emailqueue/remove'         => 'EmailQueueController@remove',             // POST
+    'emailqueue/restore'        => 'EmailQueueController@restore',            // POST
+    'email-templates/list'      => 'EmailTemplateController@list',
+    'email-templates/form'      => 'EmailTemplateController@form',
+    'email-templates/save'      => 'EmailTemplateController@save',
+    'email-templates/setActive' => 'EmailTemplateController@setActive',
 
     // DataObjectCode Access Management
     'dataobjectcodes/access'        => 'DataObjectCodeAccessController@index',

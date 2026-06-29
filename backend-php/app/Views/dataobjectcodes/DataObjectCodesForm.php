@@ -45,9 +45,6 @@ $isEdit = ($mode === 'edit');
           </div>
         <?php endif; ?>
       </div>
-      <a href="index.php?route=dataobjectcodes/index" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left-circle me-1"></i><?= __t('back_to_list') ?>
-      </a>
     </div>
 
     <div class="card-body">

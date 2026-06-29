@@ -8,9 +8,10 @@ use App\Shared\SessionHelper;
 final class SessionController extends BaseController
 {
     protected array $acl = [
-        '*'    => ['auth' => true],
-        'list' => ['permsAny' => ['SESSION_VIEW', 'ADMIN_ALL']],
-        'forceLogout' => ['permsAny' => ['SESSION_ADMIN', 'ADMIN_ALL']],
+        '*' => ['auth' => true, 'permsAny' => ['SESSION_VIEW', 'SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'index' => ['permsAny' => ['SESSION_VIEW', 'SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['permsAny' => ['SESSION_VIEW', 'SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'forceLogout' => ['permsAny' => ['SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function index(): void

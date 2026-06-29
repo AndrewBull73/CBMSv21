@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+use App\Shared\SessionHelper;
+
 if (!function_exists('h')) {
     function h(string $value): string
     {
@@ -28,6 +30,11 @@ $screenHeader = [
     'title' => 'Data Object Types',
     'icon' => 'bi-diagram-3',
 ];
+$perms = SessionHelper::get('auth.perms', []);
+$canEdit = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true)
+        || in_array('DATAOBJECTCODES_ADMIN', $perms, true)
+        || in_array('DATAOBJECTCODES_EDIT', $perms, true));
 ?>
 
 <div class="container mt-4">
@@ -78,10 +85,11 @@ $screenHeader = [
       <div class="card shadow-sm mb-4">
         <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
           <h5 class="mb-0">Data Object Type Register</h5>
-          <div class="d-flex gap-2">
-            <a href="index.php?route=dataobjectcodes/index" class="btn btn-sm btn-outline-secondary">Data Object Codes</a>
-            <a id="data-object-types-create-btn" href="index.php?route=dataobject-types/form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Data Object Type</a>
-          </div>
+          <?php if ($canEdit): ?>
+            <div class="d-flex gap-2">
+              <a id="data-object-types-create-btn" href="index.php?route=dataobject-types/form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Data Object Type</a>
+            </div>
+          <?php endif; ?>
         </div>
         <div class="card-body">
           <div class="small text-muted mb-3">These type rows are global master data. The usage count below shows how many Data Object Code records currently point to each type across all fiscal years.</div>
@@ -96,12 +104,12 @@ $screenHeader = [
                   <th>Type Role</th>
                   <th class="text-end">Data Object Usage</th>
                   <th>Last Updated</th>
-                  <th class="text-end">Action</th>
+                  <?php if ($canEdit): ?><th class="text-end">Action</th><?php endif; ?>
                 </tr>
               </thead>
               <tbody>
                 <?php if ($rows === []): ?>
-                  <tr><td colspan="8" class="text-center text-muted py-3">No data object types found.</td></tr>
+                  <tr><td colspan="<?= $canEdit ? '8' : '7' ?>" class="text-center text-muted py-3">No data object types found.</td></tr>
                 <?php else: ?>
                   <?php foreach ($rows as $row): ?>
                     <?php $isContainer = (int) ($row['DataContainer'] ?? 0) === 1; ?>
@@ -116,11 +124,13 @@ $screenHeader = [
                       <td><span class="badge text-bg-<?= $isContainer ? 'primary' : 'secondary' ?>"><?= $isContainer ? 'Container' : 'Terminal' ?></span></td>
                       <td class="text-end"><?= (int) ($row['DataObjectUsageCount'] ?? 0) ?></td>
                       <td><?= h((string) ($row['DateUpdated'] ?? '')) ?></td>
-                      <td class="text-end">
-                        <a class="btn btn-outline-primary btn-sm" href="index.php?route=dataobject-types/form&id=<?= (int) ($row['DataObjectTypeID'] ?? 0) ?>">
-                          Edit
-                        </a>
-                      </td>
+                      <?php if ($canEdit): ?>
+                        <td class="text-end">
+                          <a class="btn btn-outline-primary btn-sm" href="index.php?route=dataobject-types/form&id=<?= (int) ($row['DataObjectTypeID'] ?? 0) ?>">
+                            Edit
+                          </a>
+                        </td>
+                      <?php endif; ?>
                     </tr>
                   <?php endforeach; ?>
                 <?php endif; ?>

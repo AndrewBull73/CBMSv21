@@ -43,6 +43,14 @@ if (!function_exists('screen_testing_features_enabled')) {
                     return $cachedByMode[$cacheKey] = screen_testing_features_bool($settingValue, false);
                 }
             } catch (\Throwable $e) {
+                if (function_exists('app_log')) {
+                    app_log('Screen testing feature setting lookup failed', [
+                        'error' => $e->getMessage(),
+                        'exception' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                    ], 'warn');
+                }
                 // Fall through to default false.
             }
         }

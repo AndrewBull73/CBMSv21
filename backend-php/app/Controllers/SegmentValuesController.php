@@ -13,16 +13,16 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class SegmentValuesController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'list' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'form' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'upload' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'save' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'archive' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'resolveParentLinks' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'uploadProcess' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'downloadTemplate' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'exportExcel' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'list' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'form' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'upload' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'SEGMENT_VALUES_IMPORT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'save' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'archive' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'resolveParentLinks' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'uploadProcess' => ['auth' => true, 'permsAny' => ['SEGMENT_VALUES_IMPORT', 'SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'downloadTemplate' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'SEGMENT_VALUES_IMPORT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'exportExcel' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
     ];
 
     protected bool $requiresContext = true;

@@ -12,10 +12,11 @@ require_once __DIR__ . '/../../shared/logger.php';
 final class SystemSettingsController extends BaseController
 {
     protected array $acl = [
-        '*'        => ['auth' => true],
-        'list'     => ['permsAny' => ['SYSSETTINGS_VIEW','SYSSETTINGS_ADMIN']],
-        'usageMap' => ['permsAny' => ['SYSSETTINGS_VIEW','SYSSETTINGS_ADMIN']],
-        'save'     => ['permsAny' => ['SYSSETTINGS_EDIT','SYSSETTINGS_ADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['SYSSETTINGS_VIEW', 'SYSSETTINGS_EDIT', 'SYSSETTINGS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['permsAny' => ['SYSSETTINGS_VIEW', 'SYSSETTINGS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'usage-map' => ['permsAny' => ['SYSSETTINGS_VIEW', 'SYSSETTINGS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'usageMap' => ['permsAny' => ['SYSSETTINGS_VIEW', 'SYSSETTINGS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save' => ['permsAny' => ['SYSSETTINGS_EDIT', 'SYSSETTINGS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     private SystemSettingsModel $model;
@@ -72,9 +73,16 @@ final class SystemSettingsController extends BaseController
             return;
         }
 
+        $bulkSettings = $_POST['Settings'] ?? null;
+        if (is_array($bulkSettings)) {
+            $this->saveBulk($bulkSettings);
+            return;
+        }
+
         $key  = trim((string)($_POST['SettingKey'] ?? ''));
         $val  = (string)($_POST['SettingValue'] ?? '');
         $type = strtolower(trim((string)($_POST['SettingType'] ?? 'string')));
+        $val = $this->normalizeSettingValue($val, $type);
         $description = trim((string)($_POST['Description'] ?? ''));
         $category = trim((string)($_POST['Category'] ?? ''));
 
@@ -117,5 +125,77 @@ final class SystemSettingsController extends BaseController
         }
 
         header('Location: index.php?route=system-settings/list');
+    }
+
+    private function saveBulk(array $settings): void
+    {
+        $start = microtime(true);
+        $updated = 0;
+        $failed = [];
+
+        foreach ($settings as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $key = trim((string)($row['SettingKey'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+
+            $val = (string)($row['SettingValue'] ?? '');
+            $type = strtolower(trim((string)($row['SettingType'] ?? 'string')));
+            $val = $this->normalizeSettingValue($val, $type);
+            $description = trim((string)($row['Description'] ?? ''));
+            $category = trim((string)($row['Category'] ?? ''));
+
+            $ok = $this->model->set(
+                $key,
+                $val,
+                $type,
+                (string)SessionHelper::get('auth.username', 'system'),
+                $description !== '' ? $description : null,
+                $category !== '' ? $category : null
+            );
+
+            $this->auditEvent($ok ? 'UPDATE' : 'DENIED', 'SystemSettings', $key, [
+                'value' => $val,
+                'type' => $type,
+                'description' => $description,
+                'category' => $category,
+                'error' => $ok ? null : $this->model->getLastError(),
+            ]);
+
+            if ($ok) {
+                $updated++;
+            } else {
+                $failed[] = $key . ': ' . $this->model->getLastError();
+            }
+        }
+
+        $elapsedMs = round((microtime(true) - $start) * 1000, 2);
+
+        if ($failed === []) {
+            $this->flashSuccess('Saved ' . $updated . ' system setting' . ($updated === 1 ? '' : 's') . '.');
+        } else {
+            app_log('SystemSettingsController::saveBulk failed', [
+                'updated' => $updated,
+                'failed' => $failed,
+                'elapsedMs' => $elapsedMs,
+            ], 'error');
+            $this->flashError('Saved ' . $updated . ' setting' . ($updated === 1 ? '' : 's') . ', but some settings failed: ' . implode('; ', $failed));
+        }
+
+        header('Location: index.php?route=system-settings/list');
+    }
+
+    private function normalizeSettingValue(string $value, string $type): string
+    {
+        if ($type !== 'bool') {
+            return $value;
+        }
+
+        $normalized = strtolower(trim($value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true) ? '1' : '0';
     }
 }

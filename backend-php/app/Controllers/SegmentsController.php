@@ -12,12 +12,12 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class SegmentsController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'list' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'form' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'save' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'uploadProcess' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
-        'downloadTemplate' => ['auth' => true, 'permsAny' => ['BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'list' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'form' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'save' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'uploadProcess' => ['auth' => true, 'permsAny' => ['SEGMENTS_EDIT', 'SEGMENT_VALUES_IMPORT', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
+        'downloadTemplate' => ['auth' => true, 'permsAny' => ['SEGMENTS_VIEW', 'SEGMENTS_EDIT', 'BASE_CONFIG_VIEW', 'BASE_CONFIG_EDIT', 'ADMIN_ALL']],
     ];
 
     public function list(): void

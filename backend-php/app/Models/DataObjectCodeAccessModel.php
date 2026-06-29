@@ -260,7 +260,12 @@ public function getUserById(int $userId): ?array
 public function getDirectAccess(int $userId, int $fy): array
 {
     $sql = "
-        SELECT a.DataObjectCode, c.DataObjectName, a.AccessLevel
+        SELECT
+            a.DataObjectCode,
+            c.DataObjectName,
+            a.AccessLevel,
+            a.IncludeChildren,
+            a.AssignedAt
         FROM tblDataObjectCodeAccess a
         JOIN tblDataObjectCodes c ON a.DataObjectCode = c.DataObjectCode AND a.FiscalYearID = c.FiscalYearID
         WHERE a.UserID = :uid AND a.FiscalYearID = :fy AND a.Revoked = 0
@@ -280,38 +285,93 @@ public function getDirectAccess(int $userId, int $fy): array
 public function getUserAccessibleCodesWithLevel(int $userId, int $fy): array
 {
     $sql = "
-       WITH UserDirectAccess AS (
-    SELECT DataObjectCode, IncludeChildren
-    FROM tblDataObjectCodeAccess
-    WHERE UserID = @uid AND FiscalYearID = @fy AND Revoked = 0
-),
-CodeHierarchy AS (
-    SELECT 
-        doc.DataObjectCode,
-        doc.DataObjectCodeParent,
-        0 AS HierarchyLevel
-    FROM tblDataObjectCodes doc
-    INNER JOIN UserDirectAccess uda 
-        ON doc.DataObjectCode = uda.DataObjectCode
-    WHERE doc.FiscalYearID = @fy
+        WITH UserDirectAccess AS (
+            SELECT
+                DataObjectCode,
+                AccessLevel,
+                IncludeChildren
+            FROM tblDataObjectCodeAccess
+            WHERE UserID = :uid
+              AND FiscalYearID = :fyAccess
+              AND Revoked = 0
+        ),
+        CodeHierarchy AS (
+            SELECT
+                doc.DataObjectCode,
+                doc.DataObjectName,
+                doc.DataObjectCodeParent AS ParentCode,
+                0 AS [Level],
+                uda.AccessLevel,
+                uda.IncludeChildren,
+                CAST('Direct' AS NVARCHAR(20)) AS AccessSource,
+                doc.DataObjectCode AS SourceCode
+            FROM tblDataObjectCodes doc
+            INNER JOIN UserDirectAccess uda
+                ON doc.DataObjectCode = uda.DataObjectCode
+            WHERE doc.FiscalYearID = :fyRoot
 
-    UNION ALL
+            UNION ALL
 
-    SELECT 
-        c.DataObjectCode,
-        c.DataObjectCodeParent,
-        h.HierarchyLevel + 1
-    FROM tblDataObjectCodes c
-    INNER JOIN CodeHierarchy h 
-        ON c.DataObjectCodeParent = h.DataObjectCode
-    INNER JOIN UserDirectAccess uda 
-        ON h.DataObjectCode = uda.DataObjectCode
-    WHERE c.FiscalYearID = @fy
-      AND uda.IncludeChildren = 1
-)";
+            SELECT
+                child.DataObjectCode,
+                child.DataObjectName,
+                child.DataObjectCodeParent AS ParentCode,
+                parent.[Level] + 1 AS [Level],
+                parent.AccessLevel,
+                parent.IncludeChildren,
+                CAST('Inherited' AS NVARCHAR(20)) AS AccessSource,
+                parent.SourceCode
+            FROM tblDataObjectCodes child
+            INNER JOIN CodeHierarchy parent
+                ON child.DataObjectCodeParent = parent.DataObjectCode
+            WHERE child.FiscalYearID = :fyChild
+              AND parent.IncludeChildren = 1
+        ),
+        RankedAccess AS (
+            SELECT
+                ch.DataObjectCode,
+                ch.DataObjectName,
+                ch.ParentCode,
+                parentCode.DataObjectName AS ParentName,
+                ch.[Level],
+                ch.AccessLevel,
+                ch.AccessSource,
+                ch.SourceCode,
+                ROW_NUMBER() OVER (
+                    PARTITION BY ch.DataObjectCode
+                    ORDER BY
+                        CASE WHEN ch.AccessSource = 'Direct' THEN 0 ELSE 1 END,
+                        ch.[Level],
+                        ch.SourceCode
+                ) AS RowRank
+            FROM CodeHierarchy ch
+            LEFT JOIN tblDataObjectCodes parentCode
+                ON parentCode.FiscalYearID = :fyParent
+               AND parentCode.DataObjectCode = ch.ParentCode
+        )
+        SELECT
+            DataObjectCode,
+            DataObjectName,
+            ParentCode,
+            ParentName,
+            [Level],
+            AccessLevel,
+            AccessSource,
+            SourceCode
+        FROM RankedAccess
+        WHERE RowRank = 1
+        ORDER BY [Level], DataObjectCode
+        OPTION (MAXRECURSION 0)
+    ";
     try {
         $st = $this->pdo->prepare($sql);
-        $st->execute([$userId, $fy, $fy, $fy, $fy, $fy]);
+        $st->execute([
+            ':uid' => $userId,
+            ':fyAccess' => $fy,
+            ':fyRoot' => $fy,
+            ':fyChild' => $fy,
+            ':fyParent' => $fy,
+        ]);
         return $st->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     } catch (\Throwable $e) {
         $this->lastError = $e->getMessage();

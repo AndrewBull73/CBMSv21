@@ -1,5 +1,7 @@
 <?php declare(strict_types=1);
 
+use App\Shared\SessionHelper;
+
 if (!function_exists('h')) {
     function h(string $value): string
     {
@@ -14,16 +16,21 @@ $modules = is_array($modules ?? null) ? $modules : [];
 $functionalAreas = is_array($functionalAreas ?? null) ? $functionalAreas : [];
 $permissions = is_array($permissions ?? null) ? $permissions : [];
 $roles = is_array($roles ?? null) ? $roles : [];
+$contextLabels = is_array($contextLabels ?? null) ? $contextLabels : [];
+$yearLabel = trim((string) ($contextLabels['YearLabel'] ?? ''));
+$versionLabel = trim((string) ($contextLabels['VersionLabel'] ?? ''));
+$fiscalYearId = (int) (SessionHelper::get('FiscalYearID') ?? 0);
+$versionId = (int) (SessionHelper::get('VersionID') ?? 0);
+$screenHeader = [
+    'title' => 'Access Matrix',
+    'icon' => 'bi-shield-check',
+];
 ?>
 
+<div class="strategy-ui">
 <div class="container mt-4">
   <div class="card shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
-      <div>
-        <h3 class="mb-0"><i class="bi bi-grid me-2"></i>Access Matrix</h3>
-      </div>
-      <a href="index.php?route=roles/list" class="btn btn-sm btn-primary"><i class="bi bi-shield-lock me-1"></i>Roles & Permissions</a>
-    </div>
+    <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
       <?php if (!empty($flash)): ?>
         <div class="alert alert-<?= h((string) ($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
@@ -32,8 +39,17 @@ $roles = is_array($roles ?? null) ? $roles : [];
         </div>
       <?php endif; ?>
 
-      <div class="row g-3 mb-3">
-        <div class="col-md-2 col-sm-4">
+      <div class="small text-muted mb-3">
+        Current context:
+        <strong><?= h($yearLabel !== '' ? $yearLabel : ($fiscalYearId > 0 ? (string) $fiscalYearId : 'Not set')) ?></strong>
+        <?php if ($versionLabel !== '' || $versionId > 0): ?>
+          <span class="mx-1">/</span>
+          <strong><?= h($versionLabel !== '' ? $versionLabel : ('Version ' . (string) $versionId)) ?></strong>
+        <?php endif; ?>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-2">
           <div class="card shadow-sm h-100">
             <div class="card-body py-3">
               <div class="small text-muted">Routes</div>
@@ -41,7 +57,7 @@ $roles = is_array($roles ?? null) ? $roles : [];
             </div>
           </div>
         </div>
-        <div class="col-md-2 col-sm-4">
+        <div class="col-6 col-xl-2">
           <div class="card shadow-sm h-100">
             <div class="card-body py-3">
               <div class="small text-muted">Permission Controlled</div>
@@ -49,7 +65,7 @@ $roles = is_array($roles ?? null) ? $roles : [];
             </div>
           </div>
         </div>
-        <div class="col-md-2 col-sm-4">
+        <div class="col-6 col-xl-2">
           <div class="card shadow-sm h-100">
             <div class="card-body py-3">
               <div class="small text-muted">Auth Only</div>
@@ -57,7 +73,7 @@ $roles = is_array($roles ?? null) ? $roles : [];
             </div>
           </div>
         </div>
-        <div class="col-md-2 col-sm-4">
+        <div class="col-6 col-xl-2">
           <div class="card shadow-sm h-100">
             <div class="card-body py-3">
               <div class="small text-muted">Public</div>
@@ -65,7 +81,7 @@ $roles = is_array($roles ?? null) ? $roles : [];
             </div>
           </div>
         </div>
-        <div class="col-md-2 col-sm-4">
+        <div class="col-6 col-xl-2">
           <div class="card shadow-sm h-100">
             <div class="card-body py-3">
               <div class="small text-muted">Menu Uses Roles</div>
@@ -73,60 +89,77 @@ $roles = is_array($roles ?? null) ? $roles : [];
             </div>
           </div>
         </div>
+        <div class="col-6 col-xl-2">
+          <div class="card shadow-sm h-100">
+            <div class="card-body py-3">
+              <div class="small text-muted">Roles</div>
+              <div class="fs-4 fw-semibold"><?= count($roles) ?></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <form method="get" class="row g-2 mb-3">
-        <input type="hidden" name="route" value="access-matrix/index">
-        <div class="col-md-3">
-          <input type="text" name="q" class="form-control form-control-sm" value="<?= h((string) ($filters['q'] ?? '')) ?>" placeholder="Search route, screen, or controller">
-        </div>
-        <div class="col-md-2">
-          <select name="module" class="form-select form-select-sm">
-            <option value="">All modules</option>
-            <?php foreach ($modules as $module): ?>
-              <option value="<?= h((string) $module) ?>" <?= ((string) ($filters['module'] ?? '') === (string) $module) ? 'selected' : '' ?>><?= h((string) $module) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <select name="functional_area" class="form-select form-select-sm">
-            <option value="">All areas</option>
-            <?php foreach ($functionalAreas as $functionalArea): ?>
-              <option value="<?= h((string) $functionalArea) ?>" <?= ((string) ($filters['functional_area'] ?? '') === (string) $functionalArea) ? 'selected' : '' ?>><?= h((string) $functionalArea) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <select name="permission" class="form-select form-select-sm">
-            <option value="">All permissions</option>
-            <?php foreach ($permissions as $permission): ?>
-              <option value="<?= h((string) $permission) ?>" <?= ((string) ($filters['permission'] ?? '') === (string) $permission) ? 'selected' : '' ?>><?= h((string) $permission) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="col-md-1">
-          <select name="role" class="form-select form-select-sm">
-            <option value="">All roles</option>
-            <?php foreach ($roles as $role): ?>
-              <option value="<?= h((string) $role) ?>" <?= ((string) ($filters['role'] ?? '') === (string) $role) ? 'selected' : '' ?>><?= h((string) $role) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <select name="access_type" class="form-select form-select-sm">
-            <option value="">All types</option>
-            <?php foreach (['Permission Controlled', 'Auth Only', 'Public'] as $type): ?>
-              <option value="<?= h($type) ?>" <?= ((string) ($filters['access_type'] ?? '') === $type) ? 'selected' : '' ?>><?= h($type) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="col-12 d-flex gap-2">
-          <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
-          <a href="index.php?route=access-matrix/index" class="btn btn-sm btn-outline-secondary">Reset</a>
-        </div>
-      </form>
+      <div class="alert alert-info border-0 shadow-sm mb-4">
+        Use this screen to verify route access, controller permissions, menu visibility, and the roles that currently satisfy each enforced rule.
+      </div>
 
-      <div class="small text-muted mb-3">Use this screen to understand what permissions a screen requires, where menu visibility still depends on roles, and which current roles satisfy the enforced controller rules.</div>
+      <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="mb-0">Filters</h5></div>
+        <div class="card-body">
+          <form method="get" action="index.php" id="access-matrix-filter-form" class="row g-2">
+            <input type="hidden" name="route" value="access-matrix/index">
+            <div class="col-md-4">
+              <input type="text" name="q" class="form-control form-control-sm" value="<?= h((string) ($filters['q'] ?? '')) ?>" placeholder="Search route, screen, or controller">
+            </div>
+            <div class="col-md-2">
+              <select name="module" class="form-select form-select-sm">
+                <option value="">All modules</option>
+                <?php foreach ($modules as $module): ?>
+                  <option value="<?= h((string) $module) ?>" <?= ((string) ($filters['module'] ?? '') === (string) $module) ? 'selected' : '' ?>><?= h((string) $module) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select name="functional_area" class="form-select form-select-sm">
+                <option value="">All areas</option>
+                <?php foreach ($functionalAreas as $functionalArea): ?>
+                  <option value="<?= h((string) $functionalArea) ?>" <?= ((string) ($filters['functional_area'] ?? '') === (string) $functionalArea) ? 'selected' : '' ?>><?= h((string) $functionalArea) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select name="permission" class="form-select form-select-sm">
+                <option value="">All permissions</option>
+                <?php foreach ($permissions as $permission): ?>
+                  <option value="<?= h((string) $permission) ?>" <?= ((string) ($filters['permission'] ?? '') === (string) $permission) ? 'selected' : '' ?>><?= h((string) $permission) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select name="role" class="form-select form-select-sm">
+                <option value="">All roles</option>
+                <?php foreach ($roles as $role): ?>
+                  <option value="<?= h((string) $role) ?>" <?= ((string) ($filters['role'] ?? '') === (string) $role) ? 'selected' : '' ?>><?= h((string) $role) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select name="access_type" class="form-select form-select-sm">
+                <option value="">All types</option>
+                <?php foreach (['Permission Controlled', 'Auth Only', 'Public'] as $type): ?>
+                  <option value="<?= h($type) ?>" <?= ((string) ($filters['access_type'] ?? '') === $type) ? 'selected' : '' ?>><?= h($type) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-1 d-grid">
+              <button type="submit" id="access-matrix-filter-btn" class="btn btn-sm btn-outline-primary">Filter</button>
+            </div>
+            <div class="col-md-2 d-grid">
+              <a id="access-matrix-reset-btn" href="index.php?route=access-matrix/index" class="btn btn-sm btn-outline-secondary">Reset</a>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <?php if ($groupedRows === []): ?>
         <div class="text-center text-muted py-3">No access records matched the current filters.</div>
@@ -147,10 +180,10 @@ $roles = is_array($roles ?? null) ? $roles : [];
                 <span class="badge text-bg-light border">Menu Uses Roles: <?= (int) ($groupSummary['menu_role_count'] ?? 0) ?></span>
               </div>
             </div>
-            <div class="card-body p-0">
+            <div class="card-body">
               <div class="table-responsive">
-                <table class="table table-striped table-hover align-middle mb-0">
-                  <thead class="table-light">
+                <table id="access-matrix-table-<?= h(strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', $groupName) ?: 'other')) ?>" class="table table-sm table-hover align-middle mb-0">
+                  <thead>
                     <tr>
                       <th>Screen</th>
                       <th>Route</th>
@@ -225,4 +258,5 @@ $roles = is_array($roles ?? null) ? $roles : [];
       <?php endif; ?>
     </div>
   </div>
+</div>
 </div>

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../shared/training_features.php';
 require_once __DIR__ . '/../../../shared/testing_features.php';
+require_once __DIR__ . '/../../../shared/nav_tree.php';
 require_once __DIR__ . '/../../Core/Rbac.php';
 
 if (!function_exists('h')) {
@@ -16,9 +17,28 @@ $currentRoute = (string) ($_GET['route'] ?? '');
 $testingEnabled = screen_testing_features_enabled($GLOBALS['conn'] ?? null);
 $trainingEnabled = training_features_enabled($GLOBALS['conn'] ?? null);
 $isAdmin = (new \App\Core\Rbac($GLOBALS['conn'] ?? null))->canAny(['ADMIN_ALL', 'SYSADMIN']);
+$menuFile = __DIR__ . '/../../../config/menu.php';
+$menu = (is_file($menuFile) && is_array($tmp = require $menuFile)) ? $tmp : [];
 $groups = require __DIR__ . '/../../../config/quick_links.php';
 
-$filterLinks = static function (array $links) use ($testingEnabled, $trainingEnabled, $isAdmin): array {
+$findMenuItemByRoute = static function (array $items, string $route) use (&$findMenuItemByRoute): ?array {
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        if (trim((string) ($item['route'] ?? '')) === $route) {
+            return $item;
+        }
+        $child = $findMenuItemByRoute(is_array($item['children'] ?? null) ? $item['children'] : [], $route);
+        if ($child !== null) {
+            return $child;
+        }
+    }
+
+    return null;
+};
+
+$filterLinks = static function (array $links) use ($testingEnabled, $trainingEnabled, $isAdmin, $menu, $findMenuItemByRoute): array {
     $filtered = [];
     foreach ($links as $link) {
         if (!empty($link['requiresTesting']) && !$testingEnabled) {
@@ -28,6 +48,14 @@ $filterLinks = static function (array $links) use ($testingEnabled, $trainingEna
             continue;
         }
         if (!empty($link['requiresAdmin']) && !$isAdmin) {
+            continue;
+        }
+        if (!empty($link['perms']) && is_array($link['perms']) && !\App\Core\Rbac::canAny($link['perms'])) {
+            continue;
+        }
+        $route = trim((string) ($link['route'] ?? ''));
+        $menuItem = $route !== '' ? $findMenuItemByRoute($menu, $route) : null;
+        if ($menuItem !== null && !menu_item_visible($menuItem)) {
             continue;
         }
         $filtered[] = $link;

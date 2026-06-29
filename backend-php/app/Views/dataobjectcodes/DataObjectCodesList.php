@@ -13,6 +13,8 @@
 /** @var string $_csrf */
 /** @var int    $fiscalYearId */
 
+use App\Shared\SessionHelper;
+
 require_once __DIR__ . '/../../../shared/csrf.php';
 
 if (!function_exists('h')) {
@@ -50,6 +52,12 @@ $toggleSort = function (string $col) use ($sort, $dir, $qs): string {
 };
 
 $printMode = ($_GET['print'] ?? '') === '1';
+$perms = SessionHelper::get('auth.perms', []);
+$canAdmin = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true) || in_array('DATAOBJECTCODES_ADMIN', $perms, true));
+$canEdit = $canAdmin || (is_array($perms) && in_array('DATAOBJECTCODES_EDIT', $perms, true));
+$canImport = $canAdmin || (is_array($perms) && in_array('DATAOBJECTCODES_IMPORT', $perms, true));
+$canAct = $canEdit || $canAdmin;
 ?>
 <div class="container mt-4">
   <div class="card shadow-sm">
@@ -59,36 +67,33 @@ $printMode = ($_GET['print'] ?? '') === '1';
       </div>
       <?php if (!$printMode): ?>
       <div class="d-inline-flex gap-2">
-        <a href="index.php?route=dataobject-types/list" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-diagram-3 me-1"></i>Types
-        </a>
-        <a href="index.php?route=dataobjectcodes/hierarchy" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-diagram-2 me-1"></i>Hierarchy
-        </a>
-        <a href="index.php?route=dataobjectworkflow/statuses" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-list-check me-1"></i>Workflow Status
-        </a>
         <a href="index.php?route=dataobjectcodes/downloadTemplate" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-download me-1"></i>Template
         </a>
-        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docUploadModal">
-          <i class="bi bi-upload me-1"></i>Upload
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docOrgSegmentSyncModal">
-          <i class="bi bi-diagram-3 me-1"></i>Load Org Structure
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#docRebuildHierarchyModal">
-          <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
-        </button>
+        <?php if ($canImport): ?>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docUploadModal">
+            <i class="bi bi-upload me-1"></i>Upload
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#docOrgSegmentSyncModal">
+            <i class="bi bi-diagram-3 me-1"></i>Load Org Structure
+          </button>
+        <?php endif; ?>
+        <?php if ($canEdit): ?>
+          <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#docRebuildHierarchyModal">
+            <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
+          </button>
+        <?php endif; ?>
         <a href="index.php?route=dataobjectcodes/export" class="btn btn-sm btn-outline-success">
           <i class="bi bi-file-earmark-excel me-1"></i><?= __t('export_excel') ?>
         </a>
         <a href="<?= $qs(['route' => 'dataobjectcodes/exportPdf']) ?>" class="btn btn-sm btn-outline-secondary" target="_blank">
           <i class="bi bi-filetype-pdf me-1"></i><?= __t('export_pdf') ?>
         </a>
-        <a href="index.php?route=dataobjectcodes/create" id="dataobjectcodes-create-btn" class="btn btn-sm btn-primary">
-          <i class="bi bi-plus-circle me-1"></i><?= __t('add') ?>
-        </a>
+        <?php if ($canEdit): ?>
+          <a href="index.php?route=dataobjectcodes/create" id="dataobjectcodes-create-btn" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-circle me-1"></i><?= __t('add') ?>
+          </a>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
     </div>
@@ -151,12 +156,12 @@ $printMode = ($_GET['print'] ?? '') === '1';
               <th><a class="text-decoration-none" href="<?= $toggleSort('DataObjectTypeID') ?>"><?= __t('type') ?><?= $sort === 'DataObjectTypeID' ? ' ' . h($dir) : '' ?></a></th>
               <th><a class="text-decoration-none" href="<?= $toggleSort('DataObjectCodeStatus') ?>"><?= __t('status') ?><?= $sort === 'DataObjectCodeStatus' ? ' ' . h($dir) : '' ?></a></th>
               <th class="text-nowrap"><a class="text-decoration-none" href="<?= $toggleSort('DateUpdated') ?>"><?= __t('updated') ?><?= $sort === 'DateUpdated' ? ' ' . h($dir) : '' ?></a></th>
-              <?php if (!$printMode): ?><th class="text-end text-nowrap"><?= __t('actions') ?></th><?php endif; ?>
+              <?php if (!$printMode && $canAct): ?><th class="text-end text-nowrap"><?= __t('actions') ?></th><?php endif; ?>
             </tr>
           </thead>
           <tbody>
             <?php if (empty($rows)): ?>
-              <tr><td colspan="<?= $printMode ? '6' : '7' ?>" class="text-center text-muted py-3"><?= __t('no_records_found') ?></td></tr>
+              <tr><td colspan="<?= (!$printMode && $canAct) ? '7' : '6' ?>" class="text-center text-muted py-3"><?= __t('no_records_found') ?></td></tr>
             <?php else: ?>
               <?php foreach ($rows as $r): ?>
                 <tr>
@@ -174,21 +179,25 @@ $printMode = ($_GET['print'] ?? '') === '1';
                     <?php endif; ?>
                   </td>
                   <td class="text-nowrap"><?= h((string) ($r['DateUpdated'] ?? '')) ?></td>
-                  <?php if (!$printMode): ?>
+                  <?php if (!$printMode && $canAct): ?>
                   <td class="text-end text-nowrap">
                     <div class="d-inline-flex gap-1">
-                      <a href="index.php?route=dataobjectcodes/edit&DataObjectCode=<?= urlencode((string) $r['DataObjectCode']) ?>" class="btn btn-sm btn-outline-secondary" title="<?= __t('edit') ?>">
-                        <i class="bi bi-pencil-square"></i>
-                      </a>
-                      <button type="button"
-                              class="btn btn-sm btn-outline-danger"
-                              title="<?= __t('delete') ?>"
-                              data-bs-toggle="modal"
-                              data-bs-target="#docDeleteModal"
-                              data-code="<?= h((string) $r['DataObjectCode']) ?>"
-                              data-name="<?= h((string) $r['DataObjectName']) ?>">
-                        <i class="bi bi-trash"></i>
-                      </button>
+                      <?php if ($canEdit): ?>
+                        <a href="index.php?route=dataobjectcodes/edit&DataObjectCode=<?= urlencode((string) $r['DataObjectCode']) ?>" class="btn btn-sm btn-outline-secondary" title="<?= __t('edit') ?>">
+                          <i class="bi bi-pencil-square"></i>
+                        </a>
+                      <?php endif; ?>
+                      <?php if ($canAdmin): ?>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-danger"
+                                title="<?= __t('delete') ?>"
+                                data-bs-toggle="modal"
+                                data-bs-target="#docDeleteModal"
+                                data-code="<?= h((string) $r['DataObjectCode']) ?>"
+                                data-name="<?= h((string) $r['DataObjectName']) ?>">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      <?php endif; ?>
                     </div>
                   </td>
                   <?php endif; ?>
@@ -221,7 +230,7 @@ $printMode = ($_GET['print'] ?? '') === '1';
   </div>
 </div>
 
-<?php if (!$printMode): ?>
+<?php if (!$printMode && $canImport): ?>
 <div class="modal fade" id="docOrgSegmentSyncModal" tabindex="-1" aria-labelledby="docOrgSegmentSyncModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -307,7 +316,9 @@ $printMode = ($_GET['print'] ?? '') === '1';
     </div>
   </div>
 </div>
+<?php endif; ?>
 
+<?php if (!$printMode && $canEdit): ?>
 <div class="modal fade" id="docRebuildHierarchyModal" tabindex="-1" aria-labelledby="docRebuildHierarchyModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -333,7 +344,9 @@ $printMode = ($_GET['print'] ?? '') === '1';
     </div>
   </div>
 </div>
+<?php endif; ?>
 
+<?php if (!$printMode && $canAdmin): ?>
 <div class="modal fade" id="docDeleteModal" tabindex="-1" aria-labelledby="docDeleteModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">

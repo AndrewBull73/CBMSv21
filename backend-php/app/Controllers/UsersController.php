@@ -3,13 +3,20 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Rbac;
 use App\Shared\SessionHelper;
 use App\Shared\TrainingScenarioCatalog;
+use App\Models\DataObjectCodeAccessModel;
+use App\Models\EmailQueueModel;
+use App\Models\EmailTemplateModel;
+use App\Models\LoginTokenModel;
+use App\Models\SystemSettingsModel;
 use App\Models\UserModel;
 use App\Models\AuditModel;
 use App\Models\RoleModel;
 use App\Models\TrainingProgressModel;
 use App\Models\UserRoleModel;
+use App\Services\MailService;
 
 require_once __DIR__ . '/../../shared/csrf.php';
 require_once __DIR__ . '/../../shared/training_features.php';
@@ -107,6 +114,30 @@ public function list(): void
             ? array_column($userRoleModel->listByUser($id), 'RoleID')
             : [];
 
+        $dataObjectAccess = [];
+        $dataObjectDirectAccess = [];
+        $dataObjectAccessError = '';
+        $dataObjectAccessFiscalYear = (int)SessionHelper::get('FiscalYearID', 0);
+
+        if ($id > 0 && $dataObjectAccessFiscalYear > 0) {
+            $accessModel = new DataObjectCodeAccessModel($conn);
+            $dataObjectDirectAccess = $accessModel->getDirectAccess($id, $dataObjectAccessFiscalYear);
+            $directError = $accessModel->getLastError();
+            $dataObjectAccess = $accessModel->getUserAccessibleCodesWithLevel($id, $dataObjectAccessFiscalYear);
+            $effectiveError = $accessModel->getLastError();
+            $dataObjectAccessError = $effectiveError !== '' ? $effectiveError : $directError;
+        }
+
+        $accessReadiness = $id > 0
+            ? $this->buildUserAccessReadiness(
+                count($userRoles),
+                count($dataObjectDirectAccess),
+                count($dataObjectAccess),
+                $dataObjectAccessFiscalYear,
+                $dataObjectAccessError
+            )
+            : null;
+
         $flash = SessionHelper::get('flash.message', null);
 
         $this->render('users/UserForm', [
@@ -114,6 +145,12 @@ public function list(): void
             'user'      => $user,
             'roles'     => $roles,
             'userRoles' => $userRoles,
+            'dataObjectAccess' => $dataObjectAccess,
+            'dataObjectDirectAccess' => $dataObjectDirectAccess,
+            'dataObjectAccessError' => $dataObjectAccessError,
+            'dataObjectAccessFiscalYear' => $dataObjectAccessFiscalYear,
+            'accessReadiness' => $accessReadiness,
+            'canManageDataObjectAccess' => Rbac::canAny(['DATAOBJECTCODES_ACCESS_ADMIN', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']),
             'flash'     => $flash,
             'trainingGuide' => $this->buildUsersTrainingGuide('users/edit', $id),
             'trainingEnabled' => training_features_enabled($this->db),
@@ -150,6 +187,9 @@ public function list(): void
         $isActive   = isset($_POST['IsActive']) ? 1 : 0;
         $forceReset = isset($_POST['ForcePasswordReset']) ? 1 : 0;
         $mustChange = isset($_POST['MustChangePassword']) ? 1 : 0;
+        $onboardingMode = $id <= 0
+            ? $this->normalizeOnboardingMode((string)($_POST['OnboardingMode'] ?? 'email_invite'))
+            : '';
 
         $data = [
             'Username'           => $username,
@@ -168,12 +208,38 @@ public function list(): void
             'UpdatedAt'          => gmdate('Y-m-d H:i:s'),
         ];
 
+        if ($id <= 0) {
+            $data['CreatedBy'] = (int)SessionHelper::get('auth.user_id', 0);
+            $data['ForcePasswordReset'] = 1;
+            $data['MustChangePassword'] = 1;
+
+            if ($onboardingMode === 'email_invite') {
+                if ($email === '') {
+                    $this->flashError('Email is required when sending a welcome invite.');
+                    header('Location: index.php?route=users/edit');
+                    exit;
+                }
+                $data['PasswordHash'] = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
+            } else {
+                $password = (string)($_POST['InitialPassword'] ?? '');
+                $passwordConfirm = (string)($_POST['InitialPasswordConfirm'] ?? '');
+                $passwordError = $this->validateInitialPassword($password, $passwordConfirm);
+                if ($passwordError !== '') {
+                    $this->flashError($passwordError);
+                    header('Location: index.php?route=users/edit');
+                    exit;
+                }
+                $data['Password'] = $password;
+            }
+        }
+
         $this->syncUsersEditTrainingFieldStep($_POST);
         $trainingState = $this->getUsersTrainingState();
         $trainingScenarioQuery = '';
         if (is_array($trainingState) && \App\Shared\TrainingScenarioCatalog::isUsersScenario((string) ($trainingState['scenario_id'] ?? ''))) {
             $trainingScenarioQuery = '&training_scenario_id=' . rawurlencode((string) $trainingState['scenario_id']);
         }
+        $redirectAfterSave = 'index.php?route=users/list' . $trainingScenarioQuery;
 
         try {
             if ($id > 0) {
@@ -195,8 +261,51 @@ public function list(): void
 
             } else {
                 $newId = $model->create($data);
+                if ($newId <= 0) {
+                    throw new \RuntimeException($model->getLastError() ?: 'User insert failed.');
+                }
                 $this->completeUsersTrainingSubmitStepIfNeeded();
-                $this->flashSuccess(__t('user_created', ['user' => $username]));
+                $redirectAfterSave = 'index.php?route=users/edit&id=' . $newId . $trainingScenarioQuery . '#roles';
+                $inviteQueued = false;
+                $inviteSent = false;
+                $createFlashType = 'success';
+                $createMessage = '';
+                if ($onboardingMode === 'email_invite') {
+                    $inviteResult = $this->queueWelcomeInvite($conn, $newId, $data);
+                    $inviteQueued = (bool)($inviteResult['queued'] ?? false);
+                    $inviteSent = (bool)($inviteResult['sent'] ?? false);
+                    if ($inviteQueued) {
+                        if ($inviteSent) {
+                            $createMessage = 'User created and welcome invite sent to ' . $email . '.';
+                        } else {
+                            $warning = 'User created and welcome invite queued, but immediate send did not complete. Check Email Queue for the delivery error.';
+                            $queueId = (int)($inviteResult['email_id'] ?? 0);
+                            $sendError = trim((string)($inviteResult['error'] ?? ''));
+                            if ($queueId > 0) {
+                                $warning .= ' Queue ID: ' . $queueId . '.';
+                            }
+                            if ($sendError !== '') {
+                                $warning .= ' Immediate send error: ' . $sendError;
+                            }
+                            $createFlashType = 'warning';
+                            $createMessage = $warning;
+                        }
+                    } else {
+                        $createFlashType = 'warning';
+                        $createMessage = 'User created, but the welcome invite could not be queued. Check the application log and email template setup.';
+                    }
+                } else {
+                    $createMessage = 'User created with a temporary password. The user must change it on first login.';
+                }
+                $createReadiness = $this->buildUserAccessReadiness(0, 0, 0, (int)SessionHelper::get('FiscalYearID', 0), '');
+                if (!empty($createReadiness['issues'])) {
+                    $createFlashType = 'warning';
+                    $createMessage .= ' Access setup still needs attention: ' . implode(' ', $createReadiness['issues']);
+                }
+                SessionHelper::set('flash.message', [
+                    'type' => $createFlashType,
+                    'text' => $createMessage,
+                ]);
 
                 $audit->insert([
                     'UserID'       => SessionHelper::get('auth.user_id'),
@@ -205,7 +314,14 @@ public function list(): void
                     'Entity'       => 'User',
                     'EntityKey'    => (string)$newId,
                     'IPAddress'    => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
-                    'Details'      => ['Username' => $username, 'Email' => $email, 'Active' => $isActive],
+                    'Details'      => [
+                        'Username' => $username,
+                        'Email' => $email,
+                        'Active' => $isActive,
+                        'OnboardingMode' => $onboardingMode,
+                        'InviteQueued' => $inviteQueued,
+                        'InviteSentImmediately' => $inviteSent,
+                    ],
                     'FiscalYearID' => SessionHelper::get('FiscalYearID'),
                     'VersionID'    => SessionHelper::get('VersionID'),
                 ]);
@@ -218,7 +334,7 @@ public function list(): void
             $this->flashError(__t('user_save_failed') . ': ' . $e->getMessage());
         }
 
-        header('Location: index.php?route=users/list' . $trainingScenarioQuery);
+        header('Location: ' . $redirectAfterSave);
         exit;
     }
 
@@ -294,9 +410,28 @@ public function list(): void
             exit;
         }
 
+        $editingCurrentUser = $userId === (int) SessionHelper::get('auth.user_id', 0);
+        $redirectRoute = 'index.php?route=users/edit&id=' . $userId . $trainingScenarioQuery . '#roles';
+
         try {
             $userRoleModel->setRoles($userId, $roleIds);
-            $this->flashSuccess(__t('roles_updated_successfully'));
+            $dataAccessCount = 0;
+            $dataAccessError = '';
+            $dataObjectAccessFiscalYear = (int)SessionHelper::get('FiscalYearID', 0);
+            if ($dataObjectAccessFiscalYear > 0) {
+                $accessModel = new DataObjectCodeAccessModel($conn);
+                $dataAccessCount = count($accessModel->getUserAccessibleCodesWithLevel($userId, $dataObjectAccessFiscalYear));
+                $dataAccessError = $accessModel->getLastError();
+            }
+            $readiness = $this->buildUserAccessReadiness(count($roleIds), 0, $dataAccessCount, $dataObjectAccessFiscalYear, $dataAccessError);
+            if (!empty($readiness['issues'])) {
+                SessionHelper::set('flash.message', [
+                    'type' => 'warning',
+                    'text' => 'Roles updated. Access setup still needs attention: ' . implode(' ', $readiness['issues']),
+                ]);
+            } else {
+                $this->flashSuccess(__t('roles_updated_successfully'));
+            }
 
             $audit->insert([
                 'UserID'       => SessionHelper::get('auth.user_id'),
@@ -309,6 +444,13 @@ public function list(): void
                 'FiscalYearID' => SessionHelper::get('FiscalYearID'),
                 'VersionID'    => SessionHelper::get('VersionID'),
             ]);
+
+            if ($editingCurrentUser) {
+                (new Rbac($conn))->loadForUser($userId);
+                if (!Rbac::canAny(['USERS_EDIT', 'USERS_ADMIN'])) {
+                    $redirectRoute = 'index.php?route=home/index';
+                }
+            }
         } catch (\Throwable $e) {
             $this->logHandledException('UsersController::saveRoles failed', $e, [
                 'userId' => $userId,
@@ -316,7 +458,7 @@ public function list(): void
             $this->flashError(__t('roles_update_failed') . ': ' . $e->getMessage());
         }
 
-        header('Location: index.php?route=users/edit&id=' . $userId . $trainingScenarioQuery . '#roles');
+        header('Location: ' . $redirectRoute);
         exit;
     }
 
@@ -656,6 +798,235 @@ public function exportExcel(): void
     exit;
 }
 
+private function normalizeOnboardingMode(string $mode): string
+{
+    $mode = strtolower(trim($mode));
+    return $mode === 'temporary_password' ? 'temporary_password' : 'email_invite';
+}
+
+/**
+ * @return array{ready: bool, role_count: int, direct_data_access_count: int, effective_data_access_count: int, fiscal_year_id: int, issues: array<int, string>}
+ */
+private function buildUserAccessReadiness(
+    int $roleCount,
+    int $directDataAccessCount,
+    int $effectiveDataAccessCount,
+    int $fiscalYearId,
+    string $dataAccessError
+): array {
+    $issues = [];
+
+    if ($roleCount <= 0) {
+        $issues[] = 'Assign at least one role so the user can access the relevant menu areas.';
+    }
+
+    if ($fiscalYearId <= 0) {
+        $issues[] = 'Select a fiscal year before checking Data Object Code access.';
+    } elseif (trim($dataAccessError) !== '') {
+        $issues[] = 'Data Object Code access could not be checked: ' . trim($dataAccessError);
+    } elseif ($effectiveDataAccessCount <= 0) {
+        $issues[] = 'Grant at least one Data Object Code for the current fiscal year.';
+    }
+
+    return [
+        'ready' => empty($issues),
+        'role_count' => max(0, $roleCount),
+        'direct_data_access_count' => max(0, $directDataAccessCount),
+        'effective_data_access_count' => max(0, $effectiveDataAccessCount),
+        'fiscal_year_id' => max(0, $fiscalYearId),
+        'issues' => $issues,
+    ];
+}
+
+private function validateInitialPassword(string $password, string $confirm): string
+{
+    if ($password === '') {
+        return 'Initial password is required when using the temporary password onboarding option.';
+    }
+    if ($password !== $confirm) {
+        return 'Initial password and confirmation do not match.';
+    }
+    if (strlen($password) < 10) {
+        return 'Initial password must be at least 10 characters.';
+    }
+    if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        return 'Initial password must include uppercase, lowercase, and numeric characters.';
+    }
+
+    return '';
+}
+
+/**
+ * @return array{queued: bool, sent: bool, email_id?: int, error?: string}
+ */
+private function queueWelcomeInvite(\PDO $conn, int $userId, array $userData): array
+{
+    $email = trim((string)($userData['Email'] ?? ''));
+    if ($userId <= 0 || $email === '') {
+        return ['queued' => false, 'sent' => false, 'error' => 'Missing user or email.'];
+    }
+
+    try {
+        $settings = new SystemSettingsModel($conn);
+        $ttlMinutes = max(5, (int)$settings->get('AUTH_SECURE_LOGIN_TTL_MINUTES', '1440'));
+
+        $tokenModel = new LoginTokenModel($conn);
+        $token = $tokenModel->issue(
+            $userId,
+            $email,
+            $ttlMinutes,
+            (int)SessionHelper::get('auth.user_id', 0) ?: null
+        );
+
+        $secureUrl = $this->buildSecureLoginUrl($conn, (string)$token['Token']);
+        $loginUrl = $this->resolveLoginUrl($conn);
+        $displayName = trim((string)($userData['DisplayName'] ?? ''));
+        if ($displayName === '') {
+            $displayName = trim((string)($userData['FirstName'] ?? '') . ' ' . (string)($userData['LastName'] ?? ''));
+        }
+        if ($displayName === '') {
+            $displayName = (string)($userData['Username'] ?? 'user');
+        }
+
+        $expiresAt = (string)($token['ExpiresAt'] ?? '');
+        if ($expiresAt !== '') {
+            $expiresAt .= ' UTC';
+        }
+
+        $tokens = [
+            'APP_NAME' => 'CBMSv21',
+            'USERNAME' => (string)($userData['Username'] ?? ''),
+            'DISPLAY_NAME' => $displayName,
+            'FIRST_NAME' => (string)($userData['FirstName'] ?? ''),
+            'LAST_NAME' => (string)($userData['LastName'] ?? ''),
+            'EMAIL' => $email,
+            'CBMS_LOGIN_URL' => $loginUrl,
+            'CBMS_LOGIN_LINK' => '<a href="' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '">Log in to CBMSv21</a>',
+            'CBMS_SECURE_LOGIN_URL' => $secureUrl,
+            'CBMS_SECURE_LOGIN_LINK' => '<a href="' . htmlspecialchars($secureUrl, ENT_QUOTES, 'UTF-8') . '">Securely log in to CBMSv21</a>',
+            'EXPIRES_AT' => $expiresAt,
+            'EXPIRES_MINUTES' => (string)$ttlMinutes,
+        ];
+
+        $templateModel = new EmailTemplateModel($conn);
+        $rendered = $templateModel->render('USER_WELCOME_INVITE', $tokens);
+        if ($rendered === null) {
+            $rendered = $this->fallbackWelcomeInvite($templateModel, $tokens);
+        }
+
+        $mailer = new MailService($conn);
+        $queue = new EmailQueueModel($conn, $mailer);
+        $ids = $queue->enqueueBatch([[
+            'to' => $email,
+            'subject' => (string)($rendered['subject'] ?? 'Welcome to CBMSv21'),
+            'html' => (string)($rendered['html'] ?? ''),
+            'text' => (string)($rendered['text'] ?? ''),
+            'when' => gmdate('Y-m-d H:i:s'),
+            'status' => 'pending',
+        ]]);
+
+        $emailId = (int)($ids[0] ?? 0);
+        if ($emailId <= 0) {
+            return ['queued' => true, 'sent' => false, 'error' => 'Email queued, but queue id was not returned.'];
+        }
+
+        $processed = $queue->processDue(1, $emailId);
+        $sent = false;
+        $error = '';
+        foreach ($processed as $row) {
+            if ((int)($row['EmailID'] ?? 0) !== $emailId) {
+                continue;
+            }
+            $sent = !empty($row['Sent']);
+            $error = trim((string)($row['ErrorMsg'] ?? ''));
+            break;
+        }
+
+        return [
+            'queued' => true,
+            'sent' => $sent,
+            'email_id' => $emailId,
+            'error' => $error,
+        ];
+    } catch (\Throwable $e) {
+        app_log('User welcome invite queue failed', [
+            'userId' => $userId,
+            'email' => $email,
+            'error' => $e->getMessage(),
+        ], 'error');
+        return ['queued' => false, 'sent' => false, 'error' => $e->getMessage()];
+    }
+}
+
+/**
+ * @param array<string, scalar|null> $tokens
+ * @return array<string, string>
+ */
+private function fallbackWelcomeInvite(EmailTemplateModel $templateModel, array $tokens): array
+{
+    $subject = 'Welcome to {{APP_NAME}}';
+    $html = '<p>Hello {{DISPLAY_NAME}},</p>'
+        . '<p>Your {{APP_NAME}} account has been created.</p>'
+        . '<p>Username: <strong>{{USERNAME}}</strong></p>'
+        . '<p>Use this secure link to sign in and set your password:</p>'
+        . '<p>{{CBMS_SECURE_LOGIN_LINK}}</p>'
+        . '<p>Password requirements: use at least 10 characters including uppercase, lowercase, and numeric characters.</p>'
+        . '<p>This link expires at {{EXPIRES_AT}}.</p>';
+    $text = "Hello {{DISPLAY_NAME}},\n\n"
+        . "Your {{APP_NAME}} account has been created.\n\n"
+        . "Username: {{USERNAME}}\n"
+        . "Secure login link: {{CBMS_SECURE_LOGIN_URL}}\n\n"
+        . "Password requirements: use at least 10 characters including uppercase, lowercase, and numeric characters.\n\n"
+        . "This link expires at {{EXPIRES_AT}}.";
+
+    return [
+        'subject' => $templateModel->applyTokens($subject, $tokens, false),
+        'html' => $templateModel->applyTokens($html, $tokens, true),
+        'text' => $templateModel->applyTokens($text, $tokens, false),
+    ];
+}
+
+private function resolveLoginUrl(\PDO $conn): string
+{
+    $settings = new SystemSettingsModel($conn);
+    $explicit = trim((string)$settings->get('AUTH_LOGIN_URL', ''));
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    return rtrim($this->resolveAppUrl($conn), '/') . '/backend-php/public/index.php?route=auth/loginForm';
+}
+
+private function buildSecureLoginUrl(\PDO $conn, string $token): string
+{
+    $settings = new SystemSettingsModel($conn);
+    $base = trim((string)$settings->get('AUTH_TOKEN_LOGIN_URL_BASE', ''));
+    if ($base === '') {
+        $base = rtrim($this->resolveAppUrl($conn), '/') . '/backend-php/public/index.php?route=auth/tokenLogin';
+    }
+
+    $separator = str_contains($base, '?') ? '&' : '?';
+    return $base . $separator . 'token=' . urlencode($token);
+}
+
+private function resolveAppUrl(\PDO $conn): string
+{
+    $settings = new SystemSettingsModel($conn);
+    $appUrl = trim((string)$settings->get('APP_URL', ''));
+    if ($appUrl !== '') {
+        return rtrim($appUrl, '/');
+    }
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $script = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/backend-php/public/index.php'));
+    $marker = '/backend-php/public/index.php';
+    $pos = stripos($script, $marker);
+    $basePath = $pos !== false ? substr($script, 0, $pos) : '';
+
+    return rtrim($scheme . '://' . $host . $basePath, '/');
+}
+
 private function getUsersTrainingState(): ?array
 {
     $requestedScenarioId = trim((string) ($_GET['training_scenario_id'] ?? ''));
@@ -746,6 +1117,7 @@ private function buildUsersTrainingGuide(string $route, int $userId = 0): ?array
         'isCompleted' => $isCompleted,
         'sampleValue' => $sampleValue,
         'completeUrl' => 'index.php?route=training/complete',
+        'stuckUrl' => 'index.php?route=training/stuck',
         'runnerUrl' => TrainingScenarioCatalog::startRoute((string) ($state['scenario_id'] ?? '')),
         'stopUrl' => 'index.php?route=training/stop',
         'csrf' => csrf_token(),

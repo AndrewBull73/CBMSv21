@@ -179,6 +179,14 @@ $screenHeader = [
                         <?php if (!empty($row['instruction'])): ?>
                           <div class="small text-muted mt-1"><strong>What to do:</strong> <?= h((string) ($row['instruction'] ?? '')) ?></div>
                         <?php endif; ?>
+                        <?php $details = is_array($row['details'] ?? null) ? $row['details'] : []; ?>
+                        <?php if ($details !== []): ?>
+                          <ol class="small text-muted mt-2 mb-0 ps-3">
+                            <?php foreach ($details as $detail): ?>
+                              <li><?= h((string) $detail) ?></li>
+                            <?php endforeach; ?>
+                          </ol>
+                        <?php endif; ?>
                       </td>
                       <td class="text-end">
                         <?php if (!empty($row['action_route']) && !empty($row['action_label'])): ?>

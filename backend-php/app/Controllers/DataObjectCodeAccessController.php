@@ -9,7 +9,9 @@ use App\Models\AuditModel;
 final class DataObjectCodeAccessController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']]
+        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ACCESS_ADMIN', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'index' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ACCESS_ADMIN', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'report' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ACCESS_ADMIN', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
     ];
 
     protected bool $requiresContext = true;
@@ -44,13 +46,17 @@ final class DataObjectCodeAccessController extends BaseController
 
         $users = $model->getUsers();
         $codes = $model->getCodes($fy);
+        $selectedUserId = (int)($_GET['user'] ?? 0);
+        $returnUserId = (int)($_GET['return_user'] ?? $selectedUserId);
 
 
         $this->render('dataobjectcodes/DataObjectCodesAccessForm', [
             'title' => 'docodes_access_grant',
             'users' => $users,
             'codes' => $codes,
-            'fy' => $fy
+            'fy' => $fy,
+            'selectedUserId' => $selectedUserId,
+            'returnUserId' => $returnUserId
         ]);
     }
 
@@ -64,9 +70,13 @@ final class DataObjectCodeAccessController extends BaseController
         require_once __DIR__ . '/../Models/DataObjectCodeAccessModel.php';
 
         $fy = (int)SessionHelper::get('FiscalYearID', 0);
+        $returnUserId = (int)($_POST['return_user'] ?? 0);
+        $redirect = $returnUserId > 0
+            ? 'index.php?route=users/edit&id=' . $returnUserId . '#data-object-access'
+            : 'index.php?route=dataobjectcodes/access';
         if ($fy <= 0) {
             $this->flashError('Invalid fiscal year.');
-            header('Location: index.php?route=dataobjectcodes/access');
+            header('Location: ' . $redirect);
             return;
         }
 
@@ -101,7 +111,7 @@ final class DataObjectCodeAccessController extends BaseController
         } else {
             $this->flashError('Failed: ' . $model->getLastError());
         }
-        header('Location: index.php?route=dataobjectcodes/access');
+        header('Location: ' . $redirect);
     }
 
     public function revoke(): void

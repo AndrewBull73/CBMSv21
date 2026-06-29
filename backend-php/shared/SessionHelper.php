@@ -10,6 +10,16 @@ final class SessionHelper
         return getenv('APP_SESSION_PREFIX') ?: 'cbmsv21';
     }
 
+    private static function log(string $message, array $context = [], string $level = 'info'): void
+    {
+        if (function_exists('\\app_log')) {
+            \app_log($message, $context, $level);
+            return;
+        }
+
+        error_log($message . ($context !== [] ? ' ' . json_encode($context) : ''));
+    }
+
     private static function &ref(array &$arr, array $segments)
     {
         $cur =& $arr;
@@ -187,7 +197,15 @@ final class SessionHelper
                     error_log("[SESSION DEBUG] enforceActiveSession: Recreated session record for user_id={$userId}, session_id={$sessionId}");
                     return;
                 } catch (\Throwable $e) {
-                    error_log("[SESSION ERROR] enforceActiveSession: Failed to recreate session: " . $e->getMessage());
+                    self::log('enforceActiveSession: Failed to recreate session', [
+                        'error' => $e->getMessage(),
+                        'exception' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'user_id' => $userId,
+                        'session_id' => $sessionId,
+                        'route' => $route,
+                    ], 'error');
                     return; // Prevent session destruction
                 }
             }
@@ -230,7 +248,15 @@ final class SessionHelper
 
             error_log("[SESSION DEBUG] enforceActiveSession: Session valid, user_id={$userId}, session_id={$sessionId}, route={$route}");
         } catch (\Throwable $e) {
-            error_log("[SESSION ERROR] enforceActiveSession: Query failed: " . $e->getMessage() . ", route={$route}");
+            self::log('enforceActiveSession: Query failed', [
+                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => $userId,
+                'session_id' => $sessionId,
+                'route' => $route,
+            ], 'error');
             try {
                 require_once __DIR__ . '/../app/Models/UserSessionModel.php';
                 $model = new \App\Models\UserSessionModel($db);
@@ -245,7 +271,16 @@ final class SessionHelper
                 error_log("[SESSION DEBUG] enforceActiveSession: Recreated session record on query failure for user_id={$userId}, session_id={$sessionId}");
                 return;
             } catch (\Throwable $e2) {
-                error_log("[SESSION ERROR] enforceActiveSession: Failed to recreate session: " . $e2->getMessage() . ", route={$route}");
+                self::log('enforceActiveSession: Failed to recreate session after query failure', [
+                    'error' => $e2->getMessage(),
+                    'exception' => get_class($e2),
+                    'file' => $e2->getFile(),
+                    'line' => $e2->getLine(),
+                    'previous_error' => $e->getMessage(),
+                    'user_id' => $userId,
+                    'session_id' => $sessionId,
+                    'route' => $route,
+                ], 'error');
                 return; // Prevent session destruction
             }
         }

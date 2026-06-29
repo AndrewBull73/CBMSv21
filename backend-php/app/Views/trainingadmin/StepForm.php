@@ -16,6 +16,10 @@ $scenarioOptions = is_array($scenarioOptions ?? null) ? $scenarioOptions : [];
 $completionModes = is_array($completionModes ?? null) ? $completionModes : [];
 $scenarioCode = (string) ($scenarioCode ?? ($record['ScenarioCode'] ?? ''));
 $tableInstalled = (bool) ($tableInstalled ?? false);
+$managementInstalled = (bool) ($managementInstalled ?? false);
+$stepSupport = is_array($stepSupport ?? null) ? $stepSupport : [];
+$supportNote = is_array($stepSupport['note'] ?? null) ? $stepSupport['note'] : [];
+$supportCheckpoint = is_array($stepSupport['checkpoint'] ?? null) ? $stepSupport['checkpoint'] : [];
 $stepNo = (int) ($record['StepNo'] ?? 0);
 ?>
 
@@ -54,6 +58,11 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-info mb-0">The training catalogue schema is not installed yet, so step maintenance is unavailable on this screen.</div>
       <?php else: ?>
+      <?php if (!$managementInstalled): ?>
+        <div class="alert alert-info border-0 shadow-sm">
+          Run <code>create_training_management_features.sql</code> to enable instructor notes and checkpoint support for steps.
+        </div>
+      <?php endif; ?>
       <form method="post" action="index.php?route=training-admin/save-step" class="row g-3">
         <?= csrf_field() ?>
         <input type="hidden" name="OldStepNo" value="<?= $stepNo ?>">
@@ -115,6 +124,48 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
         <div class="col-12">
           <label class="form-label">Instruction</label>
           <textarea name="InstructionText" class="form-control form-control-sm" rows="4" required><?= h((string) ($record['InstructionText'] ?? '')) ?></textarea>
+        </div>
+
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header">
+              <h5 class="mb-0">Instructor Support</h5>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Trainer Note</label>
+                  <textarea name="TrainerNote" class="form-control form-control-sm" rows="4" <?= !$managementInstalled ? 'disabled' : '' ?>><?= h((string) ($supportNote['TrainerNote'] ?? '')) ?></textarea>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Expected Outcome</label>
+                  <textarea name="ExpectedOutcome" class="form-control form-control-sm" rows="4" <?= !$managementInstalled ? 'disabled' : '' ?>><?= h((string) ($supportNote['ExpectedOutcome'] ?? '')) ?></textarea>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Common Issues</label>
+                  <textarea name="CommonIssues" class="form-control form-control-sm" rows="4" <?= !$managementInstalled ? 'disabled' : '' ?>><?= h((string) ($supportNote['CommonIssues'] ?? '')) ?></textarea>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Checkpoint Question</label>
+                  <textarea name="QuestionText" class="form-control form-control-sm" rows="3" <?= !$managementInstalled ? 'disabled' : '' ?>><?= h((string) ($supportCheckpoint['QuestionText'] ?? '')) ?></textarea>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Expected Answer</label>
+                  <textarea name="ExpectedAnswer" class="form-control form-control-sm" rows="3" <?= !$managementInstalled ? 'disabled' : '' ?>><?= h((string) ($supportCheckpoint['ExpectedAnswer'] ?? '')) ?></textarea>
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-3">
+                  <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="checkpoint-required-flag" name="CheckpointRequired" <?= ((int) ($supportCheckpoint['RequiredFlag'] ?? 0) === 1) ? 'checked' : '' ?> <?= !$managementInstalled ? 'disabled' : '' ?>>
+                    <label class="form-check-label" for="checkpoint-required-flag">Required checkpoint</label>
+                  </div>
+                  <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="checkpoint-active-flag" name="CheckpointActive" <?= ((int) ($supportCheckpoint['ActiveFlag'] ?? 1) === 1) ? 'checked' : '' ?> <?= !$managementInstalled ? 'disabled' : '' ?>>
+                    <label class="form-check-label" for="checkpoint-active-flag">Active checkpoint</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="col-12">

@@ -13,17 +13,17 @@ use App\Shared\Pdf;
 final class DataObjectCodesController extends BaseController
 {
     protected array $acl = [
-        '*'        => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'index'    => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'create'   => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'edit'     => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'save'     => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'delete'   => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'uploadProcess' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'downloadTemplate' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'rebuildHierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'syncOrgFromSegments' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'hierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        '*'        => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'index'    => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'create'   => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'edit'     => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'save'     => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'delete'   => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'uploadProcess' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_IMPORT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'downloadTemplate' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_IMPORT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'rebuildHierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'syncOrgFromSegments' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_IMPORT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'hierarchy' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
     ];
 
     protected bool $requiresContext = true;

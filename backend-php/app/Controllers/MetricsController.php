@@ -12,12 +12,14 @@ class MetricsController extends BaseController
 {
     protected array $acl = [
         // Default: lock everything down
-        '*'              => ['auth' => true, 'permsAny' => ['SYSADMIN']],
+        '*'              => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
 
         // Allow specific metrics views for users with METRICS_VIEW or SYSADMIN
-        'failedLogins'   => ['auth' => true, 'permsAny' => ['METRICS_VIEW','SYSADMIN']],
-        'errorsTrend'    => ['auth' => true, 'permsAny' => ['METRICS_VIEW','SYSADMIN']],
-        'health'         => ['auth' => true, 'permsAny' => ['METRICS_VIEW','SYSADMIN']],
+        'failed-logins'  => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'failedLogins'   => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'errors-trend'   => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'errorsTrend'    => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'health'         => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function __construct()

@@ -48,8 +48,11 @@ abstract class BaseController
             || str_starts_with($route, 'auth/force')
             || str_starts_with($route, 'auth/refresh');
         $isIframe = !empty($_GET['iframe']);
+        $skipJustLoggedInHome = $route === 'home/index'
+            && SessionHelper::get('auth.just_logged_in')
+            && !(bool)SessionHelper::get('auth.must_change_password', false);
 
-        if (!$isAuthRoute && !($route === 'home/index' && SessionHelper::get('auth.just_logged_in'))) {
+        if (!$isAuthRoute && !$skipJustLoggedInHome) {
             $this->applyLinkedContextFromRequest();
 
             if ($this->db instanceof \PDO && !$isIframe) {
@@ -74,7 +77,7 @@ abstract class BaseController
             $this->autoMaintenance();
         }
 
-        if ($route === 'home/index' && SessionHelper::get('auth.just_logged_in')) {
+        if ($skipJustLoggedInHome) {
             SessionHelper::forget('auth.just_logged_in');
             session_write_close();
         }
@@ -156,7 +159,30 @@ abstract class BaseController
                 }
             }
 
+            $passwordChangeAllowedRoutes = ['auth/changePassword', 'auth/savePassword', 'auth/logout'];
+            if ((bool)SessionHelper::get('auth.must_change_password', false) && !in_array($route, $passwordChangeAllowedRoutes, true)) {
+                app_log('enforceAcl: password change required', [
+                    'userId' => $userId,
+                    'route' => $route,
+                    'session_id' => session_id(),
+                ], 'info');
+                header('Location: index.php?route=auth/changePassword');
+                exit;
+            }
+
             SessionHelper::set('auth.last_activity', $now);
+            try {
+                global $conn;
+                if ($conn instanceof \PDO) {
+                    (new Rbac($conn))->loadForUser($userId);
+                }
+            } catch (\Throwable $e) {
+                app_log('enforceAcl: Failed to refresh RBAC session permissions', [
+                    'userId' => $userId,
+                    'error' => $e->getMessage(),
+                    'session_id' => session_id(),
+                ], 'warn');
+            }
             session_write_close();
         }
 
@@ -245,6 +271,8 @@ abstract class BaseController
         app_log($message, $context + [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
         ], 'error');
     }
 
@@ -400,6 +428,7 @@ abstract class BaseController
             'isCompleted' => $isCompleted,
             'sampleValue' => $sampleValue,
             'completeUrl' => 'index.php?route=training/complete',
+            'stuckUrl' => 'index.php?route=training/stuck',
             'runnerUrl' => TrainingScenarioCatalog::startRoute((string) ($state['scenario_id'] ?? '')),
             'stopUrl' => 'index.php?route=training/stop',
             'csrf' => csrf_token(),
@@ -1257,7 +1286,6 @@ abstract class BaseController
     protected function denyAccess(string $detail = ''): void
     {
         $payload = $this->buildAccessDeniedPayload($detail);
-        $msg = $payload['text'];
         $route = (string)($_GET['route'] ?? '');
         $isIframe = !empty($_GET['iframe']);
 
@@ -1269,6 +1297,7 @@ abstract class BaseController
                 'title' => $payload['title'],
                 'message' => $payload['text'],
                 'requirement' => $payload['requirement'],
+                'missingPermissions' => $payload['missingPermissions'],
                 'route' => $route,
                 'method' => (string) ($_SERVER['REQUEST_METHOD'] ?? ''),
                 'iframe' => false,
@@ -1281,6 +1310,7 @@ abstract class BaseController
                 'noticeTitle' => $payload['title'],
                 'noticeText' => $payload['text'],
                 'noticeRequirement' => $payload['requirement'],
+                'noticeMissingPermissions' => $payload['missingPermissions'],
                 'noticeVariant' => 'compact',
             ]);
             exit;
@@ -1288,49 +1318,364 @@ abstract class BaseController
 
         \App\Shared\SessionHelper::set('flash.message', [
             'type' => 'warning',
+            'accessDenied' => true,
             'title' => $payload['title'],
             'text' => $payload['text'],
             'detail' => $payload['requirement'],
+            'missingPermissions' => $payload['missingPermissions'],
         ]);
         session_write_close();
         header('Location: index.php?route=home/index');
         exit;
     }
 
+    protected function renderAccessDeniedNotice(string $detail = '', int $statusCode = 403, string $variant = 'default'): void
+    {
+        $payload = $this->buildAccessDeniedPayload($detail);
+        http_response_code($statusCode);
+        $this->renderPartial('shared/AccessDeniedNotice', [
+            'noticeTitle' => $payload['title'],
+            'noticeText' => $payload['text'],
+            'noticeRequirement' => $payload['requirement'],
+            'noticeMissingPermissions' => $payload['missingPermissions'],
+            'noticeVariant' => $variant,
+        ]);
+    }
+
     protected function buildAccessDeniedPayload(string $detail = ''): array
     {
         $title = 'Access Restricted';
-        $text = 'You do not currently have access to this screen or function.';
+        $route = trim((string) ($_GET['route'] ?? ''));
+        $screen = $this->friendlyRouteName($route);
+        $text = $screen !== ''
+            ? 'Your account does not include the access needed for ' . $screen . '.'
+            : 'Your account does not include the access needed for this screen or function.';
         $requirement = '';
+        $missingPermissions = [];
+        $guidance = 'If this access is required for your work, ask a system administrator to update your assigned roles.';
 
         if ($detail !== '') {
             if (preg_match('/^Missing one of:\s*(.+)$/i', $detail, $m)) {
                 $perms = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
                 if ($perms !== []) {
-                    $requirement = 'Required permission: ' . implode(' or ', $perms);
+                    $missingPermissions = $perms;
+                    $requirement = 'Required access: ' . $this->formatAccessList($perms, 'or');
                 }
             } elseif (preg_match('/^Missing all of:\s*(.+)$/i', $detail, $m)) {
                 $perms = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
                 if ($perms !== []) {
-                    $requirement = 'Required permissions: ' . implode(', ', $perms);
+                    $missingPermissions = $perms;
+                    $requirement = 'Required access: ' . $this->formatAccessList($perms, 'and');
+                }
+            } elseif (preg_match('/^Required one of roles:\s*(.+)$/i', $detail, $m)) {
+                $roles = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
+                if ($roles !== []) {
+                    $requirement = 'Required role: ' . $this->formatTextList($roles, 'or');
+                }
+            } elseif (preg_match('/^Required all roles:\s*(.+)$/i', $detail, $m)) {
+                $roles = array_values(array_filter(array_map('trim', explode(',', $m[1]))));
+                if ($roles !== []) {
+                    $requirement = 'Required roles: ' . $this->formatTextList($roles, 'and');
                 }
             } else {
                 $requirement = $detail;
             }
         }
 
+        if ($requirement !== '') {
+            $requirement .= '. ' . $guidance;
+        } else {
+            $requirement = $guidance;
+        }
+
         return [
             'title' => $title,
             'text' => $text,
             'requirement' => $requirement,
+            'missingPermissions' => array_values(array_unique(array_filter(array_map(
+                static fn ($code): string => strtoupper(trim((string) $code)),
+                $missingPermissions
+            )))),
         ];
+    }
+
+    protected function friendlyRouteName(string $route): string
+    {
+        $route = trim($route);
+        if ($route === '') {
+            return '';
+        }
+
+        $label = $this->findMenuLabelForRoute($route);
+        if ($label !== '') {
+            return $label;
+        }
+
+        $path = preg_replace('/[^A-Za-z0-9\/_-]+/', ' ', $route) ?: $route;
+        $parts = array_filter(preg_split('/[\/_-]+/', $path) ?: []);
+        $words = array_map(static fn (string $part): string => ucfirst(strtolower($part)), $parts);
+        return implode(' ', $words);
+    }
+
+    protected function findMenuLabelForRoute(string $route): string
+    {
+        $menuFile = __DIR__ . '/../../config/menu.php';
+        if (!is_file($menuFile)) {
+            return '';
+        }
+
+        try {
+            $items = require $menuFile;
+        } catch (\Throwable $e) {
+            return '';
+        }
+
+        $label = $this->findMenuLabelInItems(is_array($items) ? $items : [], $route);
+        return $label !== '' ? $label : '';
+    }
+
+    protected function findMenuLabelInItems(array $items, string $route): string
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $itemRoute = trim((string) ($item['route'] ?? ''));
+            if ($itemRoute !== '' && $itemRoute === $route) {
+                return trim((string) ($item['label'] ?? ''));
+            }
+            $active = is_array($item['active'] ?? null) ? $item['active'] : [];
+            foreach ($active as $pattern) {
+                $pattern = trim((string) $pattern);
+                if ($pattern !== '' && $this->routeMatchesPattern($route, $pattern)) {
+                    return trim((string) ($item['label'] ?? ''));
+                }
+            }
+            $childLabel = $this->findMenuLabelInItems(is_array($item['children'] ?? null) ? $item['children'] : [], $route);
+            if ($childLabel !== '') {
+                return $childLabel;
+            }
+        }
+
+        return '';
+    }
+
+    protected function routeMatchesPattern(string $route, string $pattern): bool
+    {
+        if ($route === $pattern) {
+            return true;
+        }
+        if (!str_contains($pattern, '*')) {
+            return false;
+        }
+        $regex = '/^' . str_replace('\\*', '.*', preg_quote($pattern, '/')) . '$/i';
+        return (bool) preg_match($regex, $route);
+    }
+
+    protected function formatAccessList(array $codes, string $joinWord): string
+    {
+        $labels = [];
+        foreach ($codes as $code) {
+            $code = strtoupper(trim((string) $code));
+            if ($code === '') {
+                continue;
+            }
+            $labels[] = $this->friendlyPermissionName($code);
+        }
+
+        return $this->formatTextList(array_values(array_unique($labels)), $joinWord);
+    }
+
+    protected function formatTextList(array $items, string $joinWord): string
+    {
+        $items = array_values(array_filter(array_map('trim', array_map('strval', $items))));
+        $count = count($items);
+        if ($count === 0) {
+            return '';
+        }
+        if ($count === 1) {
+            return $items[0];
+        }
+        if ($count === 2) {
+            return $items[0] . ' ' . $joinWord . ' ' . $items[1];
+        }
+
+        $last = array_pop($items);
+        return implode(', ', $items) . ', ' . $joinWord . ' ' . $last;
+    }
+
+    protected function friendlyPermissionName(string $code): string
+    {
+        $labels = [
+            'ADMIN_ALL' => 'Super Administrator access',
+            'SYSADMIN' => 'System Administrator access',
+            'BASE_CONFIG_VIEW' => 'Base Configuration view access',
+            'BASE_CONFIG_EDIT' => 'Base Configuration edit access',
+            'FIN_CONFIG_VIEW' => 'Financial Configuration view access',
+            'FIN_CONFIG_EDIT' => 'Financial Configuration edit access',
+            'CALC_ADMIN' => 'Calculation Administration access',
+            'ESTIMATES_VIEW' => 'Budget Planning view access',
+            'ESTIMATES_EDIT' => 'Budget Planning edit access',
+            'RATES_VIEW' => 'Rates view access',
+            'RATES_EDIT' => 'Rates edit access',
+            'RATES_CREATE' => 'Rates create access',
+            'STRATEGY_VIEW' => 'Budget Strategy view access',
+            'STRATEGY_CONFIG_EDIT' => 'Strategy Configuration access',
+            'STRATEGY_SETUP_EDIT' => 'Strategy Setup access',
+            'STRATEGY_PERFORMANCE_EDIT' => 'Strategy Performance access',
+            'STRATEGY_DELIVERY_EDIT' => 'Strategy Delivery access',
+            'STRATEGY_GOVERNANCE_EDIT' => 'Strategy Governance access',
+            'STRATEGY_FISCAL_EDIT' => 'Strategy Fiscal access',
+            'STRATEGY_REPORT_VIEW' => 'Strategy Reports access',
+            'STRATEGY_WORKFLOW_EDIT' => 'Strategy Workflow access',
+            'STRATEGY_SUBMISSION_PREPARE' => 'Funding Submission preparation access',
+            'STRATEGY_SUBMISSION_REVIEW' => 'Funding Submission review access',
+            'STRATEGY_SUBMISSION_APPROVE' => 'Funding Submission approval access',
+            'STRATEGY_PUBLISH' => 'Funding Submission publish access',
+            'STRATEGY_SEGMENT_PUBLISH' => 'Segment Publication access',
+            'USERS_VIEW' => 'Users view access',
+            'USERS_EDIT' => 'Users edit access',
+            'USERS_ADMIN' => 'Users administration access',
+            'ROLES_VIEW' => 'Roles view access',
+            'ROLES_ADMIN' => 'Roles administration access',
+            'AUDIT_VIEW' => 'Audit view access',
+            'HEALTH_VIEW' => 'Health monitoring access',
+            'SESSION_VIEW' => 'Session view access',
+            'SESSION_ADMIN' => 'Session administration access',
+            'DIAG_VIEW' => 'Diagnostics access',
+            'LOGS_VIEW' => 'Application logs access',
+            'ERRORLOG_VIEW' => 'Error log view access',
+            'ERRORLOG_ADMIN' => 'Error log administration access',
+            'SYSSETTINGS_VIEW' => 'System Settings view access',
+            'SYSSETTINGS_EDIT' => 'System Settings edit access',
+            'SYSSETTINGS_ADMIN' => 'System Settings administration access',
+            'WORKFLOW_VIEW' => 'Workflow Configuration view access',
+            'WORKFLOW_EDIT' => 'Workflow Configuration edit access',
+            'WORKFLOW_ADMIN' => 'Workflow Configuration administration access',
+            'WORKFLOW_OPERATIONS_VIEW' => 'Workflow Operations view access',
+            'WORKFLOW_OPERATIONS_EDIT' => 'Workflow Operations edit access',
+            'WORKFLOW_OPERATIONS_ADMIN' => 'Workflow Operations administration access',
+            'METRICS_VIEW' => 'Metrics view access',
+            'DATAOBJECTCODES_VIEW' => 'Data Object Codes view access',
+            'DATAOBJECTCODES_EDIT' => 'Data Object Codes edit access',
+            'DATAOBJECTCODES_IMPORT' => 'Data Object Codes import access',
+            'DATAOBJECTCODES_ACCESS_ADMIN' => 'Data Object Code Access administration',
+            'DATAOBJECTCODES_ADMIN' => 'Data Object Codes administration access',
+            'SEGMENTS_VIEW' => 'Segments view access',
+            'SEGMENTS_EDIT' => 'Segments edit access',
+            'SEGMENT_VALUES_IMPORT' => 'Segment Values import access',
+            'BUDGET_EXECUTION_VIEW' => 'Budget Execution view access',
+            'BUDGET_EXECUTION_EDIT' => 'Budget Execution edit access',
+            'BUDGET_EXECUTION_REVIEW' => 'Budget Execution review access',
+            'BUDGET_EXECUTION_ADMIN' => 'Budget Execution administration access',
+            'ANALYTICS_VIEW' => 'Analytics access',
+            'DASHBOARD_VIEW' => 'Dashboard view access',
+            'DASHBOARD_ADMIN' => 'Dashboard administration access',
+        ];
+
+        if (isset($labels[$code])) {
+            return $labels[$code] . ' (' . $code . ')';
+        }
+
+        return ucwords(strtolower(str_replace('_', ' ', $code))) . ' (' . $code . ')';
     }
 
     protected function flash(string $type, string $keyOrText, array $replacements = []): void
     {
         $text = __t($keyOrText, $replacements);
         SessionHelper::set('flash.message', ['type' => $type, 'text' => $text]);
+        if ($type === 'danger') {
+            $this->logUserFacingSystemError($keyOrText, $text);
+        }
         session_write_close();
+    }
+
+    protected function logUserFacingSystemError(string $source, string $message): void
+    {
+        if (!$this->shouldLogUserFacingSystemError($source, $message)) {
+            return;
+        }
+
+        static $logged = [];
+        $route = $this->currentRoute();
+        $fingerprint = md5(static::class . '|' . $route . '|' . $source . '|' . $message);
+        if (isset($logged[$fingerprint])) {
+            return;
+        }
+        $logged[$fingerprint] = true;
+
+        app_log('User-facing system error', [
+            'source' => $source,
+            'message' => $message,
+            'controller' => static::class,
+            'route' => $route,
+            'session_id' => session_id(),
+            'user_id' => (int) SessionHelper::get('auth.user_id', 0),
+            'username' => (string) SessionHelper::get('auth.username', ''),
+        ], 'error');
+    }
+
+    private function shouldLogUserFacingSystemError(string $source, string $message): bool
+    {
+        $haystack = strtolower(trim($source . ' ' . $message));
+        if ($haystack === '') {
+            return false;
+        }
+
+        $routineDenialPatterns = [
+            '/\baccess restricted\b/',
+            '/\baccess denied\b/',
+            '/\bdoes not include the access\b/',
+            '/\bmissing permission\b/',
+            '/\bsecurity check failed\b/',
+            '/\bcsrf\b/',
+        ];
+
+        foreach ($routineDenialPatterns as $pattern) {
+            if (preg_match($pattern, $haystack)) {
+                return false;
+            }
+        }
+
+        $systemFailurePatterns = [
+            '/\bfailed\b/',
+            '/\bfailure\b/',
+            '/\bexception\b/',
+            '/\bfatal\b/',
+            '/\bdatabase\b/',
+            '/\bsql\b/',
+            '/\bpdo\b/',
+            '/\bmail\b/',
+            '/\bsmtp\b/',
+            '/\bcould not\b/',
+            '/\bunable to\b/',
+            '/\binstall(ed)?\b/',
+            '/\bschema\b/',
+        ];
+
+        foreach ($systemFailurePatterns as $pattern) {
+            if (preg_match($pattern, $haystack)) {
+                return true;
+            }
+        }
+
+        $validationPatterns = [
+            '/\binvalid\b/',
+            '/\brequired\b/',
+            '/\bplease select\b/',
+            '/\bplease enter\b/',
+            '/\balready exists\b/',
+            '/\bnot found\b/',
+            '/\bnot available\b/',
+        ];
+
+        foreach ($validationPatterns as $pattern) {
+            if (preg_match($pattern, $haystack)) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     protected function flashSuccess(string $keyOrText, array $replacements = []): void

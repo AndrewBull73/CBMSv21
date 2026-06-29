@@ -11,116 +11,241 @@ use App\Shared\SessionHelper;
 
 final class BudgetExecutionController extends BaseController
 {
-    private const EXECUTION_ROLES = [
-        'Budget Execution User',
-        'Budget Execution Reviewer',
-        'Budget Execution Administrator',
-        'System Administrator',
+    private const EXECUTION_VIEW_PERMS = [
+        'BUDGET_EXECUTION_VIEW',
+        'BUDGET_EXECUTION_EDIT',
+        'BUDGET_EXECUTION_REVIEW',
+        'BUDGET_EXECUTION_ADMIN',
+        'ADMIN_ALL',
+        'SYSADMIN',
     ];
 
-    private const EXECUTION_ADMIN_ROLES = [
-        'Budget Execution Administrator',
-        'System Administrator',
+    private const EXECUTION_EDIT_PERMS = [
+        'BUDGET_EXECUTION_EDIT',
+        'BUDGET_EXECUTION_ADMIN',
+        'ADMIN_ALL',
+        'SYSADMIN',
     ];
 
-    private const EXECUTION_REVIEW_ROLES = [
-        'Budget Execution Reviewer',
-        'Budget Execution Administrator',
-        'System Administrator',
+    private const EXECUTION_ADMIN_PERMS = [
+        'BUDGET_EXECUTION_ADMIN',
+        'ADMIN_ALL',
+        'SYSADMIN',
+    ];
+
+    private const EXECUTION_REVIEW_PERMS = [
+        'BUDGET_EXECUTION_REVIEW',
+        'BUDGET_EXECUTION_ADMIN',
+        'ADMIN_ALL',
+        'SYSADMIN',
     ];
 
     protected array $acl = [
         '*' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_ROLES,
+            'permsAny' => self::EXECUTION_VIEW_PERMS,
+        ],
+        'use-version' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_VIEW_PERMS,
+        ],
+        'save-version' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_ADMIN_PERMS,
         ],
         'saveVersion' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_ADMIN_ROLES,
+            'permsAny' => self::EXECUTION_ADMIN_PERMS,
+        ],
+        'run-rollover' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_ADMIN_PERMS,
         ],
         'runRollover' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_ADMIN_ROLES,
+            'permsAny' => self::EXECUTION_ADMIN_PERMS,
+        ],
+        'save-warrant' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-warrant-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'delete-warrant-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'submit-warrant' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'forward-warrant' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'forwardWarrant' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'return-warrant' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'returnWarrant' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'approve-warrant' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'approveWarrant' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'cancel-warrant' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'cancelWarrant' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'preview-budget-reduction' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'generate-budget-reduction' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-reservation' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-reservation-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'delete-reservation-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'submit-reservation' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'forward-reservation' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'forwardReservation' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'return-reservation' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'returnReservation' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'approve-reservation' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'approveReservation' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'cancel-reservation' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'cancelReservation' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'save-supplementary' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-supplementary-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'delete-supplementary-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'submit-supplementary' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'forward-supplementary' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'forwardSupplementary' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'return-supplementary' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'returnSupplementary' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'approve-supplementary' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'approveSupplementary' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'cancel-supplementary' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'cancelSupplementary' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'save-commitment' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-commitment-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'delete-commitment-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'submit-commitment' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'forward-commitment' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'forwardCommitment' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'return-commitment' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'returnCommitment' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'approve-commitment' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'approveCommitment' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'cancel-commitment' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'cancelCommitment' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'save-rie' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'save-rie-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'delete-rie-line' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'submit-rie' => ['auth' => true, 'permsAny' => self::EXECUTION_EDIT_PERMS],
+        'forward-rie' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'forwardRie' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'return-rie' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'returnRie' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'approve-rie' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'approveRie' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
+        ],
+        'cancel-rie' => [
+            'auth' => true,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
         'cancelRie' => [
             'auth' => true,
-            'rolesAny' => self::EXECUTION_REVIEW_ROLES,
+            'permsAny' => self::EXECUTION_REVIEW_PERMS,
         ],
     ];
 
@@ -1617,12 +1742,12 @@ final class BudgetExecutionController extends BaseController
 
     private function canAdministerExecution(): bool
     {
-        return Rbac::hasAnyRole(self::EXECUTION_ADMIN_ROLES);
+        return Rbac::canAny(self::EXECUTION_ADMIN_PERMS);
     }
 
     private function canReviewExecution(): bool
     {
-        return Rbac::hasAnyRole(self::EXECUTION_REVIEW_ROLES);
+        return Rbac::canAny(self::EXECUTION_REVIEW_PERMS);
     }
 
     protected function assertPostWithCsrf(string $redirectUrl = 'index.php?route=execution/index'): void

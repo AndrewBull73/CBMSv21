@@ -81,6 +81,29 @@ final class WorkflowTaskStatusModel
         return $this->findIdByCode('COMPLETED');
     }
 
+    public function findInProgressStatusId(): ?int
+    {
+        foreach (['INPROGRESS', 'IN_PROGRESS'] as $code) {
+            $id = $this->findIdByCode($code);
+            if ($id !== null) {
+                return $id;
+            }
+        }
+
+        try {
+            $sql = "SELECT TOP 1 StatusID
+                    FROM dbo.tblWorkflowTaskStatuses
+                    WHERE UPPER(Name) IN (N'IN PROGRESS', N'IN-PROGRESS')
+                    ORDER BY StatusID ASC";
+            $st = $this->conn->query($sql);
+            $id = $st ? $st->fetchColumn() : false;
+            return $id !== false ? (int) $id : null;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return null;
+        }
+    }
+
     public function isClosedStatusId(int $id): bool
     {
         $row = $this->findById($id);

@@ -4,17 +4,98 @@ declare(strict_types=1);
 $route = (string)($_GET['route'] ?? '');
 
 $help = [
-    'title' => 'Strategic Help',
-    'purpose' => 'This area helps users structure strategy, costing, performance, governance, and reporting for the active fiscal context.',
+    'title' => 'Screen Help',
+    'purpose' => 'Use this area to review the current screen, confirm the active context, and follow the available actions in the right order.',
     'points' => [
-        'Start with Segment Mapping and Import Dimensions if source values come from CBMS segments.',
-        'Use setup screens to confirm sectors, programs, funding, and economic structures.',
-        'Use planning screens to connect objectives, indicators, outputs, activities, and budgets.',
+        'Check the filters, selected context, and visible status values before taking action.',
+        'Use the available buttons and row actions to move through the workflow for this screen.',
+        'Review warnings or status messages after saving, sending, importing, or running a diagnostic action.',
     ],
-    'note' => 'All work on these screens is tied to the active fiscal year and version shown in the top context bar.',
+    'note' => 'Some screens are context-specific, so confirm the active fiscal year, version, or selected filter before relying on the results.',
 ];
 
 $map = [
+    'system-settings/list' => [
+        'title' => 'System Settings Help',
+        'purpose' => 'Use this screen to maintain the application settings that control defaults, authentication, sessions, email, monitoring, and environment-specific behaviour.',
+        'points' => [
+            'Use clear uppercase setting keys with an area prefix such as APP, AUTH, SESSION, SMTP, DEFAULT, FIN, or MON.',
+            'Group settings into categories so operational, security, and financial configuration values are easier to review.',
+            'Keep descriptions current so administrators can understand what each value controls before changing it.',
+        ],
+        'note' => 'Changes on this screen can affect login, session handling, default fiscal context, integrations, and other shared application behaviour.',
+    ],
+    'system-settings/usage-map' => [
+        'title' => 'System Settings Usage Map Help',
+        'purpose' => 'Use this screen to see where each system setting is referenced in the application codebase.',
+        'points' => [
+            'Review usage before renaming or retiring a setting key.',
+            'Use the map to distinguish actively used settings from catalogue entries that may be obsolete.',
+            'Follow up any unexpected usage before changing sensitive settings such as authentication, sessions, URLs, or email.',
+        ],
+        'note' => 'The usage map is a diagnostic aid. It helps explain code references but does not change settings by itself.',
+    ],
+    'emailqueue/index' => [
+        'title' => 'Email Queue Help',
+        'purpose' => 'Use this screen to review queued email activity, send due pending messages, and manage messages that need to be resent, removed, or restored.',
+        'points' => [
+            'Filter by status, search text, and row count to narrow the queue before selecting messages.',
+            'Use Send Queued Emails to process pending messages that are due to send.',
+            'Use Queue Selected for Resend only when a sent, failed, or cancelled message should be returned to pending.',
+            'Use Remove Selected to stop accidental pending messages from being sent, then Restore Selected if they need to return to their previous status.',
+        ],
+        'note' => 'Removed queue items are intentionally held out of sending. Restoring a removed item should return it to the status it had before removal where that status is available.',
+    ],
+    'email-templates/list' => [
+        'title' => 'Email Templates Help',
+        'purpose' => 'Use this screen to maintain reusable email content for onboarding and application notifications.',
+        'points' => [
+            'Keep template keys stable because application workflows refer to them by key.',
+            'Use the token list on the edit screen to personalise content without hard-coding values.',
+            'Disable a template only when the related email flow should use its built-in fallback or be held for review.',
+        ],
+        'note' => 'The new-user invite workflow uses USER_WELCOME_INVITE when an administrator creates a user with email invitation onboarding.',
+    ],
+    'email-templates/form' => [
+        'title' => 'Email Template Form Help',
+        'purpose' => 'Use this screen to edit the subject, HTML body, plain text body, status, and description for an email template.',
+        'points' => [
+            'Use uppercase template keys with underscores, for example USER_WELCOME_INVITE.',
+            'Keep the HTML body readable and include a plain text version for clients that do not render HTML.',
+            'Preview token spelling carefully before saving because unmatched tokens are left in the email content.',
+        ],
+        'note' => 'Template changes apply to future queued emails. Messages already in the queue keep the content they were queued with.',
+    ],
+    'application-log/index' => [
+        'title' => 'Application Log Help',
+        'purpose' => 'Use this screen to review application log entries when tracing errors, warnings, operational events, or recent user-facing failures.',
+        'points' => [
+            'Choose the relevant log file first, then filter or search for the time window and message you need.',
+            'Expand a log entry when you need more detail before moving to a related diagnostic screen.',
+            'Download the selected log when you need to share the evidence outside the application.',
+        ],
+        'note' => 'Logs are diagnostic records. They help explain what happened but should be paired with the matching screen, user action, or queue entry before making changes.',
+    ],
+    'diagnostics/index' => [
+        'title' => 'Diagnostics Help',
+        'purpose' => 'Use this screen to check core runtime services and run controlled diagnostic actions for troubleshooting.',
+        'points' => [
+            'Review database, logging, and mail-test results before investigating screen-specific behaviour.',
+            'Use forced-error actions only when intentionally validating error handling and log capture.',
+            'Follow any failed check into the matching health, log, or configuration screen.',
+        ],
+        'note' => 'Diagnostic actions can create test log entries or emails, so use them deliberately in shared environments.',
+    ],
+    'health/index' => [
+        'title' => 'Health Check Help',
+        'purpose' => 'Use this screen to confirm whether key application services are reachable and reporting healthy status.',
+        'points' => [
+            'Refresh the health check before relying on a previous result.',
+            'Use Ping for a lightweight service response check.',
+            'Open Diagnostics when a health item needs deeper investigation.',
+        ],
+        'note' => 'A healthy result means the checked service responded at that moment. It does not guarantee every downstream workflow is configured correctly.',
+    ],
     'strategy/index' => [
         'title' => 'Overview Help',
         'purpose' => 'Use this page as the landing screen for the strategic budgeting cycle. It tells you what context you are in, what has been captured, and what to do next.',
@@ -583,9 +664,10 @@ $map = [
         'points' => [
             'Use the Edit tab for core identity and account status details.',
             'Use the Roles tab to assign business-area roles grouped by functional area.',
+            'Use the Data Object Access tab to review the user-specific Data Object Code grants and inherited access for the current fiscal year.',
             'Use the Account & Access tab to review the account-level access view without leaving the user screen.',
         ],
-        'note' => 'Role assignment drives permission access across the application, so use the grouped role sections carefully when setting up a user.',
+        'note' => 'Role assignment drives permission access across the application. Data Object Code grants are reviewed here but maintained from Organisation & Chart of Accounts.',
     ],
     'roles/list' => [
         'title' => 'Roles & Permissions Help',
@@ -726,6 +808,16 @@ $map = [
             'Review translated sample values carefully if the examples shown to trainees should differ by language.',
         ],
         'note' => 'This screen maintains multilingual training content only. It does not change the underlying training flow or completion logic.',
+    ],
+    'training-admin/matrix' => [
+        'title' => 'Training Matrix Help',
+        'purpose' => 'Use this screen to review the agreed CBMSv21 training path order, role alignment, scenario list, and rollout status from the training matrix document.',
+        'points' => [
+            'Filter by path or status to focus on the next scenarios that need to be created or validated.',
+            'Use the role alignment section to confirm that training coverage matches menu access and permission assignments.',
+            'Update TRAINING_SCENARIO_MATRIX.md when the agreed training plan changes, then refresh this screen.',
+        ],
+        'note' => 'This screen is a planning and governance view. Scenario step content is still maintained in the Training Catalogue screens.',
     ],
     'strategy-config/fiscal-periods' => [
         'title' => 'Fiscal Period Labels Help',
@@ -1359,7 +1451,7 @@ if (!function_exists('h')) {
             </button>
           </div>
           <div id="strategyHelpBody">
-            <h5 class="mb-2"><?= h((string)($help['title'] ?? 'Strategic Help')) ?></h5>
+            <h5 class="mb-2"><?= h((string)($help['title'] ?? 'Screen Help')) ?></h5>
             <p class="mb-2 text-muted"><?= h((string)($help['purpose'] ?? '')) ?></p>
             <?php if (!empty($help['points']) && is_array($help['points'])): ?>
               <ul class="mb-2 ps-3">

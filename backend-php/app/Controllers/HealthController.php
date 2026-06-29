@@ -190,11 +190,11 @@ final class HealthController extends BaseController
         ];
 
         // 6) DB vs App time drift
-        $driftSec = null; $driftOk = true;
+        $driftSec = null; $driftOk = true; $dbUtcStr = null;
         try {
             if ($conn instanceof \PDO) {
                 if ($driver === 'sqlsrv') {
-                    $st  = $conn->query("SELECT CONVERT(varchar(33), SYSUTCDATETIME(), 126) AS dbUtc");
+                    $st  = $conn->query("SELECT CONVERT(varchar(19), SYSUTCDATETIME(), 126) + 'Z' AS dbUtc");
                     $row = $st->fetch(\PDO::FETCH_ASSOC) ?: null;
                     $dbUtcStr = $row['dbUtc'] ?? null;
                 } elseif ($driver === 'mysql') {
@@ -205,10 +205,18 @@ final class HealthController extends BaseController
                     $dbUtcStr = null;
                 }
                 if ($dbUtcStr) {
-                    $dbTs  = strtotime($dbUtcStr);
+                    $dbUtcText = trim((string) $dbUtcStr);
+                    if (!preg_match('/(?:Z|[+-]\d{2}:?\d{2})$/', $dbUtcText)) {
+                        $dbUtcText .= 'Z';
+                    }
+                    $dbTs  = strtotime($dbUtcText);
                     $phpTs = time();
-                    $driftSec = abs($phpTs - $dbTs);
-                    $driftOk  = ($driftSec <= 5);
+                    if ($dbTs !== false) {
+                        $driftSec = abs($phpTs - $dbTs);
+                        $driftOk  = ($driftSec <= 5);
+                    } else {
+                        $driftOk = false;
+                    }
                 }
             }
         } catch (\Throwable $e) { $driftOk = false; }
@@ -217,6 +225,12 @@ final class HealthController extends BaseController
             'label'   => 'DB vs App time drift',
             'ok'      => $driftOk,
             'message' => is_null($driftSec) ? 'Unknown' : ($driftSec . ' sec'),
+            'meta'    => [
+                'db_utc' => $dbUtcStr,
+                'app_utc' => gmdate('Y-m-d\TH:i:s\Z'),
+                'app_time' => date('Y-m-d H:i:s P'),
+                'php_timezone' => date_default_timezone_get(),
+            ],
         ];
 
         // 7) SMTP reachability

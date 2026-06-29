@@ -26,10 +26,14 @@ final class TransactionInputController extends BaseController
     protected array $acl = [
         'editor' => ['auth' => true, 'permsAny' => ['ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'list' => ['auth' => true, 'permsAny' => ['ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'download-template' => ['auth' => true, 'permsAny' => ['ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'downloadTemplate' => ['auth' => true, 'permsAny' => ['ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'upload-process' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'uploadProcess' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'stub' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'CALC_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'batch-runner' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'CALC_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'batchRunner' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'CALC_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'single-save-load-test' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'CALC_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'singleSaveLoadTest' => ['auth' => true, 'permsAny' => ['ESTIMATES_EDIT', 'CALC_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 

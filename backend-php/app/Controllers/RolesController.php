@@ -12,10 +12,12 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class RolesController extends BaseController
 {
     protected array $acl = [
-        '*'    => ['auth' => true],
-        'list' => ['permsAny' => ['ROLES_VIEW','ROLES_ADMIN']],
-        'edit' => ['permsAny' => ['ROLES_ADMIN']],
-        'save' => ['permsAny' => ['ROLES_ADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['ROLES_VIEW', 'ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['permsAny' => ['ROLES_VIEW', 'ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'view' => ['permsAny' => ['ROLES_VIEW', 'ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'edit' => ['permsAny' => ['ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save' => ['permsAny' => ['ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete' => ['permsAny' => ['ROLES_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function __construct()
@@ -90,9 +92,20 @@ final class RolesController extends BaseController
             }
         }
 
+        $permissions = [];
+        $selectedPermissionIds = [];
+        if ($conn instanceof \PDO) {
+            require_once __DIR__ . '/../Models/RoleModel.php';
+            $roleModel = new RoleModel($conn);
+            $permissions = $roleModel->listPermissions();
+            $selectedPermissionIds = $roleModel->permissionIdsForRole($id);
+        }
+
         $this->render('roles/RolesForm', [
             'title' => $id > 0 ? __t('edit_role') : __t('create_role'),
             'role'  => $role,
+            'permissions' => $permissions,
+            'selectedPermissionIds' => $selectedPermissionIds,
         ]);
     }
 
@@ -110,6 +123,7 @@ final class RolesController extends BaseController
         $id     = (int)($_POST['RoleID'] ?? 0);
         $name   = trim((string)($_POST['RoleName'] ?? ''));
         $active = isset($_POST['Active']) ? 1 : 0;
+        $permissionIds = array_values(array_filter(array_map('intval', (array)($_POST['PermissionIDs'] ?? [])), static fn(int $id): bool => $id > 0));
 
         // --- CSRF ---
         if (!csrf_check($_POST['_csrf'] ?? '')) {
@@ -142,6 +156,9 @@ final class RolesController extends BaseController
                 // Audit model
                 require_once __DIR__ . '/../Models/AuditModel.php';
                 $audit = new AuditModel($conn);
+                require_once __DIR__ . '/../Models/RoleModel.php';
+                $roleModel = new RoleModel($conn);
+                $savedRoleId = $id;
 
                 // --- Save ---
                 if ($id > 0) {
@@ -176,17 +193,19 @@ final class RolesController extends BaseController
                         VALUES (:name, :active, GETDATE(), GETDATE())
                     ");
                     $st->execute([':name' => $name, ':active' => $active]);
+                    $find = $conn->prepare("SELECT RoleID FROM dbo.tblRoles WHERE RoleName = :name");
+                    $find->execute([':name' => $name]);
+                    $savedRoleId = (int)($find->fetchColumn() ?: 0);
 
                     $this->flashSuccess(__t('role_created', ['role' => $name]));
 
                     // Audit log
-                    $newId = (int)$conn->lastInsertId();
                     $audit->insert([
                         'UserID'       => SessionHelper::get('auth.user_id'),
                         'Username'     => SessionHelper::get('auth.username', 'guest'),
                         'Action'       => 'CREATE',
                         'Entity'       => 'Role',
-                        'EntityKey'    => (string)($newId ?: $name),
+                        'EntityKey'    => (string)($savedRoleId ?: $name),
                         'IPAddress'    => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
                         'Details'      => [
                             'RoleName' => $name,
@@ -196,6 +215,10 @@ final class RolesController extends BaseController
                         'VersionID'    => SessionHelper::get('VersionID'),
                     ]);
                 }
+
+                if ($savedRoleId > 0) {
+                    $roleModel->replaceRolePermissions($savedRoleId, $permissionIds);
+                }
             } catch (\Throwable $e) {
                 $this->logHandledException('RolesController::save failed', $e, [
                     'roleId' => $id,
@@ -203,6 +226,53 @@ final class RolesController extends BaseController
                 ]);
                 $this->flashError(__t('role_save_failed') . ': ' . $e->getMessage());
             }
+        }
+
+        header('Location: index.php?route=roles/list');
+        exit;
+    }
+
+    public function delete(): void
+    {
+        require __DIR__ . '/../../config/db.php';
+        require_once __DIR__ . '/../../shared/csrf.php';
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+
+        $id = (int)($_POST['RoleID'] ?? 0);
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError(__t('csrf_failed'));
+            header('Location: index.php?route=roles/list');
+            exit;
+        }
+
+        if ($id <= 0 || !($conn instanceof \PDO)) {
+            $this->flashError(__t('role_save_failed'));
+            header('Location: index.php?route=roles/list');
+            exit;
+        }
+
+        try {
+            $conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $conn->beginTransaction();
+            $deletePerms = $conn->prepare('DELETE FROM dbo.tblRolePermissions WHERE RoleID = :id');
+            $deletePerms->execute([':id' => $id]);
+            $deleteUsers = $conn->prepare('DELETE FROM dbo.tblUserRoles WHERE RoleID = :id');
+            $deleteUsers->execute([':id' => $id]);
+            $deleteRole = $conn->prepare('DELETE FROM dbo.tblRoles WHERE RoleID = :id');
+            $deleteRole->execute([':id' => $id]);
+            $conn->commit();
+            $this->flashSuccess('Role deleted.');
+        } catch (\Throwable $e) {
+            if ($conn instanceof \PDO && $conn->inTransaction()) {
+                $conn->rollBack();
+            }
+            $this->logHandledException('RolesController::delete failed', $e, ['roleId' => $id]);
+            $this->flashError(__t('role_save_failed') . ': ' . $e->getMessage());
         }
 
         header('Location: index.php?route=roles/list');

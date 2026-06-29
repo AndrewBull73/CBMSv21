@@ -14,6 +14,21 @@ $scenarioOptions = is_array($scenarioOptions ?? null) ? $scenarioOptions : [];
 $setupRequired = (bool) ($setupRequired ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
 $canManageTraining = (bool) ($canManageTraining ?? false);
+$formatTrainingTimestamp = static function ($value): string {
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return '';
+    }
+
+    try {
+        $utc = new DateTimeImmutable($raw, new DateTimeZone('UTC'));
+        return $utc
+            ->setTimezone(new DateTimeZone(date_default_timezone_get()))
+            ->format('Y-m-d H:i:s');
+    } catch (Throwable) {
+        return $raw;
+    }
+};
 require_once __DIR__ . '/../../../shared/csrf.php';
 ?>
 
@@ -141,9 +156,9 @@ require_once __DIR__ . '/../../../shared/csrf.php';
                   <td><span class="badge <?= h($statusClass) ?>"><?= h(ucfirst($status !== '' ? $status : 'unknown')) ?></span></td>
                   <td><?= h((string) $currentStep) ?> / <?= h((string) $totalSteps) ?></td>
                   <td><?= h((string) ($row['AttemptNo'] ?? '1')) ?></td>
-                  <td><?= h((string) ($row['StartedAt'] ?? '')) ?></td>
-                  <td><?= h((string) ($row['CompletedAt'] ?? '')) ?></td>
-                  <td><?= h((string) ($row['LastActivityAt'] ?? '')) ?></td>
+                  <td><?= h($formatTrainingTimestamp($row['StartedAt'] ?? '')) ?></td>
+                  <td><?= h($formatTrainingTimestamp($row['CompletedAt'] ?? '')) ?></td>
+                  <td><?= h($formatTrainingTimestamp($row['LastActivityAt'] ?? '')) ?></td>
                   <?php if ($canManageTraining): ?>
                     <td>
                       <?php $rowResetConfirm = __t('training_confirm_reset_row', ['user' => $userLabel]); ?>

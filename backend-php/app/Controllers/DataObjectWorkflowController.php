@@ -10,12 +10,12 @@ use App\Shared\SessionHelper;
 class DataObjectWorkflowController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'index' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'buildStatuses' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'saveStatuses' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
-        'getStatus' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'STRATEGY_VIEW', 'STRATEGY_SETUP_EDIT', 'STRATEGY_SUBMISSION_PREPARE']],
-        'setStatus' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'index' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'buildStatuses' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'saveStatuses' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'getStatus' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'STRATEGY_VIEW', 'STRATEGY_SETUP_EDIT', 'STRATEGY_SUBMISSION_PREPARE', 'ADMIN_ALL']],
+        'setStatus' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
     ];
 
     private DataObjectWorkflowStatusModel $model;

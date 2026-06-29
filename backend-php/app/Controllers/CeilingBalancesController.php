@@ -9,9 +9,12 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class CeilingBalancesController extends BaseController
 {
     protected array $acl = [
+        'balances' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_VIEW', 'FIN_CONFIG_EDIT', 'ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'index' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_VIEW', 'FIN_CONFIG_EDIT', 'ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'balances-keys' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_VIEW', 'FIN_CONFIG_EDIT', 'ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'indexKeys' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_VIEW', 'FIN_CONFIG_EDIT', 'ESTIMATES_VIEW', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'reload' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_EDIT', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
+        'reload-balances' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_EDIT', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
         'reloadBalances' => ['auth' => true, 'permsAny' => ['FIN_CONFIG_EDIT', 'ESTIMATES_EDIT', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 

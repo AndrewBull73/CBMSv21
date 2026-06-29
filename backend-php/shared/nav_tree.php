@@ -22,6 +22,9 @@ function render_offcanvas_level(array $items, string $current, int $depth = 0): 
         }
 
         $hasKids  = !empty($it['children']);
+        if ($hasKids && !menu_item_has_visible_children($it)) {
+            continue;
+        }
         $isActive = route_is_active($current, $it);
         $icon     = !empty($it['icon']) ? '<i class="bi bi-'.htmlspecialchars($it['icon'], ENT_QUOTES).' me-2"></i>' : '';
         $itemCode = menu_item_display_code($it, is_array($jumpIndex) ? $jumpIndex : ['routeMap' => []]);
@@ -81,6 +84,20 @@ function menu_item_visible(array $item): bool {
         return false;
     }
     return true;
+}
+
+function menu_item_has_visible_children(array $item): bool {
+    foreach (is_array($item['children'] ?? null) ? $item['children'] : [] as $child) {
+        if (!is_array($child) || !menu_item_visible($child)) {
+            continue;
+        }
+
+        if (empty($child['children']) || menu_item_has_visible_children($child)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**

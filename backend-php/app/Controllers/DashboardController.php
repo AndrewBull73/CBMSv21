@@ -8,21 +8,11 @@ final class DashboardController extends BaseController
     protected array $acl = [
         'index' => [
             'auth' => true,
-            'rolesAny' => [
-                'Dashboard User',
-                'Dashboard Administrator',
-                'System Administrator',
-            ],
+            'permsAny' => ['DASHBOARD_VIEW', 'DASHBOARD_ADMIN', 'ADMIN_ALL'],
         ],
         'flexdash' => [
             'auth' => true,
-            'rolesAny' => [
-                'Dashboard User',
-                'Dashboard Administrator',
-                'Analytics User',
-                'Analytics Administrator',
-                'System Administrator',
-            ],
+            'permsAny' => ['DASHBOARD_VIEW', 'DASHBOARD_ADMIN', 'ANALYTICS_VIEW', 'ADMIN_ALL'],
         ],
     ];
 

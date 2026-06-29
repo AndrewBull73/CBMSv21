@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class ReportsController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true],
+        '*' => ['auth' => true, 'permsAny' => ['STRATEGY_REPORT_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     private ReportingAdminModel $model;
@@ -64,7 +64,7 @@ final class ReportsController extends BaseController
             exit;
         }
         if (!$this->canRunDefinition($definition)) {
-            $this->denyAccess('You do not have permission to run this report.');
+            $this->denyAccess($this->reportAccessRequirement($definition));
             return;
         }
 
@@ -115,7 +115,7 @@ final class ReportsController extends BaseController
             exit;
         }
         if (!$this->canRunDefinition($definition)) {
-            $this->denyAccess('You do not have permission to run this report.');
+            $this->denyAccess($this->reportAccessRequirement($definition));
             return;
         }
 
@@ -139,7 +139,7 @@ final class ReportsController extends BaseController
             exit;
         }
         if (!$this->canRunDefinition($definition)) {
-            $this->denyAccess('You do not have permission to run this report.');
+            $this->denyAccess($this->reportAccessRequirement($definition));
             return;
         }
 
@@ -190,7 +190,7 @@ final class ReportsController extends BaseController
         exit;
     }
 
-    public function context(): void
+    public function reportContext(): void
     {
         $reportCode = trim((string) ($_GET['code'] ?? ''));
         if ($reportCode === '') {
@@ -206,7 +206,7 @@ final class ReportsController extends BaseController
             exit;
         }
         if (!$this->canRunDefinition($definition)) {
-            $this->denyAccess('You do not have permission to run this report.');
+            $this->denyAccess($this->reportAccessRequirement($definition));
             return;
         }
 
@@ -274,8 +274,7 @@ final class ReportsController extends BaseController
             return;
         }
         if (!$this->canRunDefinition($definition)) {
-            http_response_code(403);
-            echo 'You do not have permission to run this report.';
+            $this->renderAccessDeniedNotice($this->reportAccessRequirement($definition));
             return;
         }
 
@@ -456,6 +455,16 @@ final class ReportsController extends BaseController
 
         $rbac = new Rbac($GLOBALS['conn'] ?? null);
         return $rbac->canAny([$permissionCode, 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function reportAccessRequirement(array $definition): string
+    {
+        $permissionCode = strtoupper(trim((string) ($definition['RequiredPermissionCode'] ?? '')));
+        if ($permissionCode === '') {
+            $permissionCode = 'STRATEGY_REPORT_VIEW';
+        }
+
+        return 'Missing one of: ' . $permissionCode . ', ADMIN_ALL, SYSADMIN';
     }
 
     private function isAdmin(): bool

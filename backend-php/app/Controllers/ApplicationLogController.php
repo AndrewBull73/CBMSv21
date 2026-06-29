@@ -8,9 +8,9 @@ require_once __DIR__ . '/../../shared/env.php';
 final class ApplicationLogController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
-        'index' => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
-        'download' => ['auth' => true, 'permsAny' => ['METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['LOGS_VIEW', 'METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'index' => ['auth' => true, 'permsAny' => ['LOGS_VIEW', 'METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
+        'download' => ['auth' => true, 'permsAny' => ['LOGS_VIEW', 'METRICS_VIEW', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function index(): void

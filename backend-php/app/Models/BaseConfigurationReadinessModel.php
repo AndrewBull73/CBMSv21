@@ -63,6 +63,7 @@ final class BaseConfigurationReadinessModel
         $checks[] = $this->checkRequiredSystemSettings();
         $checks[] = $this->checkLoginUrlSettings();
         $checks[] = $this->checkEmailAndSmtpSettings();
+        $checks[] = $this->checkWindowsSchedulerConfig();
         $checks[] = $this->checkDeprecatedSystemSettings();
 
         return [
@@ -3650,6 +3651,35 @@ final class BaseConfigurationReadinessModel
         );
     }
 
+    private function checkWindowsSchedulerConfig(): array
+    {
+        return $this->buildCheck(
+            'System Configuration',
+            'Windows Scheduler Config',
+            1,
+            0,
+            'info',
+            'Configure Windows Task Scheduler to run workflow reminders and overdue escalations periodically. This runs the workflow notification processor in the background so automatic task reminders and overdue escalation emails are actually sent.',
+            '',
+            '',
+            'Use Create Task, not Basic Task, and configure the action to run PHP from the CBMS working directory.',
+            [
+                'Open Windows Task Scheduler and choose Create Task.',
+                'General tab: name the task CBMS Workflow Task Notifications.',
+                'General tab: select Run whether user is logged on or not.',
+                'General tab: use a Windows account that can read C:\\CBMS\\CBMSv21 and connect to the CBMS database.',
+                'Triggers tab: add a Daily trigger, then set Repeat task every to 1 hour and For a duration of to Indefinitely.',
+                'Actions tab: set Program/script to C:\\xampp\\php\\php.exe.',
+                'Actions tab: set Add arguments to "C:\\CBMS\\CBMSv21\\scripts\\process_workflow_task_reminders.php" --limit=100.',
+                'Actions tab: set Start in to C:\\CBMS\\CBMSv21.',
+                'Settings tab: enable Allow task to be run on demand.',
+                'Settings tab: enable Run task as soon as possible after a scheduled start is missed.',
+                'Save the task, enter the Windows account password if prompted, then right-click the task and choose Run.',
+                'After testing, confirm Last Run Result is 0x0 and that automatic reminder or overdue escalation emails are logged or delivered.'
+            ]
+        );
+    }
+
     private function checkDeprecatedSystemSettings(): array
     {
         if (!$this->tableExists('dbo.tblSystemSettings')) {
@@ -3796,7 +3826,8 @@ final class BaseConfigurationReadinessModel
         string $message,
         string $actionRoute,
         string $actionLabel,
-        string $instruction
+        string $instruction,
+        array $details = []
     ): array {
         return [
             'category' => $category,
@@ -3806,6 +3837,7 @@ final class BaseConfigurationReadinessModel
             'status' => $status,
             'message' => $message,
             'instruction' => $instruction,
+            'details' => $details,
             'action_route' => $actionRoute,
             'action_label' => $actionLabel,
         ];

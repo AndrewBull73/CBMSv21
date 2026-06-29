@@ -844,8 +844,7 @@ final class ScreenTestsController extends BaseController
 
         $userId = (int) SessionHelper::get('auth.user_id', 0);
         if ((int) ($run['UserID'] ?? 0) !== $userId && !$this->canViewAllRuns()) {
-            http_response_code(403);
-            echo 'Access denied.';
+            $this->renderAccessDeniedNotice('Missing one of: USERS_VIEW, USERS_ADMIN, ADMIN_ALL, SYSADMIN', 403, 'compact');
             return;
         }
 

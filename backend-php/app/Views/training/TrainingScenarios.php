@@ -10,6 +10,7 @@ if (!function_exists('h')) {
 
 $scenarios = array_values(is_array($scenarios ?? null) ? $scenarios : []);
 $userScenarioStates = is_array($userScenarioStates ?? null) ? $userScenarioStates : [];
+$userAssignmentsByScenario = is_array($userAssignmentsByScenario ?? null) ? $userAssignmentsByScenario : [];
 $setupRequired = (bool) ($setupRequired ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
 $trainingGuide = is_array($trainingGuide ?? null) ? $trainingGuide : null;
@@ -118,6 +119,7 @@ foreach ($scenarios as $scenario) {
               <?php
               $scenarioId = (string) ($scenario['id'] ?? '');
               $state = $scenarioId !== '' ? ($userScenarioStates[$scenarioId] ?? null) : null;
+              $assignment = $scenarioId !== '' ? ($userAssignmentsByScenario[$scenarioId] ?? null) : null;
               $status = strtolower((string) ($state['Status'] ?? 'not_started'));
               $statusLabel = match ($status) {
                   'completed' => __t('training_status_completed'),
@@ -145,6 +147,9 @@ foreach ($scenarios as $scenario) {
                   <div class="card-header d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
                       <span class="badge text-bg-light border"><?= h((string) ($scenario['screen_family'] ?? 'training')) ?></span>
+                      <?php if (is_array($assignment)): ?>
+                        <span class="badge text-bg-info">Assigned</span>
+                      <?php endif; ?>
                       <span class="badge <?= h($statusClass) ?>"><?= h($statusLabel) ?></span>
                     </div>
                     <div class="small text-muted"><?= h((string) ($scenario['difficulty'] ?? '')) ?></div>
@@ -152,6 +157,16 @@ foreach ($scenarios as $scenario) {
                   <div class="card-body">
                     <div class="fw-semibold mb-1"><?= h((string) ($scenario['title'] ?? __t('training_scenario_title_default'))) ?></div>
                     <div class="small text-muted mb-3"><?= h((string) ($scenario['description'] ?? '')) ?></div>
+                    <?php if (is_array($assignment)): ?>
+                      <div class="alert alert-info border-0 shadow-sm py-2 mb-3">
+                        <div class="small">
+                          Assigned<?= !empty($assignment['PathTitle']) ? ' via ' . h((string) $assignment['PathTitle']) : '' ?>
+                          <?php if (!empty($assignment['DueDate'])): ?>
+                            <span class="text-muted">- Due <?= h((string) $assignment['DueDate']) ?></span>
+                          <?php endif; ?>
+                        </div>
+                      </div>
+                    <?php endif; ?>
 
                     <div class="row g-2 mb-3 small">
                       <div class="col-sm-6">

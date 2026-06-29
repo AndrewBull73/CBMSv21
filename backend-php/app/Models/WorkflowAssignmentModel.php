@@ -542,9 +542,9 @@ final class WorkflowAssignmentModel
                 'PUBLISH' => ['STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
             ],
             'SEGMENT_PUBLICATION' => [
-                'REVIEW' => ['STRATEGY_CONFIG_EDIT', 'STRATEGY_SETUP_EDIT', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
-                'APPROVAL' => ['STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
-                'PUBLISH' => ['STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
+                'REVIEW' => ['STRATEGY_CONFIG_EDIT', 'STRATEGY_SETUP_EDIT', 'STRATEGY_SEGMENT_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
+                'APPROVAL' => ['STRATEGY_SEGMENT_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
+                'PUBLISH' => ['STRATEGY_SEGMENT_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],
             ],
             'STRATEGIC_VERSION' => [
                 'REVIEW' => ['STRATEGY_VIEW', 'STRATEGY_WORKFLOW_EDIT', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN'],

@@ -7,6 +7,8 @@
 /** @var array $filters */
 /** @var string $_csrf */
 
+use App\Shared\SessionHelper;
+
 require_once __DIR__ . '/../../../shared/csrf.php';
 
 if (!function_exists('h')) {
@@ -31,6 +33,11 @@ $baseParams = [
     'pageSize' => $pageSize,
 ];
 $qs = static fn(array $extra = []): string => 'index.php?' . http_build_query(array_replace($baseParams, $extra));
+$perms = SessionHelper::get('auth.perms', []);
+$canEdit = is_array($perms)
+    && (in_array('ADMIN_ALL', $perms, true)
+        || in_array('DATAOBJECTCODES_ADMIN', $perms, true)
+        || in_array('DATAOBJECTCODES_EDIT', $perms, true));
 
 $childrenByParent = [];
 $nodeByCode = [];
@@ -145,14 +152,13 @@ if (!function_exists('renderDataObjectHierarchyTree')) {
         <h3 class="mb-0"><i class="bi bi-diagram-2 me-2"></i><?= h((string)($title ?? 'Data Object Hierarchy')) ?></h3>
         <div class="small text-muted mt-1">View ancestor and descendant links generated from Data Object Code parent relationships.</div>
       </div>
-      <div class="d-inline-flex gap-2">
-        <a href="index.php?route=dataobjectcodes/index" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-arrow-left me-1"></i>Data Object Codes
-        </a>
-        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#treeRebuildHierarchyModal">
-          <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
-        </button>
-      </div>
+      <?php if ($canEdit): ?>
+        <div class="d-inline-flex gap-2">
+          <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#treeRebuildHierarchyModal">
+            <i class="bi bi-diagram-2 me-1"></i>Rebuild Hierarchy
+          </button>
+        </div>
+      <?php endif; ?>
     </div>
 
     <div class="card-body">
@@ -197,6 +203,7 @@ if (!function_exists('renderDataObjectHierarchyTree')) {
   </div>
 </div>
 
+<?php if ($canEdit): ?>
 <div class="modal fade" id="treeRebuildHierarchyModal" tabindex="-1" aria-labelledby="treeRebuildHierarchyModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -222,3 +229,4 @@ if (!function_exists('renderDataObjectHierarchyTree')) {
     </div>
   </div>
 </div>
+<?php endif; ?>

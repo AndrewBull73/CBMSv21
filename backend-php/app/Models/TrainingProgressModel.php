@@ -18,6 +18,12 @@ final class TrainingProgressModel
         return (int) ($this->db->query($sql)->fetchColumn() ?: 0) > 0;
     }
 
+    public function supportsTrainingAttempts(): bool
+    {
+        $sql = "SELECT OBJECT_ID(N'dbo.tblTrainingAttempts')";
+        return (int) ($this->db->query($sql)->fetchColumn() ?: 0) > 0;
+    }
+
     public function loadState(int $userId, string $scenarioCode): ?array
     {
         if ($userId <= 0 || $scenarioCode === '' || !$this->supportsTrainingProgress()) {
@@ -89,12 +95,15 @@ final class TrainingProgressModel
         $attemptNo = (int) ($existing['attempt_no'] ?? 0) + 1;
         $state['attempt_no'] = max(1, $attemptNo);
         $state['status'] = 'active';
+        $state['started_at'] = $this->dbUtcNow();
         $state['completed_at'] = null;
         $state['stopped_at'] = null;
-        $state['last_activity_at'] = gmdate('Y-m-d H:i:s');
+        $state['last_activity_at'] = $state['started_at'];
 
         $this->upsertState($userId, $state, $updatedBy);
-        return $state;
+        $this->syncAttemptState($userId, $state, $updatedBy);
+
+        return $this->loadState($userId, (string) ($state['scenario_id'] ?? '')) ?? $state;
     }
 
     public function saveState(int $userId, array $state, ?int $updatedBy = null): void
@@ -103,8 +112,29 @@ final class TrainingProgressModel
             return;
         }
 
-        $state['last_activity_at'] = gmdate('Y-m-d H:i:s');
+        $scenarioCode = trim((string) ($state['scenario_id'] ?? ''));
+        $existing = $scenarioCode !== '' ? $this->loadState($userId, $scenarioCode) : null;
+        $status = strtolower(trim((string) ($state['status'] ?? 'active'))) ?: 'active';
+        $now = $this->dbUtcNow();
+
+        if ($status === 'completed') {
+            $state['completed_at'] = ($existing !== null && (string) ($existing['status'] ?? '') === 'completed')
+                ? ($existing['completed_at'] ?? $state['completed_at'] ?? $now)
+                : $now;
+            $state['stopped_at'] = null;
+        } elseif ($status === 'stopped') {
+            $state['completed_at'] = null;
+            $state['stopped_at'] = ($existing !== null && (string) ($existing['status'] ?? '') === 'stopped')
+                ? ($existing['stopped_at'] ?? $state['stopped_at'] ?? $now)
+                : $now;
+        } else {
+            $state['completed_at'] = null;
+            $state['stopped_at'] = null;
+        }
+
+        $state['last_activity_at'] = $now;
         $this->upsertState($userId, $state, $updatedBy);
+        $this->syncAttemptState($userId, $state, $updatedBy);
     }
 
     public function stopScenario(int $userId, string $scenarioCode, ?int $updatedBy = null): void
@@ -113,22 +143,34 @@ final class TrainingProgressModel
             return;
         }
 
+        $state = $this->loadState($userId, $scenarioCode);
+        $stoppedAt = $this->dbUtcNow();
+
         $stmt = $this->db->prepare("
             UPDATE dbo.tblTrainingProgress
             SET Status = N'stopped',
-                StoppedAt = SYSDATETIME(),
-                LastActivityAt = SYSDATETIME(),
+                StoppedAt = :stoppedAt,
+                LastActivityAt = :stoppedAt,
                 UpdatedBy = :updatedBy,
-                UpdatedDate = SYSDATETIME()
+                UpdatedDate = SYSUTCDATETIME()
             WHERE UserID = :uid
               AND ScenarioCode = :scenario
               AND ISNULL(Status, N'') <> N'completed'
         ");
         $stmt->execute([
+            ':stoppedAt' => $stoppedAt,
             ':uid' => $userId,
             ':scenario' => $scenarioCode,
             ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
         ]);
+
+        if ($stmt->rowCount() > 0 && is_array($state)) {
+            $state['status'] = 'stopped';
+            $state['completed_at'] = null;
+            $state['stopped_at'] = $stoppedAt;
+            $state['last_activity_at'] = $stoppedAt;
+            $this->syncAttemptState($userId, $state, $updatedBy);
+        }
     }
 
     public function listSummaries(array $filters = []): array
@@ -257,17 +299,20 @@ final class TrainingProgressModel
             return;
         }
 
-        $screenFamily = trim((string) ($state['screen_family'] ?? 'users'));
+        $screenFamily = trim((string) ($state['screen_family'] ?? ''));
         $status = strtolower(trim((string) ($state['status'] ?? 'active'))) ?: 'active';
         $currentStep = max(1, (int) ($state['current_step'] ?? 1));
         $totalSteps = max($currentStep, (int) ($state['total_steps'] ?? $currentStep));
         $attemptNo = max(1, (int) ($state['attempt_no'] ?? 1));
         $samplesJson = json_encode($state['samples'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $startedAt = trim((string) ($state['started_at'] ?? '')) ?: gmdate('Y-m-d H:i:s');
+        $existing = $this->loadState($userId, $scenarioCode);
+        $startedAt = trim((string) ($state['started_at'] ?? ''))
+            ?: (string) ($existing['started_at'] ?? '')
+            ?: $this->dbUtcNow();
         $completedAt = ($state['completed_at'] ?? null) ?: null;
         $stoppedAt = ($state['stopped_at'] ?? null) ?: null;
+        $lastActivityAt = trim((string) ($state['last_activity_at'] ?? '')) ?: $this->dbUtcNow();
 
-        $existing = $this->loadState($userId, $scenarioCode);
         if ($existing !== null) {
             $stmt = $this->db->prepare("
                 UPDATE dbo.tblTrainingProgress
@@ -280,9 +325,9 @@ final class TrainingProgressModel
                     StartedAt = :startedAt,
                     CompletedAt = :completedAt,
                     StoppedAt = :stoppedAt,
-                    LastActivityAt = SYSDATETIME(),
+                    LastActivityAt = :lastActivityAt,
                     UpdatedBy = :updatedBy,
-                    UpdatedDate = SYSDATETIME()
+                    UpdatedDate = SYSUTCDATETIME()
                 WHERE UserID = :uid
                   AND ScenarioCode = :scenarioCode
             ");
@@ -296,6 +341,7 @@ final class TrainingProgressModel
                 ':startedAt' => $startedAt,
                 ':completedAt' => $completedAt,
                 ':stoppedAt' => $stoppedAt,
+                ':lastActivityAt' => $lastActivityAt,
                 ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
                 ':uid' => $userId,
                 ':scenarioCode' => $scenarioCode,
@@ -307,7 +353,7 @@ final class TrainingProgressModel
             INSERT INTO dbo.tblTrainingProgress
                 (UserID, ScenarioCode, ScreenFamily, Status, CurrentStep, TotalSteps, AttemptNo, SamplesJson, StartedAt, CompletedAt, StoppedAt, LastActivityAt, CreatedBy, CreatedDate, UpdatedBy, UpdatedDate)
             VALUES
-                (:uid, :scenarioCode, :screenFamily, :status, :currentStep, :totalSteps, :attemptNo, :samplesJson, :startedAt, :completedAt, :stoppedAt, SYSDATETIME(), :createdBy, SYSDATETIME(), :updatedBy, SYSDATETIME())
+                (:uid, :scenarioCode, :screenFamily, :status, :currentStep, :totalSteps, :attemptNo, :samplesJson, :startedAt, :completedAt, :stoppedAt, :lastActivityAt, :createdBy, SYSUTCDATETIME(), :updatedBy, SYSUTCDATETIME())
         ");
         $stmt->execute([
             ':uid' => $userId,
@@ -321,8 +367,142 @@ final class TrainingProgressModel
             ':startedAt' => $startedAt,
             ':completedAt' => $completedAt,
             ':stoppedAt' => $stoppedAt,
+            ':lastActivityAt' => $lastActivityAt,
             ':createdBy' => $updatedBy > 0 ? $updatedBy : null,
             ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
         ]);
+    }
+
+    private function syncAttemptState(int $userId, array $state, ?int $updatedBy = null): void
+    {
+        if ($userId <= 0 || !$this->supportsTrainingAttempts()) {
+            return;
+        }
+
+        $scenarioCode = trim((string) ($state['scenario_id'] ?? ''));
+        if ($scenarioCode === '') {
+            return;
+        }
+
+        $this->ensureAttemptRow($userId, $state, $updatedBy);
+
+        $status = strtolower(trim((string) ($state['status'] ?? 'active'))) ?: 'active';
+        $totalSteps = max(1, (int) ($state['total_steps'] ?? 1));
+        $currentStep = max(1, (int) ($state['current_step'] ?? 1));
+        $completedSteps = $status === 'completed'
+            ? $totalSteps
+            : min($totalSteps, max(0, $currentStep - 1));
+        $samplesJson = json_encode($state['samples'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $completedAt = $status === 'completed' ? (($state['completed_at'] ?? null) ?: null) : null;
+        $stoppedAt = $status === 'stopped' ? (($state['stopped_at'] ?? null) ?: null) : null;
+        $lastActivityAt = trim((string) ($state['last_activity_at'] ?? '')) ?: $this->dbUtcNow();
+
+        $stmt = $this->db->prepare("
+            UPDATE dbo.tblTrainingAttempts
+            SET ScreenFamily = :screenFamily,
+                Status = :status,
+                TotalSteps = :totalSteps,
+                CompletedSteps = :completedSteps,
+                SamplesJson = :samplesJson,
+                CompletedAt = :completedAt,
+                StoppedAt = :stoppedAt,
+                LastActivityAt = :lastActivityAt,
+                DurationSeconds = CASE
+                    WHEN :completedAtForDuration IS NOT NULL THEN DATEDIFF(SECOND, StartedAt, :completedAtDurationValue)
+                    WHEN :stoppedAtForDuration IS NOT NULL THEN DATEDIFF(SECOND, StartedAt, :stoppedAtDurationValue)
+                    ELSE NULL
+                END,
+                UpdatedBy = :updatedBy,
+                UpdatedDate = SYSUTCDATETIME()
+            WHERE UserID = :uid
+              AND ScenarioCode = :scenarioCode
+              AND AttemptNo = :attemptNo
+        ");
+        $stmt->execute([
+            ':screenFamily' => $this->nullIfEmpty($state['screen_family'] ?? null),
+            ':status' => $status,
+            ':totalSteps' => $totalSteps,
+            ':completedSteps' => $completedSteps,
+            ':samplesJson' => $samplesJson,
+            ':completedAt' => $completedAt,
+            ':stoppedAt' => $stoppedAt,
+            ':lastActivityAt' => $lastActivityAt,
+            ':completedAtForDuration' => $completedAt,
+            ':completedAtDurationValue' => $completedAt,
+            ':stoppedAtForDuration' => $stoppedAt,
+            ':stoppedAtDurationValue' => $stoppedAt,
+            ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
+            ':uid' => $userId,
+            ':scenarioCode' => $scenarioCode,
+            ':attemptNo' => max(1, (int) ($state['attempt_no'] ?? 1)),
+        ]);
+    }
+
+    private function ensureAttemptRow(int $userId, array $state, ?int $updatedBy = null): void
+    {
+        $scenarioCode = trim((string) ($state['scenario_id'] ?? ''));
+        if ($scenarioCode === '') {
+            return;
+        }
+
+        $startedAt = trim((string) ($state['started_at'] ?? '')) ?: $this->dbUtcNow();
+        $lastActivityAt = trim((string) ($state['last_activity_at'] ?? '')) ?: $startedAt;
+        $samplesJson = json_encode($state['samples'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $stmt = $this->db->prepare("
+            INSERT INTO dbo.tblTrainingAttempts
+                (UserID, ScenarioCode, ScreenFamily, AttemptNo, Status, TotalSteps, CompletedSteps, SamplesJson, StartedAt, LastActivityAt, CreatedBy, CreatedDate, UpdatedBy, UpdatedDate)
+            SELECT
+                :uid,
+                :scenarioCode,
+                :screenFamily,
+                :attemptNo,
+                :status,
+                :totalSteps,
+                0,
+                :samplesJson,
+                :startedAt,
+                :lastActivityAt,
+                :createdBy,
+                SYSUTCDATETIME(),
+                :updatedBy,
+                SYSUTCDATETIME()
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM dbo.tblTrainingAttempts
+                WHERE UserID = :existsUid
+                  AND ScenarioCode = :existsScenarioCode
+                  AND AttemptNo = :existsAttemptNo
+            )
+        ");
+        $stmt->execute([
+            ':uid' => $userId,
+            ':scenarioCode' => $scenarioCode,
+            ':screenFamily' => $this->nullIfEmpty($state['screen_family'] ?? null),
+            ':attemptNo' => max(1, (int) ($state['attempt_no'] ?? 1)),
+            ':status' => strtolower(trim((string) ($state['status'] ?? 'active'))) ?: 'active',
+            ':totalSteps' => max(1, (int) ($state['total_steps'] ?? 1)),
+            ':samplesJson' => $samplesJson,
+            ':startedAt' => $startedAt,
+            ':lastActivityAt' => $lastActivityAt,
+            ':createdBy' => $updatedBy > 0 ? $updatedBy : null,
+            ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
+            ':existsUid' => $userId,
+            ':existsScenarioCode' => $scenarioCode,
+            ':existsAttemptNo' => max(1, (int) ($state['attempt_no'] ?? 1)),
+        ]);
+    }
+
+    private function dbUtcNow(): string
+    {
+        return (string) $this->db
+            ->query("SELECT CONVERT(VARCHAR(19), SYSUTCDATETIME(), 120)")
+            ->fetchColumn();
+    }
+
+    private function nullIfEmpty(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        return $value === '' ? null : $value;
     }
 }

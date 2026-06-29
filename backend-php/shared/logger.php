@@ -139,6 +139,7 @@ function app_log(string $message, array $context = [], string $level = 'info'): 
 
     static $lastEmailTime = 0;
     static $emailQueue = [];
+    static $sendingEmailAlerts = false;
 
     try {
         if ($conn instanceof \PDO) {
@@ -155,11 +156,13 @@ function app_log(string $message, array $context = [], string $level = 'info'): 
 
             $ridTag = ($context['RequestID'] ?? null) ? " [RID: {$context['RequestID']}]" : '';
 
-            if ($levelLower === 'error' && $emailEnabled) {
+            $suppressEmailAlert = !empty($context['suppress_email_alert']);
+
+            if (!$suppressEmailAlert && $levelLower === 'error' && $emailEnabled) {
                 $shouldQueue = true;
                 $subject = "[CBMS Error]{$ridTag} {$message}";
                 $body = buildLogEmailBody($message, $context, $level);
-            } elseif ($levelLower === 'warn' && $slowAlertsEnabled) {
+            } elseif (!$suppressEmailAlert && $levelLower === 'warn' && $slowAlertsEnabled) {
                 $timeMs = (float)($context['time_ms'] ?? 0);
                 if ($timeMs >= $slowThreshold) {
                     $shouldQueue = true;
@@ -172,19 +175,27 @@ function app_log(string $message, array $context = [], string $level = 'info'): 
                 $emailQueue[] = ['to' => $emailTo, 'subject' => $subject, 'body' => $body, 'from' => $emailFrom];
             }
 
-            // Send emails every 60 seconds if queue is non-empty
-            if ($emailQueue && (time() - $lastEmailTime) >= 60) {
-                $mailer = new MailService($conn);
-                foreach ($emailQueue as $email) {
-                    try {
-                        $mailer->sendEmail($email['to'], $email['subject'], $email['body'], $email['from']);
-                        @file_put_contents($logFile, sprintf("[%s] [INFO] Email sent: %s\n", date('Y-m-d H:i:s'), $email['subject']), FILE_APPEND | LOCK_EX);
-                    } catch (\Throwable $e) {
-                        @file_put_contents($logFile, sprintf("[%s] [ERROR] Email failed: %s\n", date('Y-m-d H:i:s'), $e->getMessage()), FILE_APPEND | LOCK_EX);
-                    }
-                }
+            // Send emails every 60 seconds if queue is non-empty.
+            // Clear the in-memory queue before sending so MailService's own app_log()
+            // calls cannot re-enter this block and resend the same alert.
+            if ($emailQueue && !$sendingEmailAlerts && (time() - $lastEmailTime) >= 60) {
+                $emailsToSend = $emailQueue;
                 $emailQueue = [];
                 $lastEmailTime = time();
+                $sendingEmailAlerts = true;
+                $mailer = new MailService($conn);
+                try {
+                    foreach ($emailsToSend as $email) {
+                        try {
+                            $mailer->sendEmail($email['to'], $email['subject'], $email['body'], $email['from']);
+                            @file_put_contents($logFile, sprintf("[%s] [INFO] Email sent: %s\n", date('Y-m-d H:i:s'), $email['subject']), FILE_APPEND | LOCK_EX);
+                        } catch (\Throwable $e) {
+                            @file_put_contents($logFile, sprintf("[%s] [ERROR] Email failed: %s\n", date('Y-m-d H:i:s'), $e->getMessage()), FILE_APPEND | LOCK_EX);
+                        }
+                    }
+                } finally {
+                    $sendingEmailAlerts = false;
+                }
             }
         }
     } catch (\Throwable $e) {

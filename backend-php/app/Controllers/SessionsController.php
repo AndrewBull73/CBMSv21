@@ -11,9 +11,10 @@ use App\Controllers\BaseController;
 final class SessionsController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true],
-        'index' => ['permsAny' => ['SESSION_VIEW', 'ADMIN_ALL']],
-        'forcelogout' => ['permsAny' => ['SESSION_FORCE_LOGOUT', 'ADMIN_ALL']],
+        '*' => ['auth' => true, 'permsAny' => ['SESSION_VIEW', 'SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'index' => ['permsAny' => ['SESSION_VIEW', 'SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'forcelogout' => ['permsAny' => ['SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'forceLogout' => ['permsAny' => ['SESSION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function index(): void

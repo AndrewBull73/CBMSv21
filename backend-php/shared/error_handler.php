@@ -14,6 +14,45 @@ if (!function_exists('_et')) {
     }
 }
 
+if (!function_exists('cbms_error_return_url')) {
+    function cbms_error_return_url(): string
+    {
+        $candidates = [
+            $_SERVER['HTTP_REFERER'] ?? '',
+            $_SERVER['REQUEST_URI'] ?? '',
+        ];
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim((string) $candidate);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $parts = parse_url($candidate);
+            if ($parts === false) {
+                continue;
+            }
+
+            if (isset($parts['host'])) {
+                $requestHost = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+                if ($requestHost === '' || strtolower((string) $parts['host']) !== $requestHost) {
+                    continue;
+                }
+            }
+
+            $path = (string) ($parts['path'] ?? '');
+            $query = isset($parts['query']) ? '?' . (string) $parts['query'] : '';
+            if ($path === '' && $query === '') {
+                continue;
+            }
+
+            return $path . $query;
+        }
+
+        return 'index.php?route=home/index';
+    }
+}
+
 /**
  * Convert warnings/notices into exceptions
  */
@@ -30,6 +69,7 @@ function renderFriendlyErrorBox(?string $title = null): void {
     $homeLabel  = _et('home', 'Home');
     $backLabel  = _et('back', 'Back');
     $refLabel   = _et('reference_id', 'Reference ID');
+    $returnUrl  = cbms_error_return_url();
 
     // Try to get a request id if generator is available
     $rid = function_exists('cbms_request_id') ? cbms_request_id() : null;
@@ -55,14 +95,14 @@ function renderFriendlyErrorBox(?string $title = null): void {
     }
 
     echo "  <div style='margin-top:1em;'>
-              <a href='index.php?route=home/index' 
+              <a href='" . htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') . "'
                  style='display:inline-block;padding:6px 12px;margin-right:6px;
                         background:#0d6efd;color:#fff;text-decoration:none;
-                        border-radius:4px;'>" . htmlspecialchars($homeLabel, ENT_QUOTES, 'UTF-8') . "</a>
-              <a href='javascript:history.back()' 
+                        border-radius:4px;'>" . htmlspecialchars($backLabel, ENT_QUOTES, 'UTF-8') . "</a>
+              <a href='index.php?route=home/index'
                  style='display:inline-block;padding:6px 12px;
                         background:#6c757d;color:#fff;text-decoration:none;
-                        border-radius:4px;'>" . htmlspecialchars($backLabel, ENT_QUOTES, 'UTF-8') . "</a>
+                        border-radius:4px;'>" . htmlspecialchars($homeLabel, ENT_QUOTES, 'UTF-8') . "</a>
             </div>
           </div>";
 }

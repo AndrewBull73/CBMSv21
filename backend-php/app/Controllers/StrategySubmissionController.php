@@ -23,19 +23,34 @@ final class StrategySubmissionController extends BaseController
 
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
         'lodgements' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'form' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'save' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
+        'view' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'line-form' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'lineForm' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
+        'save-line' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'saveLine' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
+        'delete-line' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'deleteLine' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
+        'upload-attachment' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'uploadAttachment' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
+        'attachment-list' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'download-attachment' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete-attachment' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'deleteAttachment' => ['auth' => true, 'permsAny' => self::PREPARER_PERMS],
         'reviews' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
+        'review-line' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
         'reviewLine' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
+        'save-review' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
         'saveReview' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
+        'save-assessment' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
         'saveAssessment' => ['auth' => true, 'permsAny' => self::REVIEWER_PERMS],
         'approvals' => ['auth' => true, 'permsAny' => self::APPROVER_PERMS],
+        'transition' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_PREPARE', 'STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'report' => ['auth' => true, 'permsAny' => ['STRATEGY_SUBMISSION_REVIEW', 'STRATEGY_SUBMISSION_APPROVE', 'STRATEGY_PUBLISH', 'ADMIN_ALL', 'SYSADMIN']],
+        'publish-sector-ceilings' => ['auth' => true, 'permsAny' => self::PUBLISHER_PERMS],
         'publishSectorCeilings' => ['auth' => true, 'permsAny' => self::PUBLISHER_PERMS],
     ];
 
@@ -926,11 +941,12 @@ final class StrategySubmissionController extends BaseController
 
         try {
             $mailer = new MailService($this->db);
+            $from = trim((string) $settings->get('EMAIL_ERROR_FROM', ''));
             $mailer->sendEmail(
                 $email,
                 $subject,
                 $body,
-                $settings->get('EMAIL_ERROR_FROM', 'noreply@cbmsv2.local')
+                $from !== '' ? $from : null
             );
         } catch (\Throwable $e) {
             app_log('Funding workflow task email failed', [

@@ -79,6 +79,7 @@ final class TrainingScenarioCatalog
 
         return [
             'scenario_id' => $scenarioId,
+            'screen_family' => (string) ($scenario['screen_family'] ?? ''),
             'status' => 'active',
             'current_step' => 1,
             'total_steps' => count($scenario['steps'] ?? []),

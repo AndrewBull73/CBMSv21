@@ -12,7 +12,9 @@ final class DataObjectCodesAPIController extends BaseController
 {
     /** Require auth + permission for all actions */
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_VIEW', 'DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'save' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_EDIT', 'DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
+        'delete' => ['auth' => true, 'permsAny' => ['DATAOBJECTCODES_ADMIN', 'ADMIN_ALL']],
     ];
 
     /** Context-aware: needs FiscalYearID/VersionID in session */

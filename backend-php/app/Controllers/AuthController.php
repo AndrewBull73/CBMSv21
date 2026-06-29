@@ -18,6 +18,8 @@ final class AuthController extends BaseController
         'logout' => ['auth' => true],
         'account' => ['auth' => true],
         'refreshAccess' => ['auth' => true],
+        'changePassword' => ['auth' => true],
+        'savePassword' => ['auth' => true],
     ];
 
     public function __construct()
@@ -29,7 +31,7 @@ final class AuthController extends BaseController
 {
     require_once __DIR__ . '/../../shared/csrf.php';
 
-    // GENERATE CSRF TOKEN — THIS WAS MISSING
+    // Generate CSRF token for the login form.
     csrf_token();
 
     if (($_GET['reason'] ?? '') === 'forced') {
@@ -51,6 +53,11 @@ final class AuthController extends BaseController
     $returnUrl = $this->normalizeReturnUrl((string) ($_GET['return'] ?? ''));
 
     if (SessionHelper::get('auth.user_id')) {
+        if ((bool)SessionHelper::get('auth.must_change_password', false)) {
+            session_write_close();
+            header('Location: index.php?route=auth/changePassword');
+            exit;
+        }
         session_write_close();
         header('Location: ' . ($returnUrl !== '' ? $returnUrl : 'index.php?route=home/index'));
         exit;
@@ -139,7 +146,7 @@ final class AuthController extends BaseController
     $user = null;
     if ($conn instanceof \PDO) {
         $st = $conn->prepare("
-            SELECT UserID, Username, PasswordHash, IsActive
+            SELECT UserID, Username, PasswordHash, IsActive, ForcePasswordReset, MustChangePassword
             FROM dbo.tblUsers
             WHERE Username = :u
         ");
@@ -148,7 +155,7 @@ final class AuthController extends BaseController
     } elseif (is_resource($conn)) {
         $st = sqlsrv_prepare(
             $conn,
-            "SELECT UserID, Username, PasswordHash, IsActive 
+            "SELECT UserID, Username, PasswordHash, IsActive, ForcePasswordReset, MustChangePassword
              FROM dbo.tblUsers WHERE Username = ?",
             [$username]
         );
@@ -266,6 +273,12 @@ final class AuthController extends BaseController
     SessionHelper::set('auth.login_time', time());
     SessionHelper::set('auth.last_activity', time());
     SessionHelper::set('auth.just_logged_in', true);
+    $mustChangePassword = ((int)($user['ForcePasswordReset'] ?? 0) === 1)
+        || ((int)($user['MustChangePassword'] ?? 0) === 1);
+    SessionHelper::set('auth.must_change_password', $mustChangePassword);
+    if ($mustChangePassword && $returnUrl !== '') {
+        SessionHelper::set('auth.post_password_change_return', $returnUrl);
+    }
     csrf_regenerate();
 
     $rbac = new \App\Core\Rbac($conn);
@@ -357,7 +370,11 @@ final class AuthController extends BaseController
         'perms' => $perms
     ], 'info');
 
-    header('Location: ' . ($returnUrl !== '' ? $returnUrl : 'index.php?route=home/index'));
+    $target = $mustChangePassword
+        ? 'index.php?route=auth/changePassword'
+        : ($returnUrl !== '' ? $returnUrl : 'index.php?route=home/index');
+
+    header('Location: ' . $target);
     exit;
     }
 
@@ -491,6 +508,89 @@ final class AuthController extends BaseController
         exit;
     }
 
+    public function changePassword(): void
+    {
+        if (!SessionHelper::get('auth.user_id')) {
+            $this->flashError(__t('please_login'));
+            header('Location: index.php?route=auth/loginForm');
+            exit;
+        }
+
+        $this->render('auth/change_password', [
+            'title' => 'Set Password',
+            'mustChange' => (bool)SessionHelper::get('auth.must_change_password', false),
+        ]);
+    }
+
+    public function savePassword(): void
+    {
+        if (!SessionHelper::get('auth.user_id')) {
+            $this->flashError(__t('please_login'));
+            header('Location: index.php?route=auth/loginForm');
+            exit;
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+
+        require_once __DIR__ . '/../../shared/csrf.php';
+        if (!csrf_check($_POST['_csrf'] ?? '')) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=auth/changePassword');
+            exit;
+        }
+
+        $password = (string)($_POST['NewPassword'] ?? '');
+        $confirm = (string)($_POST['ConfirmPassword'] ?? '');
+        $error = $this->validatePasswordChange($password, $confirm);
+        if ($error !== '') {
+            $this->flashError($error);
+            header('Location: index.php?route=auth/changePassword');
+            exit;
+        }
+
+        require __DIR__ . '/../../config/db.php';
+        require_once __DIR__ . '/../Models/UserModel.php';
+
+        $userId = (int)SessionHelper::get('auth.user_id', 0);
+        $model = new \App\Models\UserModel($conn);
+        $updated = $model->updatePassword($userId, password_hash($password, PASSWORD_BCRYPT), $userId);
+        if (!$updated) {
+            $this->flashError('Password could not be updated: ' . ($model->getLastError() ?: 'Unknown error'));
+            header('Location: index.php?route=auth/changePassword');
+            exit;
+        }
+
+        SessionHelper::set('auth.must_change_password', false);
+        $returnUrl = $this->normalizeReturnUrl((string)SessionHelper::get('auth.post_password_change_return', ''));
+        SessionHelper::forget('auth.post_password_change_return');
+        $this->flashSuccess('Password updated.');
+
+        header('Location: ' . ($returnUrl !== '' ? $returnUrl : 'index.php?route=home/index'));
+        exit;
+    }
+
+    private function validatePasswordChange(string $password, string $confirm): string
+    {
+        if ($password === '') {
+            return 'New password is required.';
+        }
+        if ($password !== $confirm) {
+            return 'New password and confirmation do not match.';
+        }
+        if (strlen($password) < 10) {
+            return 'New password must be at least 10 characters.';
+        }
+        if (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+            return 'New password must include uppercase, lowercase, and numeric characters.';
+        }
+
+        return '';
+    }
+
     public function account(): void
     {
         require __DIR__ . '/../../config/db.php';
@@ -501,8 +601,7 @@ final class AuthController extends BaseController
 
         $isAdmin = in_array('USERS_ADMIN', $adminPerms, true) || in_array('USERS_VIEW', $adminPerms, true);
         if ($targetUserId !== $currentUserId && !$isAdmin) {
-            http_response_code(403);
-            $this->render('errors/403.php', ['message' => 'You do not have permission to view other users\' accounts.']);
+            $this->renderAccessDeniedNotice('Missing one of: USERS_VIEW, USERS_ADMIN, ADMIN_ALL, SYSADMIN');
             return;
         }
 
@@ -594,8 +693,7 @@ final class AuthController extends BaseController
 
         $isAdmin = in_array('USERS_ADMIN', $adminPerms, true) || in_array('USERS_VIEW', $adminPerms, true);
         if ($targetUserId !== $currentUserId && !$isAdmin) {
-            http_response_code(403);
-            $this->render('errors/403.php', ['message' => 'Not authorized to refresh another user’s access.']);
+            $this->renderAccessDeniedNotice('Missing one of: USERS_VIEW, USERS_ADMIN, ADMIN_ALL, SYSADMIN');
             return;
         }
 

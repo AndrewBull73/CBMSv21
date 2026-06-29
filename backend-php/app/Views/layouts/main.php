@@ -2,52 +2,6 @@
 declare(strict_types=1);
 $layoutRoute = (string) ($_GET['route'] ?? 'home/index');
 $isStrategyRouteLayout = str_starts_with($layoutRoute, 'strategy-');
-$sharedUiRoutePrefixes = [
-    'home/',
-    'strategy/',
-    'strategy-',
-    'integration-admin/',
-    'reports/',
-    'report-admin/',
-    'screen-tests/',
-    'screen-tests-admin/',
-    'base-config/',
-    'fiscal-years/',
-    'versions/',
-    'version-types/',
-    'currencies/',
-    'currency-rates/',
-    'dataobject-types/',
-    'financial-config/',
-    'segments/',
-    'segment-values/',
-    'workflow-engine/',
-    'workflow-task-types/',
-    'workflow-task-statuses/',
-    'workflow-assignments/',
-    'users/',
-    'roles/',
-    'audit/',
-    'diagnostics/',
-    'workflow/',
-    'training/',
-    'training-admin/',
-    'system-settings/',
-    'session/',
-    'sessions/',
-    'dataobjectcodes/',
-    'dataobjectworkflow/',
-    'systemmessages/',
-    'metrics/',
-    'execution/',
-];
-$useSharedModuleUi = false;
-foreach ($sharedUiRoutePrefixes as $routePrefix) {
-    if (str_starts_with($layoutRoute, $routePrefix)) {
-        $useSharedModuleUi = true;
-        break;
-    }
-}
 $trainingEnabled = (bool) ($trainingEnabled ?? false);
 $screenTestingEnabled = (bool) ($screenTestingEnabled ?? false);
 $screenTestLauncher = is_array($screenTestLauncher ?? null) ? $screenTestLauncher : null;
@@ -224,7 +178,7 @@ $pageTitle = $pageTitleKey !== ''
     </style>
 </head>
 <body
-    class="bg-light<?= $useSharedModuleUi ? ' strategy-ui' : '' ?>"
+    class="bg-light strategy-ui"
     data-cbms-route="<?= htmlspecialchars($layoutRoute, ENT_QUOTES, 'UTF-8') ?>"
     data-screen-testing-enabled="<?= $screenTestingEnabled ? '1' : '0' ?>"
     data-training-enabled="<?= $trainingEnabled ? '1' : '0' ?>"
@@ -641,6 +595,7 @@ $pageTitle = $pageTitleKey !== ''
             'diagnostics/',
             'health/',
             'application-log/',
+            'emailqueue/',
             'metrics/',
             'systemmessages/',
             'session/',
@@ -672,17 +627,29 @@ $pageTitle = $pageTitleKey !== ''
             $allowed = ['success','danger','warning','info'];
             if (!in_array($type, $allowed, true)) $type = 'info';
             $autoDismiss = in_array($type, ['success','info'], true);
+            $isAccessRestricted = !empty($flashMessage['accessDenied'])
+                || strcasecmp((string)($flashMessage['title'] ?? ''), 'Access Restricted') === 0;
     ?>
-        <div class="app-flash alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show <?= $autoDismiss ? 'auto-dismiss' : '' ?>" role="alert">
-            <?php if (!empty($flashMessage['title'])): ?>
-                <div class="alert-heading"><?= htmlspecialchars((string)$flashMessage['title'], ENT_QUOTES, 'UTF-8') ?></div>
-            <?php endif; ?>
-            <div><?= htmlspecialchars((string)$flashMessage['text'], ENT_QUOTES, 'UTF-8') ?></div>
-            <?php if (!empty($flashMessage['detail'])): ?>
-                <div class="app-flash-detail"><?= htmlspecialchars((string)$flashMessage['detail'], ENT_QUOTES, 'UTF-8') ?></div>
-            <?php endif; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+        <?php if ($isAccessRestricted): ?>
+            <?php
+                $noticeTitle = (string)($flashMessage['title'] ?? 'Access Restricted');
+                $noticeText = (string)$flashMessage['text'];
+                $noticeRequirement = (string)($flashMessage['detail'] ?? '');
+                $noticeMissingPermissions = is_array($flashMessage['missingPermissions'] ?? null) ? $flashMessage['missingPermissions'] : [];
+                require __DIR__ . '/../shared/AccessDeniedNotice.php';
+            ?>
+        <?php else: ?>
+            <div class="app-flash alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show <?= $autoDismiss ? 'auto-dismiss' : '' ?>" role="alert">
+                <?php if (!empty($flashMessage['title'])): ?>
+                    <div class="alert-heading"><?= htmlspecialchars((string)$flashMessage['title'], ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+                <div><?= htmlspecialchars((string)$flashMessage['text'], ENT_QUOTES, 'UTF-8') ?></div>
+                <?php if (!empty($flashMessage['detail'])): ?>
+                    <div class="app-flash-detail"><?= htmlspecialchars((string)$flashMessage['detail'], ENT_QUOTES, 'UTF-8') ?></div>
+                <?php endif; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <?php endif; ?>
     <?php endif; ?>
     <?php if ($currentRoute === 'auth/loginForm'): ?>
         <?= $content ?? '' ?>
@@ -741,7 +708,302 @@ $pageTitle = $pageTitleKey !== ''
         </div>
     </div>
 </div>
+<div class="modal fade" id="appConfirmModal" tabindex="-1" aria-hidden="true" aria-labelledby="appConfirmModalLabel">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="appConfirmModalLabel" class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i><?= htmlspecialchars(__t('confirmation_required'), ENT_QUOTES, 'UTF-8') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= htmlspecialchars(__t('close'), ENT_QUOTES, 'UTF-8') ?>"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0" id="appConfirmModalMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <?= htmlspecialchars(__t('cancel'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+                <button type="button" class="btn btn-primary" id="appConfirmModalConfirm">
+                    <?= htmlspecialchars(__t('confirm'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 <script src="assets/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('click', function (event) {
+    const dismissButton = event.target && typeof event.target.closest === 'function'
+        ? event.target.closest('[data-bs-dismiss="modal"]')
+        : null;
+    if (!dismissButton || dismissButton.disabled || dismissButton.classList.contains('disabled')) {
+        return;
+    }
+
+    const modalEl = dismissButton.closest('.modal');
+    if (!modalEl || !window.bootstrap || !window.bootstrap.Modal) {
+        return;
+    }
+
+    window.setTimeout(function () {
+        window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    }, 0);
+}, true);
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('appConfirmModal');
+    const titleEl = document.getElementById('appConfirmModalLabel');
+    const messageEl = document.getElementById('appConfirmModalMessage');
+    const confirmButton = document.getElementById('appConfirmModalConfirm');
+    const defaultTitle = <?= json_encode(__t('confirmation_required'), JSON_UNESCAPED_SLASHES) ?>;
+    const defaultButton = <?= json_encode(__t('confirm'), JSON_UNESCAPED_SLASHES) ?>;
+    const dangerousWords = /\b(delete|remove|archive|reset|clear|cancel|supprimer|effacer|archiver|annuler)\b/i;
+    let pendingAction = null;
+
+    function decodeInlineMessage(value) {
+        return String(value || '')
+            .replace(/\\'/g, "'")
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\')
+            .replace(/\\n/g, "\n")
+            .replace(/\\r/g, "\r")
+            .replace(/\\t/g, "\t");
+    }
+
+    function parseInlineConfirm(attributeValue) {
+        if (!attributeValue) {
+            return '';
+        }
+
+        let match = String(attributeValue).match(/confirm\s*\(\s*'((?:\\.|[^'])*)'\s*\)/);
+        if (!match) {
+            match = String(attributeValue).match(/confirm\s*\(\s*"((?:\\.|[^"])*)"\s*\)/);
+        }
+
+        return match ? decodeInlineMessage(match[1]) : '';
+    }
+
+    function removeInlineHandler(element, handlerName) {
+        if (!element) {
+            return;
+        }
+        element.removeAttribute(handlerName);
+        try {
+            element[handlerName] = null;
+        } catch (error) {
+            // Some older DOM implementations expose inline handlers as read-only.
+        }
+    }
+
+    function getConfirmConfig(element, inlineAttributeName) {
+        const dataMessage = element ? (element.getAttribute('data-confirm-message') || '') : '';
+        const inlineMessage = element && inlineAttributeName
+            ? parseInlineConfirm(element.getAttribute(inlineAttributeName))
+            : '';
+        const message = dataMessage || inlineMessage;
+        if (!message) {
+            return null;
+        }
+
+        return {
+            message: message,
+            title: element.getAttribute('data-confirm-title') || defaultTitle,
+            buttonText: element.getAttribute('data-confirm-button') || defaultButton,
+            buttonClass: element.getAttribute('data-confirm-button-class')
+                || (dangerousWords.test(message) ? 'btn-danger' : 'btn-primary'),
+            inlineAttributeName: inlineMessage ? inlineAttributeName : ''
+        };
+    }
+
+    function shouldHandleDataClick(element) {
+        if (!element || !element.getAttribute('data-confirm-message')) {
+            return false;
+        }
+        if (element.tagName === 'A') {
+            return true;
+        }
+        if (element.matches('button, input[type="submit"], input[type="button"]')) {
+            const type = String(element.getAttribute('type') || 'submit').toLowerCase();
+            return type === 'submit';
+        }
+        return false;
+    }
+
+    function findClickConfirmTarget(startElement) {
+        const candidate = startElement && typeof startElement.closest === 'function'
+            ? startElement.closest('a, button, input[type="submit"], input[type="button"], [data-confirm-message]')
+            : null;
+        if (!candidate) {
+            return null;
+        }
+
+        if (parseInlineConfirm(candidate.getAttribute('onclick')) || shouldHandleDataClick(candidate)) {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    function applyConfirmButtonClass(buttonClass) {
+        confirmButton.className = 'btn';
+        String(buttonClass || 'btn-primary').split(/\s+/).forEach(function (className) {
+            if (className) {
+                confirmButton.classList.add(className);
+            }
+        });
+    }
+
+    function runConfirmedAction(action) {
+        if (!action) {
+            return;
+        }
+
+        if (action.inlineElement && action.inlineAttributeName) {
+            removeInlineHandler(action.inlineElement, action.inlineAttributeName);
+        }
+
+        if (action.type === 'form') {
+            action.form.dataset.appConfirmApproved = '1';
+            if (!action.form.getAttribute('data-confirm-message')) {
+                action.form.setAttribute('data-confirm-message', action.config.message);
+            }
+            if (typeof action.form.requestSubmit === 'function') {
+                if (action.submitter) {
+                    action.form.requestSubmit(action.submitter);
+                } else {
+                    action.form.requestSubmit();
+                }
+            } else {
+                action.form.submit();
+            }
+            return;
+        }
+
+        if (action.type === 'click') {
+            const element = action.element;
+            if (element.matches('button, input[type="submit"]') && element.form) {
+                element.form.dataset.appConfirmApproved = '1';
+                if (typeof element.form.requestSubmit === 'function') {
+                    element.form.requestSubmit(element);
+                } else {
+                    element.form.submit();
+                }
+                return;
+            }
+
+            if (element.tagName === 'A') {
+                const href = element.getAttribute('href');
+                if (!href || href === '#') {
+                    return;
+                }
+                const target = element.getAttribute('target');
+                if (target && target !== '_self') {
+                    window.open(href, target);
+                } else {
+                    window.location.href = href;
+                }
+                return;
+            }
+
+            element.dataset.appConfirmApproved = '1';
+            element.click();
+        }
+    }
+
+    function askForConfirmation(action, event) {
+        const config = action.config;
+        if (!modalEl || !titleEl || !messageEl || !confirmButton || !window.bootstrap || !window.bootstrap.Modal) {
+            if (!window.confirm(config.message)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return false;
+            }
+            if (action.inlineElement && action.inlineAttributeName) {
+                removeInlineHandler(action.inlineElement, action.inlineAttributeName);
+            }
+            return true;
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        pendingAction = action;
+        titleEl.textContent = '';
+        const titleIcon = document.createElement('i');
+        titleIcon.className = 'bi bi-exclamation-triangle text-warning me-2';
+        titleEl.appendChild(titleIcon);
+        titleEl.appendChild(document.createTextNode(config.title));
+        messageEl.textContent = config.message;
+        confirmButton.textContent = config.buttonText;
+        applyConfirmButtonClass(config.buttonClass);
+        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        return false;
+    }
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!form || !form.matches('form')) {
+            return;
+        }
+
+        if (form.dataset.appConfirmApproved === '1') {
+            delete form.dataset.appConfirmApproved;
+            return;
+        }
+
+        const config = getConfirmConfig(form, 'onsubmit');
+        if (!config) {
+            return;
+        }
+
+        askForConfirmation({
+            type: 'form',
+            form: form,
+            submitter: event.submitter || null,
+            config: config,
+            inlineElement: form,
+            inlineAttributeName: config.inlineAttributeName
+        }, event);
+    }, true);
+
+    document.addEventListener('click', function (event) {
+        const element = findClickConfirmTarget(event.target);
+        if (!element) {
+            return;
+        }
+
+        if (element.dataset.appConfirmApproved === '1') {
+            delete element.dataset.appConfirmApproved;
+            return;
+        }
+
+        const config = getConfirmConfig(element, 'onclick');
+        if (!config) {
+            return;
+        }
+
+        askForConfirmation({
+            type: 'click',
+            element: element,
+            config: config,
+            inlineElement: element,
+            inlineAttributeName: config.inlineAttributeName
+        }, event);
+    }, true);
+
+    if (confirmButton) {
+        confirmButton.addEventListener('click', function () {
+            const action = pendingAction;
+            pendingAction = null;
+            if (modalEl && window.bootstrap && window.bootstrap.Modal) {
+                window.bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+            runConfirmedAction(action);
+        });
+    }
+});
+</script>
 <script>
 window.CBMSWindowContext = {
     enabled: <?= $isLoggedIn ? 'true' : 'false' ?>,

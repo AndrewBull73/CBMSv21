@@ -1,9 +1,11 @@
 <?php declare(strict_types=1); ?>
 <?php
 $perms = is_array($perms ?? null) ? $perms : [];
-$canViewWorkflowTasks = in_array('WORKFLOW_VIEW', $perms, true)
-    || in_array('WORKFLOW_ADMIN', $perms, true)
-    || in_array('WORKFLOW_EDIT', $perms, true);
+$canViewWorkflowTasks = in_array('WORKFLOW_OPERATIONS_VIEW', $perms, true)
+    || in_array('WORKFLOW_OPERATIONS_EDIT', $perms, true)
+    || in_array('WORKFLOW_OPERATIONS_ADMIN', $perms, true)
+    || in_array('ADMIN_ALL', $perms, true)
+    || in_array('SYSADMIN', $perms, true);
 $workflowIframeParams = [
     'route' => 'workflow/list',
     'mine' => 1,

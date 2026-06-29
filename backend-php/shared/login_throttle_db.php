@@ -84,6 +84,14 @@ if (!function_exists('lt_get_config')) {
                 FILTER_VALIDATE_BOOLEAN
             );
         } catch (\Throwable $e) {
+            if (function_exists('app_log')) {
+                app_log('Login throttle settings lookup failed', [
+                    'error' => $e->getMessage(),
+                    'exception' => get_class($e),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ], 'warn');
+            }
             // fall back to defaults
         }
 
