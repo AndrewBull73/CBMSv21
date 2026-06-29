@@ -80,6 +80,7 @@ final class WorkflowProjectController extends BaseController
             'workflowLinkTypeOptions' => $linkModel->linkTypeOptions(),
             'workflowLinksInstalled' => $linkModel->supportsWorkflowLinks(),
             'statusOptions' => $model->statusOptions(),
+            'roleOptions' => $model->roleOptions(),
             'tableInstalled' => $tableInstalled,
             'backUrl' => $backUrl,
             'flash' => SessionHelper::get('flash.message', null),
@@ -113,6 +114,7 @@ final class WorkflowProjectController extends BaseController
             'projectTasks' => $tableInstalled && $id > 0 ? $taskModel->listProjectTaskOptions($id) : [],
             'users' => method_exists($userModel, 'listAll') ? $userModel->listAll() : [],
             'statusOptions' => $model->statusOptions(),
+            'roleOptions' => $model->roleOptions(),
             'tableInstalled' => $tableInstalled,
             'returnTo' => $returnTo,
             'backUrl' => $backUrl,
@@ -149,6 +151,7 @@ final class WorkflowProjectController extends BaseController
             'ActualEndDate' => trim((string)($_POST['ActualEndDate'] ?? '')),
             'Active' => isset($_POST['Active']) ? 1 : 0,
             'ProjectUserIDs' => $_POST['ProjectUserIDs'] ?? [],
+            'ProjectUserRoles' => $_POST['ProjectUserRoles'] ?? [],
         ];
         $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
         $validationError = $this->validateProjectPayload($payload, $model);
@@ -166,6 +169,7 @@ final class WorkflowProjectController extends BaseController
                 'ProjectStatusCode' => $payload['ProjectStatusCode'],
                 'Active' => $payload['Active'],
                 'ProjectUserIDs' => $payload['ProjectUserIDs'],
+                'ProjectUserRoles' => $payload['ProjectUserRoles'],
             ]);
             $this->flashSuccess($id > 0 ? __t('workflow_project_updated') : __t('workflow_project_created'));
             header('Location: ' . $this->defaultProjectBackUrl($returnTo));

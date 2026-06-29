@@ -71,6 +71,13 @@ $requirementStatusOptions = is_array($requirementStatusOptions ?? null) ? $requi
 $requirementPriorityOptions = is_array($requirementPriorityOptions ?? null) ? $requirementPriorityOptions : [];
 $workflowLinksInstalled = !empty($workflowLinksInstalled);
 $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
+$roleOptions = is_array($roleOptions ?? null) && $roleOptions !== []
+    ? $roleOptions
+    : [
+        'MEMBER' => 'workflow_project_role_member',
+        'LEAD' => 'workflow_project_role_lead',
+        'OBSERVER' => 'workflow_project_role_observer',
+    ];
 $projectId = (int)($record['WorkflowProjectID'] ?? 0);
 $projectName = trim((string)($record['ProjectName'] ?? ''));
 $projectCode = trim((string)($record['ProjectCode'] ?? ''));
@@ -82,6 +89,11 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
     $code = strtoupper(trim((string)$code));
     $key = $statusOptions[$code] ?? '';
     return $key !== '' ? __t($key) : $code;
+};
+$roleLabel = static function (?string $code) use ($roleOptions): string {
+    $code = strtoupper(trim((string)$code));
+    $key = $roleOptions[$code] ?? '';
+    return $key !== '' ? __t($key) : ($code !== '' ? $code : __t('workflow_project_role_member'));
 };
 $taskStatusLabel = static function (array $task): string {
     $name = trim((string)($task['StatusName'] ?? ''));
@@ -480,6 +492,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
               <?php foreach ($projectUsers as $member): ?>
                 <span class="badge text-bg-light border">
                   <i class="bi bi-person me-1"></i><?= h((string)($member['UserName'] ?? '')) ?>
+                  <span class="ms-1 text-muted"><?= h($roleLabel($member['ProjectRoleCode'] ?? 'MEMBER')) ?></span>
                 </span>
               <?php endforeach; ?>
             </div>

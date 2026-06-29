@@ -42,6 +42,13 @@ $record = is_array($record ?? null) ? $record : [];
 $users = is_array($users ?? null) ? $users : [];
 $projectTasks = is_array($projectTasks ?? null) ? $projectTasks : [];
 $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
+$roleOptions = is_array($roleOptions ?? null) && $roleOptions !== []
+    ? $roleOptions
+    : [
+        'MEMBER' => 'workflow_project_role_member',
+        'LEAD' => 'workflow_project_role_lead',
+        'OBSERVER' => 'workflow_project_role_observer',
+    ];
 $tableInstalled = !empty($tableInstalled);
 $projectId = (int)($record['WorkflowProjectID'] ?? 0);
 $projectUserIDs = [];
@@ -49,6 +56,14 @@ foreach (is_array($record['ProjectUserIDs'] ?? null) ? $record['ProjectUserIDs']
     $projectUserID = (int)$projectUserID;
     if ($projectUserID > 0) {
         $projectUserIDs[$projectUserID] = true;
+    }
+}
+$projectUserRoles = [];
+foreach (is_array($record['ProjectUserRoles'] ?? null) ? $record['ProjectUserRoles'] : [] as $projectUserID => $projectRoleCode) {
+    $projectUserID = (int)$projectUserID;
+    $projectRoleCode = strtoupper(trim((string)$projectRoleCode));
+    if ($projectUserID > 0 && array_key_exists($projectRoleCode, $roleOptions)) {
+        $projectUserRoles[$projectUserID] = $projectRoleCode;
     }
 }
 
@@ -226,7 +241,25 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
     margin-bottom: .85rem;
   }
   .project-edit-team-list {
-    max-height: 14rem;
+    max-height: 18rem;
+  }
+  .project-edit-team-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 11rem);
+    gap: .75rem;
+    align-items: center;
+  }
+  .project-edit-team-main {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    min-width: 0;
+  }
+  .project-edit-team-label {
+    min-width: 0;
+  }
+  .project-edit-team-role .form-select {
+    min-height: 2rem;
   }
   .project-edit-footer {
     border-top: 1px solid #e4ebf2;
@@ -243,6 +276,12 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
     .workflow-gantt-header,
     .workflow-gantt-row {
       min-width: 48rem;
+    }
+    .project-edit-team-row {
+      grid-template-columns: 1fr;
+    }
+    .project-edit-team-role {
+      padding-left: 1.8rem;
     }
   }
 </style>
@@ -395,21 +434,42 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                     }
                     $username = trim((string)($user['Username'] ?? ''));
                     $searchText = strtolower(trim($label . ' ' . $username));
+                    $isSelected = isset($projectUserIDs[$userId]);
+                    $selectedRole = $projectUserRoles[$userId] ?? 'MEMBER';
                   ?>
-                  <label class="d-flex align-items-center gap-2 border-bottom px-3 py-2 mb-0" data-project-user-row data-project-user-search-text="<?= h($searchText) ?>">
-                    <input class="form-check-input mt-0"
-                           type="checkbox"
-                           name="ProjectUserIDs[]"
-                           value="<?= $userId ?>"
-                           <?= isset($projectUserIDs[$userId]) ? 'checked' : '' ?>
-                           <?= !$tableInstalled ? 'disabled' : '' ?>>
-                    <span>
-                      <span class="d-block"><?= h($label) ?></span>
-                      <?php if ($username !== '' && $username !== $label): ?>
-                        <span class="d-block text-muted small"><?= h($username) ?></span>
-                      <?php endif; ?>
-                    </span>
-                  </label>
+                  <div class="project-edit-team-row border-bottom px-3 py-2" data-project-user-row data-project-user-search-text="<?= h($searchText) ?>">
+                    <div class="project-edit-team-main">
+                      <input class="form-check-input mt-0"
+                             type="checkbox"
+                             id="ProjectUserID_<?= $userId ?>"
+                             name="ProjectUserIDs[]"
+                             value="<?= $userId ?>"
+                             data-project-user-checkbox
+                             <?= $isSelected ? 'checked' : '' ?>
+                             <?= !$tableInstalled ? 'disabled' : '' ?>>
+                      <label class="project-edit-team-label mb-0" for="ProjectUserID_<?= $userId ?>">
+                        <span class="d-block text-truncate"><?= h($label) ?></span>
+                        <?php if ($username !== '' && $username !== $label): ?>
+                          <span class="d-block text-muted small text-truncate"><?= h($username) ?></span>
+                        <?php endif; ?>
+                      </label>
+                    </div>
+                    <div class="project-edit-team-role">
+                      <label class="visually-hidden" for="ProjectUserRole_<?= $userId ?>"><?= h(__t('workflow_project_role')) ?></label>
+                      <select class="form-select form-select-sm"
+                              id="ProjectUserRole_<?= $userId ?>"
+                              name="ProjectUserRoles[<?= $userId ?>]"
+                              data-project-user-role
+                              <?= !$isSelected || !$tableInstalled ? 'disabled' : '' ?>
+                              <?= !$tableInstalled ? 'data-project-user-role-locked="1"' : '' ?>>
+                        <?php foreach ($roleOptions as $roleCode => $roleLabelKey): ?>
+                          <option value="<?= h((string)$roleCode) ?>" <?= $selectedRole === (string)$roleCode ? 'selected' : '' ?>>
+                            <?= h(__t((string)$roleLabelKey)) ?>
+                          </option>
+                        <?php endforeach; ?>
+                      </select>
+                    </div>
+                  </div>
                 <?php endforeach; ?>
                 <div class="text-center text-muted small py-3 d-none" data-project-user-empty>
                   <?= h(__t('workflow_project_no_user_matches')) ?>
@@ -553,10 +613,16 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
   const projectUserEmpty = document.querySelector('[data-project-user-empty]');
   const projectUserCount = document.querySelector('[data-project-user-selected-count]');
   const projectUserClear = document.querySelector('[data-project-user-clear]');
+  const syncProjectUserRow = row => {
+    const input = row.querySelector('[data-project-user-checkbox]');
+    const role = row.querySelector('[data-project-user-role]');
+    if (!role || role.getAttribute('data-project-user-role-locked') === '1') return;
+    role.disabled = !(input && input.checked);
+  };
   const updateProjectUserCount = () => {
     if (!projectUserCount) return;
     const selected = projectUserRows.filter(row => {
-      const input = row.querySelector('input[type="checkbox"]');
+      const input = row.querySelector('[data-project-user-checkbox]');
       return input && input.checked;
     }).length;
     projectUserCount.textContent = selected + ' <?= h(__t('workflow_project_selected')) ?>';
@@ -580,16 +646,21 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
   if (projectUserClear) {
     projectUserClear.addEventListener('click', () => {
       projectUserRows.forEach(row => {
-        const input = row.querySelector('input[type="checkbox"]');
+        const input = row.querySelector('[data-project-user-checkbox]');
         if (input) input.checked = false;
+        syncProjectUserRow(row);
       });
       updateProjectUserCount();
     });
   }
   projectUserRows.forEach(row => {
-    const input = row.querySelector('input[type="checkbox"]');
+    const input = row.querySelector('[data-project-user-checkbox]');
+    syncProjectUserRow(row);
     if (input) {
-      input.addEventListener('change', updateProjectUserCount);
+      input.addEventListener('change', () => {
+        syncProjectUserRow(row);
+        updateProjectUserCount();
+      });
     }
   });
   updateProjectUserCount();

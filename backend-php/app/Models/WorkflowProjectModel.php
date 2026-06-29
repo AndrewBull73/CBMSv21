@@ -50,6 +50,15 @@ final class WorkflowProjectModel
         ];
     }
 
+    public function roleOptions(): array
+    {
+        return [
+            'MEMBER' => 'workflow_project_role_member',
+            'LEAD' => 'workflow_project_role_lead',
+            'OBSERVER' => 'workflow_project_role_observer',
+        ];
+    }
+
     public function listProjects(string $q = '', string $status = '', ?string $active = '1'): array
     {
         if (!$this->supportsWorkflowProjects()) {
@@ -170,6 +179,7 @@ final class WorkflowProjectModel
                 return null;
             }
             $row['ProjectUserIDs'] = $this->listProjectUserIds($id);
+            $row['ProjectUserRoles'] = $this->listProjectUserRoleMap($id);
             return $row;
         } catch (\Throwable $e) {
             $this->lastError = $e->getMessage();
@@ -275,6 +285,7 @@ final class WorkflowProjectModel
             ':Active' => !empty($data['Active']) ? 1 : 0,
         ];
         $projectUserIds = $this->normalizeUserIds($data['ProjectUserIDs'] ?? []);
+        $projectUserRoles = $this->normalizeUserRoleMap($data['ProjectUserRoles'] ?? []);
 
         $startedTransaction = !$this->conn->inTransaction();
         if ($startedTransaction) {
@@ -322,7 +333,7 @@ final class WorkflowProjectModel
                 throw new \RuntimeException('Workflow project save did not return a project id.');
             }
 
-            $this->syncProjectUsers($savedId, $projectUserIds, $currentUserId);
+            $this->syncProjectUsers($savedId, $projectUserIds, $projectUserRoles, $currentUserId);
             if ($startedTransaction) {
                 $this->conn->commit();
             }
@@ -376,7 +387,24 @@ final class WorkflowProjectModel
         return array_values($ids);
     }
 
-    private function syncProjectUsers(int $projectId, array $userIds, int $currentUserId): void
+    private function normalizeUserRoleMap($value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $roles = [];
+        foreach ($value as $userId => $roleCode) {
+            $userId = (int)$userId;
+            if ($userId > 0) {
+                $roles[$userId] = $this->normalizeProjectRoleCode($roleCode);
+            }
+        }
+
+        return $roles;
+    }
+
+    private function syncProjectUsers(int $projectId, array $userIds, array $userRoles, int $currentUserId): void
     {
         $existingRoles = $this->listProjectUserRoleMap($projectId);
         $delete = $this->conn->prepare("
@@ -401,7 +429,7 @@ final class WorkflowProjectModel
             $insert->execute([
                 ':WorkflowProjectID' => $projectId,
                 ':UserID' => $userId,
-                ':ProjectRoleCode' => $existingRoles[$userId] ?? 'MEMBER',
+                ':ProjectRoleCode' => $userRoles[$userId] ?? $existingRoles[$userId] ?? 'MEMBER',
                 ':AssignedBy' => $currentUserId > 0 ? $currentUserId : null,
             ]);
         }
