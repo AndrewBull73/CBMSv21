@@ -38,6 +38,9 @@ $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
 $requirementLevelOptions = is_array($requirementLevelOptions ?? null) ? $requirementLevelOptions : [];
 $workflowProjects = is_array($workflowProjects ?? null) ? $workflowProjects : [];
 $tableInstalled = !empty($tableInstalled);
+$canCreateRequirement = !empty($canCreateRequirement);
+$canEditRequirement = !empty($canEditRequirement);
+$canDeleteRequirement = !empty($canDeleteRequirement);
 
 $activeCount = 0;
 $mustCount = 0;
@@ -141,9 +144,11 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
           </div>
         </div>
         <div class="d-flex gap-2 flex-wrap justify-content-end">
-          <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
-          </a>
+          <?php if ($canCreateRequirement): ?>
+            <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+              <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
+            </a>
+          <?php endif; ?>
           <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowRequirementListActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
               <i class="bi bi-three-dots-vertical"></i>
@@ -345,7 +350,7 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                   <td><?= h((string)($row['OwnerName'] ?? '')) ?></td>
                   <td class="text-end">
                     <div class="d-inline-flex gap-1 align-items-center">
-                      <?php if (!$isDetailedRequirement): ?>
+                      <?php if (!$isDetailedRequirement && $canCreateRequirement): ?>
                         <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>" title="<?= h(__t('workflow_requirement_add_child')) ?>" aria-label="<?= h(__t('workflow_requirement_add_child')) ?>">
                           <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_level_detailed')) ?>
                         </a>
@@ -357,7 +362,7 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementRowActions<?= $id ?>">
                           <li>
                             <a class="dropdown-item" href="index.php?route=workflow-requirements/form&id=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>">
-                              <i class="bi bi-pencil-square me-2"></i><?= h(__t('edit')) ?>
+                              <i class="bi <?= $canEditRequirement ? 'bi-pencil-square' : 'bi-box-arrow-up-right' ?> me-2"></i><?= h(__t($canEditRequirement ? 'edit' : 'open')) ?>
                             </a>
                           </li>
                           <?php if (!empty($row['WorkflowProjectID'])): ?>
@@ -365,6 +370,24 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                               <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= (int)$row['WorkflowProjectID'] ?>">
                                 <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
                               </a>
+                            </li>
+                          <?php endif; ?>
+                          <?php if ($canDeleteRequirement && !$isInactive): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                              <form method="post"
+                                    action="index.php?route=workflow-requirements/delete"
+                                    class="m-0"
+                                    data-confirm-message="<?= h(__t('workflow_requirement_delete_confirm')) ?>"
+                                    data-confirm-button="<?= h(__t('delete')) ?>"
+                                    data-confirm-button-class="btn-danger">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="WorkflowRequirementID" value="<?= $id ?>">
+                                <input type="hidden" name="returnTo" value="<?= h($workflowRequirementReturnTo) ?>">
+                                <button type="submit" class="dropdown-item text-danger">
+                                  <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
+                                </button>
+                              </form>
                             </li>
                           <?php endif; ?>
                         </ul>

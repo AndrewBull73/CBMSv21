@@ -191,11 +191,18 @@ $requirementAttachmentsInstalled = !empty($requirementAttachmentsInstalled);
 $requirementHistory = is_array($requirementHistory ?? null) ? $requirementHistory : [];
 $requirementHistoryInstalled = !empty($requirementHistoryInstalled);
 $requirementHierarchyInstalled = !empty($requirementHierarchyInstalled);
+$canCreateRequirement = !empty($canCreateRequirement);
+$canEditRequirement = !empty($canEditRequirement);
+$canDeleteRequirement = !empty($canDeleteRequirement);
+$canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 $canReviewRequirement = !empty($canReviewRequirement);
 $canApproveRequirement = !empty($canApproveRequirement);
 $workflowLinksInstalled = !empty($workflowLinksInstalled);
 $tableInstalled = !empty($tableInstalled);
 $requirementId = (int)($record['WorkflowRequirementID'] ?? 0);
+$canSaveRequirement = $tableInstalled && ($requirementId > 0 ? $canEditRequirement : $canCreateRequirement);
+$requirementFieldsDisabled = !$canSaveRequirement;
+$requirementActiveDisabled = $requirementFieldsDisabled || ($requirementId > 0 && !$canDeleteRequirement);
 $workflowProjectID = (int)($record['WorkflowProjectID'] ?? 0);
 $parentRequirementID = (int)($record['ParentRequirementID'] ?? 0);
 $currentRequirementLevel = strtoupper(trim((string)($record['RequirementLevelCode'] ?? 'HIGH_LEVEL'))) ?: 'HIGH_LEVEL';
@@ -378,24 +385,38 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
 
         <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3 requirement-form-actions-top">
           <div class="d-flex gap-2 flex-wrap">
-            <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
-              <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-              <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
-            </button>
-            <?php if ($workflowProjectID > 0 && $requirementId > 0): ?>
+            <?php if ($canSaveRequirement): ?>
+              <button type="submit" class="btn btn-primary">
+                <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
+              </button>
+            <?php endif; ?>
+            <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
               <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
+            <?php endif; ?>
+            <?php if ($requirementId > 0): ?>
               <div class="dropdown">
                 <button class="btn btn-outline-secondary" type="button" id="workflowRequirementFormActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
                   <i class="bi bi-three-dots-vertical"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementFormActions">
-                  <li>
-                    <a class="dropdown-item" href="index.php?route=workflow-projects/summary&id=<?= $workflowProjectID ?>">
-                      <i class="bi bi-speedometer2 me-2"></i><?= h(__t('workflow_project_summary')) ?>
-                    </a>
-                  </li>
+                  <?php if ($workflowProjectID > 0): ?>
+                    <li>
+                      <a class="dropdown-item" href="index.php?route=workflow-projects/summary&id=<?= $workflowProjectID ?>">
+                        <i class="bi bi-speedometer2 me-2"></i><?= h(__t('workflow_project_summary')) ?>
+                      </a>
+                    </li>
+                  <?php endif; ?>
+                  <?php if ($canDeleteRequirement && (int)($record['Active'] ?? 0) === 1): ?>
+                    <?php if ($workflowProjectID > 0): ?><li><hr class="dropdown-divider"></li><?php endif; ?>
+                    <li>
+                      <button type="submit" form="WorkflowRequirementDeleteForm" class="dropdown-item text-danger">
+                        <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
+                      </button>
+                    </li>
+                  <?php endif; ?>
                 </ul>
               </div>
             <?php endif; ?>
@@ -439,7 +460,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               <div class="row g-3">
                 <div class="col-12">
                   <label class="form-label" for="RequirementTitle"><?= h(__t('workflow_requirement_title')) ?></label>
-                  <input type="text" class="form-control" id="RequirementTitle" name="RequirementTitle" value="<?= h((string)($record['RequirementTitle'] ?? '')) ?>" maxlength="255" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="RequirementTitle" name="RequirementTitle" value="<?= h((string)($record['RequirementTitle'] ?? '')) ?>" maxlength="255" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                   <div class="invalid-feedback"><?= h(__t('workflow_requirement_title_required')) ?></div>
                 </div>
               </div>
@@ -460,8 +481,8 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   <button type="button" class="btn btn-sm btn-outline-secondary" data-requirement-rich-command="createLink" title="<?= h(__t('workflow_task_description_format_link')) ?>" aria-label="<?= h(__t('workflow_task_description_format_link')) ?>"><i class="bi bi-link-45deg"></i></button>
                   <button type="button" class="btn btn-sm btn-outline-secondary" data-requirement-rich-command="removeFormat" title="<?= h(__t('workflow_task_description_format_clear')) ?>" aria-label="<?= h(__t('workflow_task_description_format_clear')) ?>"><i class="bi bi-eraser"></i></button>
                 </div>
-                <div class="form-control requirement-rich-text-editor" contenteditable="<?= $tableInstalled ? 'true' : 'false' ?>" data-requirement-rich-editor data-placeholder="<?= h(__t('description')) ?>"><?= wf_requirement_render_rich($record['Description'] ?? '') ?></div>
-                <textarea id="RequirementDescription" name="Description" class="form-control requirement-rich-text-source" rows="5" <?= !$tableInstalled ? 'disabled' : '' ?>><?= h((string)($record['Description'] ?? '')) ?></textarea>
+                <div class="form-control requirement-rich-text-editor" contenteditable="<?= !$requirementFieldsDisabled ? 'true' : 'false' ?>" data-requirement-rich-editor data-placeholder="<?= h(__t('description')) ?>"><?= wf_requirement_render_rich($record['Description'] ?? '') ?></div>
+                <textarea id="RequirementDescription" name="Description" class="form-control requirement-rich-text-source" rows="5" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>><?= h((string)($record['Description'] ?? '')) ?></textarea>
               </div>
             </section>
           </div>
@@ -479,8 +500,8 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   <button type="button" class="btn btn-sm btn-outline-secondary" data-requirement-rich-command="createLink" title="<?= h(__t('workflow_task_description_format_link')) ?>" aria-label="<?= h(__t('workflow_task_description_format_link')) ?>"><i class="bi bi-link-45deg"></i></button>
                   <button type="button" class="btn btn-sm btn-outline-secondary" data-requirement-rich-command="removeFormat" title="<?= h(__t('workflow_task_description_format_clear')) ?>" aria-label="<?= h(__t('workflow_task_description_format_clear')) ?>"><i class="bi bi-eraser"></i></button>
                 </div>
-                <div class="form-control requirement-rich-text-editor" contenteditable="<?= $tableInstalled ? 'true' : 'false' ?>" data-requirement-rich-editor data-placeholder="<?= h(__t('workflow_requirement_acceptance_criteria')) ?>"><?= wf_requirement_render_rich($record['AcceptanceCriteria'] ?? '') ?></div>
-                <textarea id="AcceptanceCriteria" name="AcceptanceCriteria" class="form-control requirement-rich-text-source" rows="5" <?= !$tableInstalled ? 'disabled' : '' ?>><?= h((string)($record['AcceptanceCriteria'] ?? '')) ?></textarea>
+                <div class="form-control requirement-rich-text-editor" contenteditable="<?= !$requirementFieldsDisabled ? 'true' : 'false' ?>" data-requirement-rich-editor data-placeholder="<?= h(__t('workflow_requirement_acceptance_criteria')) ?>"><?= wf_requirement_render_rich($record['AcceptanceCriteria'] ?? '') ?></div>
+                <textarea id="AcceptanceCriteria" name="AcceptanceCriteria" class="form-control requirement-rich-text-source" rows="5" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>><?= h((string)($record['AcceptanceCriteria'] ?? '')) ?></textarea>
               </div>
             </section>
           </div>
@@ -490,15 +511,15 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               <div class="requirement-sidebar-grid">
                 <div>
                   <label class="form-label" for="RequirementCode"><?= h(__t('workflow_requirement_code')) ?></label>
-                  <input type="text" class="form-control" id="RequirementCode" name="RequirementCode" value="<?= h((string)($record['RequirementCode'] ?? '')) ?>" maxlength="50" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="RequirementCode" name="RequirementCode" value="<?= h((string)($record['RequirementCode'] ?? '')) ?>" maxlength="50" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div>
                   <label class="form-label" for="ModuleCode"><?= h(__t('workflow_requirement_module')) ?></label>
-                  <input type="text" class="form-control" id="ModuleCode" name="ModuleCode" value="<?= h((string)($record['ModuleCode'] ?? '')) ?>" maxlength="100" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="ModuleCode" name="ModuleCode" value="<?= h((string)($record['ModuleCode'] ?? '')) ?>" maxlength="100" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div class="span-2">
                   <label class="form-label" for="WorkflowProjectID"><?= h(__t('workflow_project_project')) ?></label>
-                  <select class="form-select" id="WorkflowProjectID" name="WorkflowProjectID" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="WorkflowProjectID" name="WorkflowProjectID" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <option value=""><?= h(__t('workflow_project_no_project')) ?></option>
                     <?php foreach ($workflowProjects as $project): ?>
                       <?php $projectId = (int)($project['WorkflowProjectID'] ?? 0); ?>
@@ -511,7 +532,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div>
                   <label class="form-label" for="RequirementStatusCode"><?= h(__t('status')) ?></label>
-                  <select class="form-select" id="RequirementStatusCode" name="RequirementStatusCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="RequirementStatusCode" name="RequirementStatusCode" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <?php foreach ($statusOptions as $code => $labelKey): ?>
                       <option value="<?= h((string)$code) ?>" <?= strtoupper((string)($record['RequirementStatusCode'] ?? 'DRAFT')) === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                     <?php endforeach; ?>
@@ -519,7 +540,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div>
                   <label class="form-label" for="PriorityCode"><?= h(__t('workflow_requirement_priority')) ?></label>
-                  <select class="form-select" id="PriorityCode" name="PriorityCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="PriorityCode" name="PriorityCode" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <?php foreach ($priorityOptions as $code => $labelKey): ?>
                       <option value="<?= h((string)$code) ?>" <?= strtoupper((string)($record['PriorityCode'] ?? 'SHOULD')) === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                     <?php endforeach; ?>
@@ -527,7 +548,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div>
                   <label class="form-label" for="DeliveryClassCode"><?= h(__t('workflow_requirement_delivery_class')) ?></label>
-                  <select class="form-select" id="DeliveryClassCode" name="DeliveryClassCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="DeliveryClassCode" name="DeliveryClassCode" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <?php foreach ($deliveryClassOptions as $code => $labelKey): ?>
                       <option value="<?= h((string)$code) ?>" <?= strtoupper((string)($record['DeliveryClassCode'] ?? 'ENHANCEMENT')) === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                     <?php endforeach; ?>
@@ -535,7 +556,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div>
                   <label class="form-label" for="RequirementTypeCode"><?= h(__t('workflow_requirement_type')) ?></label>
-                  <select class="form-select" id="RequirementTypeCode" name="RequirementTypeCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="RequirementTypeCode" name="RequirementTypeCode" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <?php foreach ($typeOptions as $code => $labelKey): ?>
                       <option value="<?= h((string)$code) ?>" <?= strtoupper((string)($record['RequirementTypeCode'] ?? 'FUNCTIONAL')) === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                     <?php endforeach; ?>
@@ -544,7 +565,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 <?php if ($requirementHierarchyInstalled): ?>
                   <div>
                     <label class="form-label" for="RequirementLevelCode"><?= h(__t('workflow_requirement_level')) ?></label>
-                    <select class="form-select" id="RequirementLevelCode" name="RequirementLevelCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                    <select class="form-select" id="RequirementLevelCode" name="RequirementLevelCode" required <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                       <?php foreach ($requirementLevelOptions as $code => $labelKey): ?>
                         <option value="<?= h((string)$code) ?>" <?= $currentRequirementLevel === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                       <?php endforeach; ?>
@@ -552,7 +573,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   </div>
                   <div class="span-2">
                     <label class="form-label" for="ParentRequirementID"><?= h(__t('workflow_requirement_parent')) ?></label>
-                    <select class="form-select" id="ParentRequirementID" name="ParentRequirementID" data-requirement-parent-select <?= !$tableInstalled ? 'disabled' : '' ?>>
+                    <select class="form-select" id="ParentRequirementID" name="ParentRequirementID" data-requirement-parent-select data-requirement-parent-locked="<?= $requirementFieldsDisabled ? '1' : '0' ?>" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                       <option value=""><?= h(__t('workflow_requirement_no_parent')) ?></option>
                       <?php foreach ($parentRequirements as $parentRequirement): ?>
                         <?php $parentId = (int)($parentRequirement['WorkflowRequirementID'] ?? 0); ?>
@@ -567,7 +588,10 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 <?php endif; ?>
                 <div class="span-2">
                   <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="Active" name="Active" value="1" <?= ((int)($record['Active'] ?? 1) === 1) ? 'checked' : '' ?> <?= !$tableInstalled ? 'disabled' : '' ?>>
+                    <?php if ($requirementActiveDisabled): ?>
+                      <input type="hidden" name="Active" value="<?= ((int)($record['Active'] ?? 1) === 1) ? '1' : '0' ?>">
+                    <?php endif; ?>
+                    <input class="form-check-input" type="checkbox" id="Active" name="Active" value="1" <?= ((int)($record['Active'] ?? 1) === 1) ? 'checked' : '' ?> <?= $requirementActiveDisabled ? 'disabled' : '' ?>>
                     <label class="form-check-label" for="Active"><?= h(__t('workflow_project_active')) ?></label>
                   </div>
                 </div>
@@ -580,7 +604,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               <div class="requirement-sidebar-grid">
                 <div class="span-2">
                   <label class="form-label" for="RequestedByUserID"><?= h(__t('workflow_requirement_requested_by')) ?></label>
-                  <select class="form-select" id="RequestedByUserID" name="RequestedByUserID" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="RequestedByUserID" name="RequestedByUserID" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <option value=""><?= h(__t('none')) ?></option>
                     <?php foreach ($users as $user): ?>
                       <?php $userId = (int)($user['UserID'] ?? 0); ?>
@@ -591,7 +615,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div class="span-2">
                   <label class="form-label" for="OwnerUserID"><?= h(__t('workflow_requirement_owner')) ?></label>
-                  <select class="form-select" id="OwnerUserID" name="OwnerUserID" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="OwnerUserID" name="OwnerUserID" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <option value=""><?= h(__t('none')) ?></option>
                     <?php foreach ($users as $user): ?>
                       <?php $userId = (int)($user['UserID'] ?? 0); ?>
@@ -602,7 +626,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div class="span-2">
                   <label class="form-label" for="ApprovedByUserID"><?= h(__t('workflow_requirement_approved_by')) ?></label>
-                  <select class="form-select" id="ApprovedByUserID" name="ApprovedByUserID" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="ApprovedByUserID" name="ApprovedByUserID" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                     <option value=""><?= h(__t('none')) ?></option>
                     <?php foreach ($users as $user): ?>
                       <?php $userId = (int)($user['UserID'] ?? 0); ?>
@@ -613,7 +637,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 </div>
                 <div class="span-2">
                   <label class="form-label" for="ApprovedAt"><?= h(__t('workflow_requirement_approved_at')) ?></label>
-                  <input type="datetime-local" class="form-control" id="ApprovedAt" name="ApprovedAt" value="<?= h(wf_requirement_datetime_local($record['ApprovedAt'] ?? '')) ?>" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="datetime-local" class="form-control" id="ApprovedAt" name="ApprovedAt" value="<?= h(wf_requirement_datetime_local($record['ApprovedAt'] ?? '')) ?>" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
               </div>
             </section>
@@ -625,11 +649,11 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               <div class="requirement-sidebar-grid">
                 <div class="span-2">
                   <label class="form-label" for="SourceDocument"><?= h(__t('workflow_requirement_source_document')) ?></label>
-                  <input type="text" class="form-control" id="SourceDocument" name="SourceDocument" value="<?= h((string)($record['SourceDocument'] ?? '')) ?>" maxlength="255" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="SourceDocument" name="SourceDocument" value="<?= h((string)($record['SourceDocument'] ?? '')) ?>" maxlength="255" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div class="span-2">
                   <label class="form-label" for="SourceSection"><?= h(__t('workflow_requirement_source_section')) ?></label>
-                  <input type="text" class="form-control" id="SourceSection" name="SourceSection" value="<?= h((string)($record['SourceSection'] ?? '')) ?>" maxlength="255" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="SourceSection" name="SourceSection" value="<?= h((string)($record['SourceSection'] ?? '')) ?>" maxlength="255" <?= $requirementFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
               </div>
             </section>
@@ -644,18 +668,34 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
             <i class="bi bi-arrow-left me-1"></i><?= h(__t('back')) ?>
           </a>
           <div class="d-flex gap-2 flex-wrap">
-            <?php if ($workflowProjectID > 0 && $requirementId > 0): ?>
+            <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
               <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
             <?php endif; ?>
-            <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
-              <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-              <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
-            </button>
+            <?php if ($canSaveRequirement): ?>
+              <button type="submit" class="btn btn-primary">
+                <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
+              </button>
+            <?php endif; ?>
           </div>
         </div>
       </form>
+
+      <?php if ($canDeleteRequirement && $requirementId > 0 && (int)($record['Active'] ?? 0) === 1): ?>
+        <form id="WorkflowRequirementDeleteForm"
+              method="post"
+              action="index.php?route=workflow-requirements/delete"
+              class="d-none"
+              data-confirm-message="<?= h(__t('workflow_requirement_delete_confirm')) ?>"
+              data-confirm-button="<?= h(__t('delete')) ?>"
+              data-confirm-button-class="btn-danger">
+          <?= csrf_field() ?>
+          <input type="hidden" name="WorkflowRequirementID" value="<?= $requirementId ?>">
+          <input type="hidden" name="returnTo" value="<?= h($backUrl) ?>">
+        </form>
+      <?php endif; ?>
 
       <?php if ($requirementHierarchyInstalled): ?>
         <div class="border-top mt-4 pt-4 d-none" data-requirement-tab-panel="RequirementDetailsTab">
@@ -689,9 +729,11 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           <?php else: ?>
             <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
               <div class="fw-semibold"><?= h(__t('workflow_requirement_child_requirements')) ?></div>
-              <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" title="<?= h(__t('workflow_requirement_add_child')) ?>" aria-label="<?= h(__t('workflow_requirement_add_child')) ?>">
-                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_level_detailed')) ?>
-              </a>
+              <?php if ($canCreateRequirement): ?>
+                <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" title="<?= h(__t('workflow_requirement_add_child')) ?>" aria-label="<?= h(__t('workflow_requirement_add_child')) ?>">
+                  <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_level_detailed')) ?>
+                </a>
+              <?php endif; ?>
             </div>
 
             <?php if ($childRequirements === []): ?>
@@ -919,6 +961,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
             </div>
           </div>
 
+          <?php if ($canCreateWorkflowTask): ?>
           <div class="mb-4">
             <div class="fw-semibold mb-2"><?= h(__t('workflow_requirement_create_task_from_requirement')) ?></div>
             <?php if ($workflowProjectID <= 0): ?>
@@ -963,6 +1006,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               </form>
             <?php endif; ?>
           </div>
+          <?php endif; ?>
 
           <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
@@ -1093,34 +1137,36 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
             <?= h(__t('workflow_requirement_attachments_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
           </div>
         <?php else: ?>
-          <form method="post"
-                action="index.php?route=workflow-requirements/upload-attachment"
-                enctype="multipart/form-data"
-                class="needs-validation mb-3"
-                novalidate>
-            <?= csrf_field() ?>
-            <input type="hidden" name="WorkflowRequirementID" value="<?= $requirementId ?>">
-            <div class="row g-2 align-items-end">
-              <div class="col-12 col-lg">
-                <label class="form-label" for="RequirementAttachment"><?= h(__t('workflow_requirement_attach_file')) ?></label>
-                <input type="file"
-                       class="form-control"
-                       id="RequirementAttachment"
-                       name="RequirementAttachment[]"
-                       multiple
-                       required
-                       accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.gif,.zip">
-                <div class="invalid-feedback"><?= h(__t('workflow_requirement_choose_file')) ?></div>
+          <?php if ($canEditRequirement): ?>
+            <form method="post"
+                  action="index.php?route=workflow-requirements/upload-attachment"
+                  enctype="multipart/form-data"
+                  class="needs-validation mb-3"
+                  novalidate>
+              <?= csrf_field() ?>
+              <input type="hidden" name="WorkflowRequirementID" value="<?= $requirementId ?>">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-lg">
+                  <label class="form-label" for="RequirementAttachment"><?= h(__t('workflow_requirement_attach_file')) ?></label>
+                  <input type="file"
+                         class="form-control"
+                         id="RequirementAttachment"
+                         name="RequirementAttachment[]"
+                         multiple
+                         required
+                         accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.gif,.zip">
+                  <div class="invalid-feedback"><?= h(__t('workflow_requirement_choose_file')) ?></div>
+                </div>
+                <div class="col-12 col-lg-auto">
+                  <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                    <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                    <i class="bi bi-paperclip me-1"></i><?= h(__t('workflow_requirement_upload_attachment')) ?>
+                  </button>
+                </div>
               </div>
-              <div class="col-12 col-lg-auto">
-                <button type="submit" class="btn btn-sm btn-outline-primary w-100">
-                  <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-                  <i class="bi bi-paperclip me-1"></i><?= h(__t('workflow_requirement_upload_attachment')) ?>
-                </button>
-              </div>
-            </div>
-            <div class="form-text"><?= h(__t('workflow_task_allowed_file_types_help')) ?></div>
-          </form>
+              <div class="form-text"><?= h(__t('workflow_task_allowed_file_types_help')) ?></div>
+            </form>
+          <?php endif; ?>
 
           <?php if ($requirementAttachments !== []): ?>
             <div class="table-responsive">
@@ -1162,20 +1208,22 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                           <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-requirements/download-attachment&id=<?= $attachmentId ?>">
                             <i class="bi bi-download me-1"></i><?= h(__t('workflow_task_download')) ?>
                           </a>
-                          <form method="post"
-                                action="index.php?route=workflow-requirements/delete-attachment"
-                                class="needs-validation d-inline"
-                                novalidate
-                                data-confirm-message="<?= h(__t('workflow_requirement_remove_attachment_confirm')) ?>"
-                                data-confirm-button="<?= h(__t('workflow_task_remove')) ?>"
-                                data-confirm-button-class="btn-danger">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="WorkflowRequirementAttachmentID" value="<?= $attachmentId ?>">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                              <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-                              <i class="bi bi-trash me-1"></i><?= h(__t('workflow_task_remove')) ?>
-                            </button>
-                          </form>
+                          <?php if ($canEditRequirement || $canDeleteRequirement): ?>
+                            <form method="post"
+                                  action="index.php?route=workflow-requirements/delete-attachment"
+                                  class="needs-validation d-inline"
+                                  novalidate
+                                  data-confirm-message="<?= h(__t('workflow_requirement_remove_attachment_confirm')) ?>"
+                                  data-confirm-button="<?= h(__t('workflow_task_remove')) ?>"
+                                  data-confirm-button-class="btn-danger">
+                              <?= csrf_field() ?>
+                              <input type="hidden" name="WorkflowRequirementAttachmentID" value="<?= $attachmentId ?>">
+                              <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                                <i class="bi bi-trash me-1"></i><?= h(__t('workflow_task_remove')) ?>
+                              </button>
+                            </form>
+                          <?php endif; ?>
                         </div>
                       </td>
                     </tr>
@@ -1213,6 +1261,10 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
   const parentSelect = document.getElementById('ParentRequirementID');
   if (levelSelect && parentSelect) {
     const syncParentSelect = () => {
+      if (parentSelect.getAttribute('data-requirement-parent-locked') === '1') {
+        parentSelect.disabled = true;
+        return;
+      }
       const isDetailed = levelSelect.value === 'DETAILED';
       parentSelect.disabled = !isDetailed;
       parentSelect.required = isDetailed;
@@ -1226,14 +1278,21 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
     const editor = container.querySelector('[data-requirement-rich-editor]');
     const source = container.querySelector('.requirement-rich-text-source');
     if (!editor || !source) return;
+    const editable = editor.getAttribute('contenteditable') === 'true';
 
     const sync = () => {
       source.value = plainText(editor.innerHTML) ? editor.innerHTML.trim() : '';
     };
 
-    editor.addEventListener('input', sync);
-    editor.addEventListener('blur', sync);
+    if (editable) {
+      editor.addEventListener('input', sync);
+      editor.addEventListener('blur', sync);
+    }
     container.querySelectorAll('[data-requirement-rich-command]').forEach(button => {
+      if (!editable) {
+        button.disabled = true;
+        return;
+      }
       button.addEventListener('click', () => {
         editor.focus();
         const command = button.getAttribute('data-requirement-rich-command') || '';

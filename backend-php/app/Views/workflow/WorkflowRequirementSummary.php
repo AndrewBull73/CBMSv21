@@ -38,6 +38,7 @@ $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
 $requirementLevelOptions = is_array($requirementLevelOptions ?? null) ? $requirementLevelOptions : [];
 $workflowProjects = is_array($workflowProjects ?? null) ? $workflowProjects : [];
 $tableInstalled = !empty($tableInstalled);
+$canCreateRequirement = !empty($canCreateRequirement);
 
 $byStatus = is_array($summary['byStatus'] ?? null) ? $summary['byStatus'] : [];
 $byLevel = is_array($summary['byLevel'] ?? null) ? $summary['byLevel'] : [];
@@ -90,9 +91,11 @@ $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummar
       <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div class="text-muted small"><?= h(__t('workflow_requirement_summary_help')) ?></div>
         <div class="d-flex gap-2 flex-wrap justify-content-end">
-          <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementSummaryReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
-          </a>
+          <?php if ($canCreateRequirement): ?>
+            <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementSummaryReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+              <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
+            </a>
+          <?php endif; ?>
           <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowRequirementSummaryActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
               <i class="bi bi-three-dots-vertical"></i>

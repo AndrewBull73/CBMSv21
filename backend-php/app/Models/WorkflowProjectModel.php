@@ -352,6 +352,33 @@ final class WorkflowProjectModel
         }
     }
 
+    public function archiveProject(int $projectId, int $currentUserId): bool
+    {
+        if ($projectId <= 0 || !$this->supportsWorkflowProjects()) {
+            return false;
+        }
+
+        try {
+            $stmt = $this->conn->prepare("
+                UPDATE dbo.tblWorkflowProjects
+                SET Active = 0,
+                    UpdatedAt = SYSUTCDATETIME(),
+                    UpdatedBy = :UpdatedBy
+                WHERE WorkflowProjectID = :WorkflowProjectID
+                  AND Active = 1
+            ");
+            $stmt->execute([
+                ':WorkflowProjectID' => $projectId,
+                ':UpdatedBy' => $currentUserId > 0 ? $currentUserId : null,
+            ]);
+            $this->lastError = '';
+            return $stmt->rowCount() > 0;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
+    }
+
     private function normalizeStatusCode($value, bool $defaultPlanned): string
     {
         $code = strtoupper(trim((string)$value));

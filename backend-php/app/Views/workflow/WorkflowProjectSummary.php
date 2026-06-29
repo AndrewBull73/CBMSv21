@@ -70,6 +70,10 @@ $workflowLinkTypeOptions = is_array($workflowLinkTypeOptions ?? null) ? $workflo
 $requirementStatusOptions = is_array($requirementStatusOptions ?? null) ? $requirementStatusOptions : [];
 $requirementPriorityOptions = is_array($requirementPriorityOptions ?? null) ? $requirementPriorityOptions : [];
 $workflowLinksInstalled = !empty($workflowLinksInstalled);
+$canEditProject = !empty($canEditProject);
+$canDeleteProject = !empty($canDeleteProject);
+$canCreateRequirement = !empty($canCreateRequirement);
+$canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
 $roleOptions = is_array($roleOptions ?? null) && $roleOptions !== []
     ? $roleOptions
@@ -384,22 +388,28 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
           <a href="<?= h($backUrl) ?>" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i><?= h(__t('back')) ?>
           </a>
-          <a href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-pencil-square me-1"></i><?= h(__t('workflow_project_edit')) ?>
-          </a>
-          <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
-            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
-          </a>
+          <?php if ($canEditProject): ?>
+            <a href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-pencil-square me-1"></i><?= h(__t('workflow_project_edit')) ?>
+            </a>
+          <?php endif; ?>
+          <?php if ($canCreateWorkflowTask): ?>
+            <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
+              <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+            </a>
+          <?php endif; ?>
           <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectSummaryActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
               <i class="bi bi-three-dots-vertical"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowProjectSummaryActions">
-              <li>
-                <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
-                  <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
-                </a>
-              </li>
+              <?php if ($canCreateRequirement): ?>
+                <li>
+                  <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
+                    <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
+                  </a>
+                </li>
+              <?php endif; ?>
               <li>
                 <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
                   <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
@@ -410,6 +420,24 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
                   <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
                 </a>
               </li>
+              <?php if ($canDeleteProject && (int)($record['Active'] ?? 0) === 1): ?>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <form method="post"
+                        action="index.php?route=workflow-projects/delete"
+                        class="m-0"
+                        data-confirm-message="<?= h(__t('workflow_project_delete_confirm')) ?>"
+                        data-confirm-button="<?= h(__t('delete')) ?>"
+                        data-confirm-button-class="btn-danger">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="WorkflowProjectID" value="<?= $projectId ?>">
+                    <input type="hidden" name="returnTo" value="index.php?route=workflow-projects/list">
+                    <button type="submit" class="dropdown-item text-danger">
+                      <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
+                    </button>
+                  </form>
+                </li>
+              <?php endif; ?>
             </ul>
           </div>
         </div>

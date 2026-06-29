@@ -50,7 +50,12 @@ $roleOptions = is_array($roleOptions ?? null) && $roleOptions !== []
         'OBSERVER' => 'workflow_project_role_observer',
     ];
 $tableInstalled = !empty($tableInstalled);
+$canSaveProject = !empty($canSaveProject);
+$canDeleteProject = !empty($canDeleteProject);
+$canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 $projectId = (int)($record['WorkflowProjectID'] ?? 0);
+$projectFieldsDisabled = !$tableInstalled || !$canSaveProject;
+$projectActiveDisabled = $projectFieldsDisabled || ($projectId > 0 && !$canDeleteProject);
 $projectUserIDs = [];
 foreach (is_array($record['ProjectUserIDs'] ?? null) ? $record['ProjectUserIDs'] : [] as $projectUserID) {
     $projectUserID = (int)$projectUserID;
@@ -318,10 +323,12 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                 <i class="bi bi-speedometer2 me-1"></i><?= h(__t('workflow_project_summary')) ?>
               </a>
             <?php endif; ?>
-            <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
-              <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-              <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
-            </button>
+            <?php if ($canSaveProject): ?>
+              <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+                <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
+              </button>
+            <?php endif; ?>
           </div>
         </div>
 
@@ -332,16 +339,16 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
               <div class="row g-3">
                 <div class="col-12 col-lg-4">
                   <label class="form-label" for="ProjectCode"><?= h(__t('workflow_project_code')) ?></label>
-                  <input type="text" class="form-control" id="ProjectCode" name="ProjectCode" value="<?= h((string)($record['ProjectCode'] ?? '')) ?>" maxlength="50" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="ProjectCode" name="ProjectCode" value="<?= h((string)($record['ProjectCode'] ?? '')) ?>" maxlength="50" <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-12 col-lg-8">
                   <label class="form-label" for="ProjectName"><?= h(__t('workflow_project_name')) ?></label>
-                  <input type="text" class="form-control" id="ProjectName" name="ProjectName" value="<?= h((string)($record['ProjectName'] ?? '')) ?>" maxlength="255" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="text" class="form-control" id="ProjectName" name="ProjectName" value="<?= h((string)($record['ProjectName'] ?? '')) ?>" maxlength="255" required <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                   <div class="invalid-feedback"><?= h(__t('workflow_project_name_required')) ?></div>
                 </div>
                 <div class="col-12 col-lg-5">
                   <label class="form-label" for="ProjectOwnerUserID"><?= h(__t('workflow_project_owner')) ?></label>
-                  <select class="form-select" id="ProjectOwnerUserID" name="ProjectOwnerUserID" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="ProjectOwnerUserID" name="ProjectOwnerUserID" <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                     <option value=""><?= h(__t('workflow_project_no_owner')) ?></option>
                     <?php foreach ($users as $user): ?>
                       <?php
@@ -360,7 +367,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                 </div>
                 <div class="col-12 col-sm-7 col-lg-4">
                   <label class="form-label" for="ProjectStatusCode"><?= h(__t('status')) ?></label>
-                  <select class="form-select" id="ProjectStatusCode" name="ProjectStatusCode" required <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <select class="form-select" id="ProjectStatusCode" name="ProjectStatusCode" required <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                     <?php foreach ($statusOptions as $code => $labelKey): ?>
                       <option value="<?= h((string)$code) ?>" <?= strtoupper((string)($record['ProjectStatusCode'] ?? 'PLANNED')) === $code ? 'selected' : '' ?>><?= h(__t((string)$labelKey)) ?></option>
                     <?php endforeach; ?>
@@ -368,7 +375,10 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                 </div>
                 <div class="col-12 col-sm-5 col-lg-3 d-flex align-items-end">
                   <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="Active" name="Active" value="1" <?= ((int)($record['Active'] ?? 1) === 1) ? 'checked' : '' ?> <?= !$tableInstalled ? 'disabled' : '' ?>>
+                    <?php if ($projectActiveDisabled): ?>
+                      <input type="hidden" name="Active" value="<?= ((int)($record['Active'] ?? 1) === 1) ? '1' : '0' ?>">
+                    <?php endif; ?>
+                    <input class="form-check-input" type="checkbox" id="Active" name="Active" value="1" <?= ((int)($record['Active'] ?? 1) === 1) ? 'checked' : '' ?> <?= $projectActiveDisabled ? 'disabled' : '' ?>>
                     <label class="form-check-label" for="Active"><?= h(__t('workflow_project_active')) ?></label>
                   </div>
                 </div>
@@ -380,15 +390,15 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
               <div class="row g-3">
                 <div class="col-12 col-md-4">
                   <label class="form-label" for="StartDate"><?= h(__t('workflow_project_start_date')) ?></label>
-                  <input type="date" class="form-control" id="StartDate" name="StartDate" value="<?= h((string)($record['StartDate'] ?? '')) ?>" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="date" class="form-control" id="StartDate" name="StartDate" value="<?= h((string)($record['StartDate'] ?? '')) ?>" <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-12 col-md-4">
                   <label class="form-label" for="TargetEndDate"><?= h(__t('workflow_project_target_end_date')) ?></label>
-                  <input type="date" class="form-control" id="TargetEndDate" name="TargetEndDate" value="<?= h((string)($record['TargetEndDate'] ?? '')) ?>" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="date" class="form-control" id="TargetEndDate" name="TargetEndDate" value="<?= h((string)($record['TargetEndDate'] ?? '')) ?>" <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-12 col-md-4">
                   <label class="form-label" for="ActualEndDate"><?= h(__t('workflow_project_actual_end_date')) ?></label>
-                  <input type="date" class="form-control" id="ActualEndDate" name="ActualEndDate" value="<?= h((string)($record['ActualEndDate'] ?? '')) ?>" <?= !$tableInstalled ? 'disabled' : '' ?>>
+                  <input type="date" class="form-control" id="ActualEndDate" name="ActualEndDate" value="<?= h((string)($record['ActualEndDate'] ?? '')) ?>" <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                 </div>
               </div>
             </section>
@@ -396,7 +406,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
             <section class="project-edit-section">
               <div class="project-edit-section-title"><?= h(__t('description')) ?></div>
               <label class="visually-hidden" for="Description"><?= h(__t('description')) ?></label>
-              <textarea class="form-control" id="Description" name="Description" rows="5" <?= !$tableInstalled ? 'disabled' : '' ?>><?= h((string)($record['Description'] ?? '')) ?></textarea>
+              <textarea class="form-control" id="Description" name="Description" rows="5" <?= $projectFieldsDisabled ? 'disabled' : '' ?>><?= h((string)($record['Description'] ?? '')) ?></textarea>
             </section>
           </div>
 
@@ -416,8 +426,8 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                        id="workflowProjectUserSearch"
                        placeholder="<?= h(__t('workflow_project_user_search_placeholder')) ?>"
                        data-project-user-search
-                       <?= !$tableInstalled ? 'disabled' : '' ?>>
-                <button type="button" class="btn btn-outline-secondary" data-project-user-clear <?= !$tableInstalled ? 'disabled' : '' ?>>
+                       <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
+                <button type="button" class="btn btn-outline-secondary" data-project-user-clear <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                   <i class="bi bi-x-circle me-1"></i><?= h(__t('workflow_project_clear_users')) ?>
                 </button>
               </div>
@@ -446,7 +456,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                              value="<?= $userId ?>"
                              data-project-user-checkbox
                              <?= $isSelected ? 'checked' : '' ?>
-                             <?= !$tableInstalled ? 'disabled' : '' ?>>
+                             <?= $projectFieldsDisabled ? 'disabled' : '' ?>>
                       <label class="project-edit-team-label mb-0" for="ProjectUserID_<?= $userId ?>">
                         <span class="d-block text-truncate"><?= h($label) ?></span>
                         <?php if ($username !== '' && $username !== $label): ?>
@@ -460,8 +470,8 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                               id="ProjectUserRole_<?= $userId ?>"
                               name="ProjectUserRoles[<?= $userId ?>]"
                               data-project-user-role
-                              <?= !$isSelected || !$tableInstalled ? 'disabled' : '' ?>
-                              <?= !$tableInstalled ? 'data-project-user-role-locked="1"' : '' ?>>
+                              <?= !$isSelected || $projectFieldsDisabled ? 'disabled' : '' ?>
+                              <?= $projectFieldsDisabled ? 'data-project-user-role-locked="1"' : '' ?>>
                         <?php foreach ($roleOptions as $roleCode => $roleLabelKey): ?>
                           <option value="<?= h((string)$roleCode) ?>" <?= $selectedRole === (string)$roleCode ? 'selected' : '' ?>>
                             <?= h(__t((string)$roleLabelKey)) ?>
@@ -483,10 +493,12 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
           <a href="<?= h($backUrl) ?>" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i><?= h(__t('back')) ?>
           </a>
-          <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
-            <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-            <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
-          </button>
+          <?php if ($canSaveProject): ?>
+            <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
+              <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
+              <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
+            </button>
+          <?php endif; ?>
         </div>
       </form>
 
@@ -498,9 +510,11 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
               <div class="text-muted small"><?= h(__t('workflow_project_gantt_help')) ?></div>
             </div>
             <div class="d-flex gap-2">
-              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
-              </a>
+              <?php if ($canCreateWorkflowTask): ?>
+                <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
+                  <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+                </a>
+              <?php endif; ?>
               <a href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_view_tasks')) ?>
               </a>

@@ -12,6 +12,11 @@ $rows = is_array($rows ?? null) ? $rows : [];
 $filters = is_array($filters ?? null) ? $filters : [];
 $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
 $tableInstalled = !empty($tableInstalled);
+$canCreateProject = !empty($canCreateProject);
+$canEditProject = !empty($canEditProject);
+$canDeleteProject = !empty($canDeleteProject);
+$canCreateRequirement = !empty($canCreateRequirement);
+$canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 
 $activeCount = 0;
 $openTaskCount = 0;
@@ -66,9 +71,11 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
             <span><strong><?= $openTaskCount ?></strong> <?= h(__t('workflow_project_open_tasks')) ?></span>
           </div>
         </div>
-        <a href="index.php?route=workflow-projects/form&returnTo=<?= $workflowProjectListReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-          <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create')) ?>
-        </a>
+        <?php if ($canCreateProject): ?>
+          <a href="index.php?route=workflow-projects/form&returnTo=<?= $workflowProjectListReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create')) ?>
+          </a>
+        <?php endif; ?>
       </div>
 
       <form method="get" action="index.php" class="row g-2 align-items-end mb-3">
@@ -169,9 +176,11 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                   </td>
                   <td class="text-end">
                     <div class="d-inline-flex justify-content-end align-items-center gap-1">
-                      <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>">
-                        <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
-                      </a>
+                      <?php if ($canCreateWorkflowTask): ?>
+                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>">
+                          <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+                        </a>
+                      <?php endif; ?>
                       <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectActions<?= $projectId ?>" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
                           <i class="bi bi-three-dots-vertical"></i>
@@ -182,16 +191,20 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                               <i class="bi bi-kanban me-2"></i><?= h(__t('workflow_project_summary')) ?>
                             </a>
                           </li>
-                          <li>
-                            <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
-                              <i class="bi bi-pencil-square me-2"></i><?= h(__t('workflow_project_edit')) ?>
-                            </a>
-                          </li>
-                          <li>
-                            <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
-                              <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
-                            </a>
-                          </li>
+                          <?php if ($canEditProject): ?>
+                            <li>
+                              <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                                <i class="bi bi-pencil-square me-2"></i><?= h(__t('workflow_project_edit')) ?>
+                              </a>
+                            </li>
+                          <?php endif; ?>
+                          <?php if ($canCreateRequirement): ?>
+                            <li>
+                              <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                                <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
+                              </a>
+                            </li>
+                          <?php endif; ?>
                           <li>
                             <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
                               <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
@@ -202,6 +215,24 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                               <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
                             </a>
                           </li>
+                          <?php if ($canDeleteProject && (int)($row['Active'] ?? 0) === 1): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                              <form method="post"
+                                    action="index.php?route=workflow-projects/delete"
+                                    class="m-0"
+                                    data-confirm-message="<?= h(__t('workflow_project_delete_confirm')) ?>"
+                                    data-confirm-button="<?= h(__t('delete')) ?>"
+                                    data-confirm-button-class="btn-danger">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="WorkflowProjectID" value="<?= $projectId ?>">
+                                <input type="hidden" name="returnTo" value="<?= h($workflowProjectListReturnTo) ?>">
+                                <button type="submit" class="dropdown-item text-danger">
+                                  <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
+                                </button>
+                              </form>
+                            </li>
+                          <?php endif; ?>
                         </ul>
                       </div>
                     </div>

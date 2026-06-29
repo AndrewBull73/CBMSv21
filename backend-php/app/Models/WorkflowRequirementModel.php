@@ -1172,6 +1172,37 @@ final class WorkflowRequirementModel
         return $savedId;
     }
 
+    public function archiveRequirement(int $requirementID, int $currentUserID): bool
+    {
+        if ($requirementID <= 0 || !$this->supportsRequirements()) {
+            return false;
+        }
+
+        try {
+            $hasHierarchy = $this->supportsRequirementHierarchy();
+            $where = $hasHierarchy
+                ? '(WorkflowRequirementID = :WorkflowRequirementID OR ParentRequirementID = :WorkflowRequirementID)'
+                : 'WorkflowRequirementID = :WorkflowRequirementID';
+            $stmt = $this->conn->prepare("
+                UPDATE dbo.tblWorkflowRequirements
+                SET Active = 0,
+                    UpdatedAt = SYSUTCDATETIME(),
+                    UpdatedBy = :UpdatedBy
+                WHERE {$where}
+                  AND Active = 1
+            ");
+            $stmt->execute([
+                ':WorkflowRequirementID' => $requirementID,
+                ':UpdatedBy' => $currentUserID > 0 ? $currentUserID : null,
+            ]);
+            $this->lastError = '';
+            return $stmt->rowCount() > 0;
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */

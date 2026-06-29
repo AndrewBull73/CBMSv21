@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Rbac;
 use App\Models\UserModel;
 use App\Models\WorkflowLinkModel;
 use App\Models\WorkflowProjectModel;
@@ -14,10 +15,11 @@ final class WorkflowProjectController extends BaseController
 {
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'summary' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'form' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_PROJECTS_VIEW', 'WORKFLOW_PROJECTS_CREATE', 'WORKFLOW_PROJECTS_EDIT', 'WORKFLOW_PROJECTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'summary' => ['auth' => true, 'permsAny' => ['WORKFLOW_PROJECTS_VIEW', 'WORKFLOW_PROJECTS_CREATE', 'WORKFLOW_PROJECTS_EDIT', 'WORKFLOW_PROJECTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'form' => ['auth' => true, 'permsAny' => ['WORKFLOW_PROJECTS_VIEW', 'WORKFLOW_PROJECTS_CREATE', 'WORKFLOW_PROJECTS_EDIT', 'WORKFLOW_PROJECTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_PROJECTS_CREATE', 'WORKFLOW_PROJECTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_PROJECTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function list(): void
@@ -35,6 +37,11 @@ final class WorkflowProjectController extends BaseController
             'filters' => $filters,
             'statusOptions' => $model->statusOptions(),
             'tableInstalled' => $model->supportsWorkflowProjects(),
+            'canCreateProject' => $this->canCreateProjects(),
+            'canEditProject' => $this->canEditProjects(),
+            'canDeleteProject' => $this->canDeleteProjects(),
+            'canCreateRequirement' => $this->canCreateRequirements(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -83,6 +90,10 @@ final class WorkflowProjectController extends BaseController
             'roleOptions' => $model->roleOptions(),
             'tableInstalled' => $tableInstalled,
             'backUrl' => $backUrl,
+            'canEditProject' => $this->canEditProjects(),
+            'canDeleteProject' => $this->canDeleteProjects(),
+            'canCreateRequirement' => $this->canCreateRequirements(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -107,6 +118,11 @@ final class WorkflowProjectController extends BaseController
             header('Location: ' . $backUrl);
             return;
         }
+        if ($id <= 0 && !$this->canCreateProjects()) {
+            $this->flashError(__t('workflow_project_permission_create'));
+            header('Location: ' . $backUrl);
+            return;
+        }
 
         $this->render('workflow/WorkflowProjectForm', [
             'title' => $id > 0 ? __t('workflow_project_edit') : __t('workflow_project_create'),
@@ -118,6 +134,9 @@ final class WorkflowProjectController extends BaseController
             'tableInstalled' => $tableInstalled,
             'returnTo' => $returnTo,
             'backUrl' => $backUrl,
+            'canSaveProject' => $id > 0 ? $this->canEditProjects() : $this->canCreateProjects(),
+            'canDeleteProject' => $this->canDeleteProjects(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -139,6 +158,23 @@ final class WorkflowProjectController extends BaseController
         }
 
         $id = (int)($_POST['WorkflowProjectID'] ?? 0);
+        $before = $id > 0 ? $model->findProject($id) : null;
+        if ($id > 0 && !$before) {
+            $this->flashError(__t('workflow_project_not_found'));
+            header('Location: ' . $this->defaultProjectBackUrl($returnTo));
+            return;
+        }
+        if ($id <= 0 && !$this->canCreateProjects()) {
+            $this->flashError(__t('workflow_project_permission_create'));
+            header('Location: ' . $this->defaultProjectBackUrl($returnTo));
+            return;
+        }
+        if ($id > 0 && !$this->canEditProjects()) {
+            $this->flashError(__t('workflow_project_permission_edit'));
+            header('Location: ' . $this->projectFormRedirectUrl($id, $returnTo));
+            return;
+        }
+
         $payload = [
             'WorkflowProjectID' => $id,
             'ProjectCode' => trim((string)($_POST['ProjectCode'] ?? '')),
@@ -149,10 +185,15 @@ final class WorkflowProjectController extends BaseController
             'StartDate' => trim((string)($_POST['StartDate'] ?? '')),
             'TargetEndDate' => trim((string)($_POST['TargetEndDate'] ?? '')),
             'ActualEndDate' => trim((string)($_POST['ActualEndDate'] ?? '')),
-            'Active' => isset($_POST['Active']) ? 1 : 0,
+            'Active' => isset($_POST['Active']) && (string)$_POST['Active'] !== '0' ? 1 : 0,
             'ProjectUserIDs' => $_POST['ProjectUserIDs'] ?? [],
             'ProjectUserRoles' => $_POST['ProjectUserRoles'] ?? [],
         ];
+        if ($id > 0 && (int)($before['Active'] ?? 0) === 1 && $payload['Active'] === 0 && !$this->canDeleteProjects()) {
+            $this->flashError(__t('workflow_project_permission_delete'));
+            header('Location: ' . $this->projectFormRedirectUrl($id, $returnTo));
+            return;
+        }
         $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
         $validationError = $this->validateProjectPayload($payload, $model);
         if ($validationError !== '') {
@@ -190,6 +231,53 @@ final class WorkflowProjectController extends BaseController
             header('Location: ' . $this->projectFormRedirectUrl($id, $returnTo));
             return;
         }
+    }
+
+    public function delete(): void
+    {
+        $this->assertPostWithCsrf('index.php?route=workflow-projects/list');
+
+        $returnTo = $this->normalizeProjectReturnTo((string)($_POST['returnTo'] ?? ''));
+        $redirect = $this->defaultProjectBackUrl($returnTo);
+        if (!$this->canDeleteProjects()) {
+            $this->flashError(__t('workflow_project_permission_delete'));
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        $id = (int)($_POST['WorkflowProjectID'] ?? 0);
+        $model = new WorkflowProjectModel($this->db);
+        if (!$model->supportsWorkflowProjects()) {
+            $this->flashError(__t('workflow_project_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql']));
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        $record = $id > 0 ? $model->findProject($id) : null;
+        if (!$record) {
+            $this->flashError(__t('workflow_project_not_found'));
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
+        try {
+            if (!$model->archiveProject($id, $currentUserId)) {
+                throw new \RuntimeException($model->getLastError() ?: __t('workflow_task_unknown_error'));
+            }
+            $this->auditEvent('DELETE', 'WorkflowProject', (string)$id, [
+                'ProjectCode' => (string)($record['ProjectCode'] ?? ''),
+                'ProjectName' => (string)($record['ProjectName'] ?? ''),
+            ]);
+            $this->flashSuccess(__t('workflow_project_deleted'));
+        } catch (\Throwable $e) {
+            $this->logHandledException('WorkflowProjectController::delete failed', $e, [
+                'WorkflowProjectID' => $id,
+            ]);
+            $this->flashError(__t('workflow_project_delete_failed') . ': ' . $e->getMessage());
+        }
+
+        header('Location: ' . $redirect);
     }
 
     private function normalizeProjectReturnTo(string $returnTo): string
@@ -304,5 +392,30 @@ final class WorkflowProjectController extends BaseController
         }
 
         return $date;
+    }
+
+    private function canCreateProjects(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_PROJECTS_CREATE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canEditProjects(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_PROJECTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canDeleteProjects(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_PROJECTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canCreateRequirements(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canCreateWorkflowTasks(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
     }
 }

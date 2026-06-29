@@ -19,16 +19,17 @@ final class WorkflowRequirementController extends BaseController
 {
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'summary' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'matrix' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'form' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'transition' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'summary' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'matrix' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'form' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'transition' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'create-task' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'upload-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'download-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'delete-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'upload-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'download-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function list(): void
@@ -58,6 +59,10 @@ final class WorkflowRequirementController extends BaseController
             'requirementLevelOptions' => $model->requirementLevelOptions(),
             'workflowProjects' => $projectModel->supportsWorkflowProjects() ? $projectModel->listActiveProjects() : [],
             'tableInstalled' => $model->supportsRequirements(),
+            'canCreateRequirement' => $this->canCreateRequirements(),
+            'canEditRequirement' => $this->canEditRequirements(),
+            'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -92,6 +97,7 @@ final class WorkflowRequirementController extends BaseController
             'requirementLevelOptions' => $model->requirementLevelOptions(),
             'workflowProjects' => $projectModel->supportsWorkflowProjects() ? $projectModel->listActiveProjects() : [],
             'tableInstalled' => $model->supportsRequirements(),
+            'canCreateRequirement' => $this->canCreateRequirements(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -150,6 +156,10 @@ final class WorkflowRequirementController extends BaseController
             'workflowProjects' => $projectModel->supportsWorkflowProjects() ? $projectModel->listActiveProjects() : [],
             'tableInstalled' => $model->supportsRequirements(),
             'workflowLinksInstalled' => $linkModel->supportsWorkflowLinks(),
+            'canCreateRequirement' => $this->canCreateRequirements(),
+            'canEditRequirement' => $this->canEditRequirements(),
+            'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
 
@@ -173,6 +183,11 @@ final class WorkflowRequirementController extends BaseController
         if ($id > 0 && $tableInstalled && !$record) {
             $this->flashError(__t('workflow_requirement_not_found'));
             header('Location: index.php?route=workflow-requirements/list');
+            return;
+        }
+        if ($id <= 0 && !$this->canCreateRequirements()) {
+            $this->flashError(__t('workflow_requirement_permission_create'));
+            header('Location: ' . $this->defaultRequirementBackUrl($returnTo, null, (int)($_GET['workflowProjectID'] ?? 0)));
             return;
         }
 
@@ -252,6 +267,10 @@ final class WorkflowRequirementController extends BaseController
             'requirementAttachments' => $id > 0 && $model->supportsRequirementAttachments() ? $model->listAttachments($id) : [],
             'requirementHistoryInstalled' => $model->supportsRequirementHistory(),
             'requirementHistory' => $id > 0 && $model->supportsRequirementHistory() ? $model->listRequirementHistory($id) : [],
+            'canCreateRequirement' => $this->canCreateRequirements(),
+            'canEditRequirement' => $this->canEditRequirements(),
+            'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'canReviewRequirement' => $this->canReviewRequirements(),
             'canApproveRequirement' => $this->canApproveRequirements(),
             'flash' => SessionHelper::get('flash.message', null),
@@ -275,6 +294,23 @@ final class WorkflowRequirementController extends BaseController
         }
 
         $id = (int)($_POST['WorkflowRequirementID'] ?? 0);
+        $before = $id > 0 ? $model->findRequirement($id) : null;
+        if ($id > 0 && !$before) {
+            $this->flashError(__t('workflow_requirement_not_found'));
+            header('Location: index.php?route=workflow-requirements/list');
+            return;
+        }
+        if ($id <= 0 && !$this->canCreateRequirements()) {
+            $this->flashError(__t('workflow_requirement_permission_create'));
+            header('Location: index.php?route=workflow-requirements/list');
+            return;
+        }
+        if ($id > 0 && !$this->canEditRequirements()) {
+            $this->flashError(__t('workflow_requirement_permission_edit'));
+            header('Location: ' . $this->requirementFormRedirectUrl($id, $returnTo));
+            return;
+        }
+
         $payload = [
             'WorkflowRequirementID' => $id,
             'RequirementCode' => trim((string)($_POST['RequirementCode'] ?? '')),
@@ -295,8 +331,21 @@ final class WorkflowRequirementController extends BaseController
             'OwnerUserID' => ($_POST['OwnerUserID'] ?? '') !== '' ? (int)$_POST['OwnerUserID'] : null,
             'ApprovedByUserID' => ($_POST['ApprovedByUserID'] ?? '') !== '' ? (int)$_POST['ApprovedByUserID'] : null,
             'ApprovedAt' => trim((string)($_POST['ApprovedAt'] ?? '')),
-            'Active' => isset($_POST['Active']) ? 1 : 0,
+            'Active' => isset($_POST['Active']) && (string)$_POST['Active'] !== '0' ? 1 : 0,
         ];
+        if ($id > 0 && (int)($before['Active'] ?? 0) === 1 && $payload['Active'] === 0 && !$this->canDeleteRequirements()) {
+            $this->flashError(__t('workflow_requirement_permission_delete'));
+            header('Location: ' . $this->requirementFormRedirectUrl($id, $returnTo));
+            return;
+        }
+        if ($this->statusRequiresApprovalPermission($payload['RequirementStatusCode'])
+            && (string)($before['RequirementStatusCode'] ?? '') !== $payload['RequirementStatusCode']
+            && !$this->canApproveRequirements()
+        ) {
+            $this->flashError(__t('workflow_requirement_approval_permission_required'));
+            header('Location: ' . $this->requirementFormRedirectUrl($id, $returnTo));
+            return;
+        }
 
         if ($payload['RequirementTitle'] === '') {
             $this->flashError(__t('workflow_requirement_title_required'));
@@ -312,7 +361,6 @@ final class WorkflowRequirementController extends BaseController
         }
 
         $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
-        $before = $id > 0 ? $model->findRequirement($id) : null;
 
         try {
             $savedId = $model->saveRequirement($payload, $currentUserId);
@@ -374,6 +422,59 @@ final class WorkflowRequirementController extends BaseController
             ));
             return;
         }
+    }
+
+    public function delete(): void
+    {
+        $this->assertPostWithCsrf('index.php?route=workflow-requirements/list');
+
+        $model = new WorkflowRequirementModel($this->db);
+        $returnTo = $this->normalizeRequirementReturnTo((string)($_POST['returnTo'] ?? ''));
+        $redirect = $this->defaultRequirementBackUrl($returnTo, null, null);
+        if (!$this->canDeleteRequirements()) {
+            $this->flashError(__t('workflow_requirement_permission_delete'));
+            header('Location: ' . $redirect);
+            return;
+        }
+        if (!$model->supportsRequirements()) {
+            $this->flashError(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql']));
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        $id = (int)($_POST['WorkflowRequirementID'] ?? 0);
+        $record = $id > 0 ? $model->findRequirement($id) : null;
+        if (!$record) {
+            $this->flashError(__t('workflow_requirement_not_found'));
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        if ($returnTo === '') {
+            $redirect = $this->defaultRequirementBackUrl('', !empty($record['ParentRequirementID']) ? (int)$record['ParentRequirementID'] : null, !empty($record['WorkflowProjectID']) ? (int)$record['WorkflowProjectID'] : null);
+        }
+
+        $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
+        try {
+            if (!$model->archiveRequirement($id, $currentUserId)) {
+                throw new \RuntimeException($model->getLastError() ?: __t('workflow_task_unknown_error'));
+            }
+            $after = $model->findRequirement($id) ?: $record;
+            $model->recordRequirementSaveHistory($id, $record, $after, $currentUserId);
+            $this->auditEvent('DELETE', 'WorkflowRequirement', (string)$id, [
+                'RequirementCode' => (string)($record['RequirementCode'] ?? ''),
+                'RequirementTitle' => (string)($record['RequirementTitle'] ?? ''),
+                'WorkflowProjectID' => !empty($record['WorkflowProjectID']) ? (int)$record['WorkflowProjectID'] : null,
+            ]);
+            $this->flashSuccess(__t('workflow_requirement_deleted'));
+        } catch (\Throwable $e) {
+            $this->logHandledException('WorkflowRequirementController::delete failed', $e, [
+                'WorkflowRequirementID' => $id,
+            ]);
+            $this->flashError(__t('workflow_requirement_delete_failed') . ': ' . $e->getMessage());
+        }
+
+        header('Location: ' . $redirect);
     }
 
     public function transition(): void
@@ -458,6 +559,11 @@ final class WorkflowRequirementController extends BaseController
         $record = $requirementID > 0 ? $requirementModel->findRequirement($requirementID) : null;
         if (!$record) {
             $this->flashError(__t('workflow_requirement_not_found'));
+            header('Location: index.php?route=workflow-requirements/list');
+            return;
+        }
+        if (!$this->canViewRequirements()) {
+            $this->flashError(__t('access_denied'));
             header('Location: index.php?route=workflow-requirements/list');
             return;
         }
@@ -960,7 +1066,8 @@ final class WorkflowRequirementController extends BaseController
         if ($userId <= 0) {
             return false;
         }
-        if (in_array('WORKFLOW_OPERATIONS_ADMIN', $perms, true)
+        if (in_array('WORKFLOW_REQUIREMENTS_DELETE', $perms, true)
+            || in_array('WORKFLOW_OPERATIONS_ADMIN', $perms, true)
             || in_array('ADMIN_ALL', $perms, true)
             || in_array('SYSADMIN', $perms, true)
         ) {
@@ -1174,12 +1281,37 @@ final class WorkflowRequirementController extends BaseController
 
     private function canReviewRequirements(): bool
     {
-        return Rbac::canAny(['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+        return $this->canEditRequirements();
     }
 
     private function canApproveRequirements(): bool
     {
         return Rbac::canAny(['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canCreateRequirements(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canViewRequirements(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canEditRequirements(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canDeleteRequirements(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    private function canCreateWorkflowTasks(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
     }
 
     private function statusRequiresApprovalPermission(string $statusCode): bool
