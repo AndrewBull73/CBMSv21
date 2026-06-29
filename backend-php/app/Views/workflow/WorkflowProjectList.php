@@ -128,7 +128,9 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                 ?>
                 <tr>
                   <td>
-                    <div class="fw-semibold"><?= h((string)($row['ProjectName'] ?? '')) ?></div>
+                    <a class="fw-semibold" href="index.php?route=workflow-projects/summary&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                      <?= h((string)($row['ProjectName'] ?? '')) ?>
+                    </a>
                     <?php if (!empty($row['ProjectCode'])): ?>
                       <div class="text-muted small"><?= h((string)$row['ProjectCode']) ?></div>
                     <?php endif; ?>
@@ -166,12 +168,43 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                     <span class="text-muted small">(<?= (int)($row['OpenTaskCount'] ?? 0) ?> <?= h(__t('workflow_task_open')) ?>)</span>
                   </td>
                   <td class="text-end">
-                    <a class="btn btn-sm btn-outline-info" href="index.php?route=workflow-projects/summary&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>"><?= h(__t('workflow_project_summary')) ?></a>
-                    <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>"><?= h(__t('edit')) ?></a>
-                    <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>"><?= h(__t('workflow_project_create_task')) ?></a>
-                    <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>"><?= h(__t('workflow_requirement_create')) ?></a>
-                    <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>"><?= h(__t('workflow_project_view_tasks')) ?></a>
-                    <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>#workflow-project-gantt"><?= h(__t('workflow_project_gantt_chart')) ?></a>
+                    <div class="d-inline-flex justify-content-end align-items-center gap-1">
+                      <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>">
+                        <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                      </a>
+                      <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectActions<?= $projectId ?>" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+                          <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowProjectActions<?= $projectId ?>">
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow-projects/summary&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                              <i class="bi bi-kanban me-2"></i><?= h(__t('workflow_project_summary')) ?>
+                            </a>
+                          </li>
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                              <i class="bi bi-pencil-square me-2"></i><?= h(__t('workflow_project_edit')) ?>
+                            </a>
+                          </li>
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
+                              <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
+                            </a>
+                          </li>
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
+                              <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
+                            </a>
+                          </li>
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>#workflow-project-gantt">
+                              <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
+                            </a>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               <?php endforeach; ?>

@@ -390,12 +390,28 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
           <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
             <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
           </a>
-          <a href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-success">
-            <i class="bi bi-journal-plus me-1"></i><?= h(__t('workflow_requirement_create')) ?>
-          </a>
-          <a href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_view_tasks')) ?>
-          </a>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectSummaryActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowProjectSummaryActions">
+              <li>
+                <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
+                  <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
+                  <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>#workflow-project-gantt">
+                  <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
