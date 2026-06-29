@@ -140,16 +140,27 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
             <span><strong><?= $detailedCount ?></strong> <?= h(__t('workflow_requirement_level_detailed')) ?></span>
           </div>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a href="index.php?route=workflow-requirements/matrix<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>" class="btn btn-sm btn-outline-secondary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-diagram-3 me-1"></i><?= h(__t('workflow_requirement_matrix')) ?>
-          </a>
-          <a href="index.php?route=workflow-requirements/summary<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>" class="btn btn-sm btn-outline-info <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-speedometer2 me-1"></i><?= h(__t('workflow_requirement_summary')) ?>
-          </a>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
           <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_requirement_create')) ?>
+            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
           </a>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowRequirementListActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementListActions">
+              <li>
+                <a class="dropdown-item <?= !$tableInstalled ? 'disabled' : '' ?>" href="index.php?route=workflow-requirements/matrix<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>">
+                  <i class="bi bi-diagram-3 me-2"></i><?= h(__t('workflow_requirement_matrix')) ?>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item <?= !$tableInstalled ? 'disabled' : '' ?>" href="index.php?route=workflow-requirements/summary<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>">
+                  <i class="bi bi-speedometer2 me-2"></i><?= h(__t('workflow_requirement_summary')) ?>
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -333,13 +344,32 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                   </td>
                   <td><?= h((string)($row['OwnerName'] ?? '')) ?></td>
                   <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-requirements/form&id=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>"><?= h(__t('edit')) ?></a>
-                    <?php if (!$isDetailedRequirement): ?>
-                      <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>"><?= h(__t('workflow_requirement_add_child')) ?></a>
-                    <?php endif; ?>
-                    <?php if (!empty($row['WorkflowProjectID'])): ?>
-                      <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow/list&workflowProjectID=<?= (int)$row['WorkflowProjectID'] ?>"><?= h(__t('workflow_project_view_tasks')) ?></a>
-                    <?php endif; ?>
+                    <div class="d-inline-flex gap-1 align-items-center">
+                      <?php if (!$isDetailedRequirement): ?>
+                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>" title="<?= h(__t('workflow_requirement_add_child')) ?>" aria-label="<?= h(__t('workflow_requirement_add_child')) ?>">
+                          <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_level_detailed')) ?>
+                        </a>
+                      <?php endif; ?>
+                      <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowRequirementRowActions<?= $id ?>" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+                          <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementRowActions<?= $id ?>">
+                          <li>
+                            <a class="dropdown-item" href="index.php?route=workflow-requirements/form&id=<?= $id ?>&returnTo=<?= $workflowRequirementReturnParam ?>">
+                              <i class="bi bi-pencil-square me-2"></i><?= h(__t('edit')) ?>
+                            </a>
+                          </li>
+                          <?php if (!empty($row['WorkflowProjectID'])): ?>
+                            <li>
+                              <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= (int)$row['WorkflowProjectID'] ?>">
+                                <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
+                              </a>
+                            </li>
+                          <?php endif; ?>
+                        </ul>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               <?php endforeach; ?>

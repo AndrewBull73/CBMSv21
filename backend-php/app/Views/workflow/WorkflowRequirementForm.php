@@ -339,6 +339,8 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
     padding-top: 1rem;
   }
   @media (max-width: 767.98px) {
+    .requirement-form-actions .dropdown,
+    .requirement-form-actions-top .dropdown,
     .requirement-form-actions .btn,
     .requirement-form-actions-top .btn {
       width: 100%;
@@ -382,11 +384,20 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
             </button>
             <?php if ($workflowProjectID > 0 && $requirementId > 0): ?>
               <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
-                <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
-              <a href="index.php?route=workflow-projects/summary&id=<?= $workflowProjectID ?>" class="btn btn-outline-info">
-                <i class="bi bi-speedometer2 me-1"></i><?= h(__t('workflow_project_summary')) ?>
-              </a>
+              <div class="dropdown">
+                <button class="btn btn-outline-secondary" type="button" id="workflowRequirementFormActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+                  <i class="bi bi-three-dots-vertical"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementFormActions">
+                  <li>
+                    <a class="dropdown-item" href="index.php?route=workflow-projects/summary&id=<?= $workflowProjectID ?>">
+                      <i class="bi bi-speedometer2 me-2"></i><?= h(__t('workflow_project_summary')) ?>
+                    </a>
+                  </li>
+                </ul>
+              </div>
             <?php endif; ?>
           </div>
           <a href="<?= h($backUrl) ?>" class="btn btn-outline-secondary">
@@ -635,7 +646,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           <div class="d-flex gap-2 flex-wrap">
             <?php if ($workflowProjectID > 0 && $requirementId > 0): ?>
               <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
-                <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
             <?php endif; ?>
             <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
@@ -678,8 +689,8 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           <?php else: ?>
             <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
               <div class="fw-semibold"><?= h(__t('workflow_requirement_child_requirements')) ?></div>
-              <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>">
-                <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_requirement_add_child')) ?>
+              <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow-requirements/form&parentRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" title="<?= h(__t('workflow_requirement_add_child')) ?>" aria-label="<?= h(__t('workflow_requirement_add_child')) ?>">
+                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_level_detailed')) ?>
               </a>
             </div>
 
@@ -944,7 +955,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   <div class="col-12 col-lg-2">
                     <button type="submit" class="btn btn-sm btn-outline-success w-100">
                       <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
-                      <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                      <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                     </button>
                   </div>
                 </div>

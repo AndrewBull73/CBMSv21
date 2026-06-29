@@ -89,16 +89,27 @@ $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummar
 
       <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div class="text-muted small"><?= h(__t('workflow_requirement_summary_help')) ?></div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a href="index.php?route=workflow-requirements/matrix<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>" class="btn btn-sm btn-outline-secondary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-diagram-3 me-1"></i><?= h(__t('workflow_requirement_matrix')) ?>
-          </a>
-          <a href="index.php?route=workflow-requirements/list<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-list-ul me-1"></i><?= h(__t('workflow_requirements')) ?>
-          </a>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
           <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementSummaryReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_requirement_create')) ?>
+            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
           </a>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowRequirementSummaryActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowRequirementSummaryActions">
+              <li>
+                <a class="dropdown-item <?= !$tableInstalled ? 'disabled' : '' ?>" href="index.php?route=workflow-requirements/matrix<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>">
+                  <i class="bi bi-diagram-3 me-2"></i><?= h(__t('workflow_requirement_matrix')) ?>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="index.php?route=workflow-requirements/list<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>">
+                  <i class="bi bi-list-ul me-2"></i><?= h(__t('workflow_requirements')) ?>
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 
