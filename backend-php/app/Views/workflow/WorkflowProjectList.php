@@ -170,7 +170,7 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                   <td class="text-end">
                     <div class="d-inline-flex justify-content-end align-items-center gap-1">
                       <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>">
-                        <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                        <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                       </a>
                       <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectActions<?= $projectId ?>" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">

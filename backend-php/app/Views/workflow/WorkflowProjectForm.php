@@ -499,7 +499,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
             </div>
             <div class="d-flex gap-2">
               <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+                <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
               <a href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_view_tasks')) ?>

@@ -388,7 +388,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             <i class="bi bi-pencil-square me-1"></i><?= h(__t('workflow_project_edit')) ?>
           </a>
           <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
-            <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create_task')) ?>
+            <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
           </a>
           <div class="dropdown">
             <button class="btn btn-sm btn-outline-secondary" type="button" id="workflowProjectSummaryActions" data-bs-toggle="dropdown" aria-expanded="false" title="<?= h(__t('actions')) ?>" aria-label="<?= h(__t('actions')) ?>">
