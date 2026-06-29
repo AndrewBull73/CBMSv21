@@ -177,7 +177,7 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                   <td class="text-end">
                     <div class="d-inline-flex justify-content-end align-items-center gap-1">
                       <?php if ($canCreateWorkflowTask): ?>
-                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>">
+                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectListReturnParam ?>">
                           <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                         </a>
                       <?php endif; ?>

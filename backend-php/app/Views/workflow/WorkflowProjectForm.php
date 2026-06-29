@@ -81,6 +81,11 @@ $backUrl = trim((string)($backUrl ?? ''));
 if ($backUrl === '') {
     $backUrl = $returnTo !== '' ? $returnTo : 'index.php?route=workflow-projects/list';
 }
+$currentProjectUrl = $projectId > 0 ? 'index.php?route=workflow-projects/form&id=' . $projectId : $backUrl;
+if ($projectId > 0 && $returnTo !== '') {
+    $currentProjectUrl .= '&returnTo=' . rawurlencode($returnTo);
+}
+$workflowProjectTaskReturnParam = rawurlencode($currentProjectUrl . ($projectId > 0 ? '#workflow-project-gantt' : ''));
 
 $ganttRows = [];
 $unscheduledTasks = [];
@@ -511,7 +516,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
             </div>
             <div class="d-flex gap-2">
               <?php if ($canCreateWorkflowTask): ?>
-                <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
+                <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>" class="btn btn-sm btn-outline-success">
                   <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                 </a>
               <?php endif; ?>
@@ -562,7 +567,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                   <div class="workflow-gantt-task <?= $hasParent ? 'ps-4' : '' ?>">
                     <div class="workflow-gantt-task-title">
                       <?php if ($hasParent): ?><i class="bi bi-arrow-return-right text-muted me-1"></i><?php endif; ?>
-                      <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>">
+                      <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
                         <?= h($taskTitle) ?>
                       </a>
                     </div>
@@ -605,7 +610,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                     }
                   ?>
                   <a class="badge text-bg-light border text-decoration-none"
-                     href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>">
+                     href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
                     #<?= $taskId ?> <?= h($taskTitle) ?>
                   </a>
                 <?php endforeach; ?>

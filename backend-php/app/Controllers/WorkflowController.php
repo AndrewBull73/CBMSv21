@@ -168,6 +168,10 @@ final class WorkflowController extends BaseController
         $currentUserId = (int) SessionHelper::get('auth.user_id', 0);
         $canAdmin = $this->canAdminWorkflowTasks($perms);
         $canEdit = $canAdmin || in_array('WORKFLOW_OPERATIONS_EDIT', $perms, true);
+        $returnTo = $this->normalizeWorkflowReturnTo((string)($_GET['returnTo'] ?? ''));
+        if ($returnTo === '') {
+            $returnTo = $this->normalizeWorkflowReturnTo((string)($_SERVER['HTTP_REFERER'] ?? ''));
+        }
 
         if ($id > 0 && !$task) {
             $this->flashError(__t('invalid_task'));
@@ -313,6 +317,7 @@ final class WorkflowController extends BaseController
             'workflowTaskViewsInstalled' => $viewsInstalled,
             'canAdminWorkflow' => $canAdmin,
             'currentUserId' => $currentUserId,
+            'returnTo' => $returnTo,
             'flash' => SessionHelper::get('flash.message', null),
         ];
 
@@ -330,7 +335,9 @@ final class WorkflowController extends BaseController
 
     public function save(): void
     {
-        $this->assertPostWithCsrf($this->mergeLinkedContextIntoUrl('index.php?route=workflow/list'));
+        $safeReturnTo = $this->normalizeWorkflowReturnTo((string)($_POST['returnTo'] ?? ''));
+        $csrfRedirect = $safeReturnTo !== '' ? $safeReturnTo : 'index.php?route=workflow/list';
+        $this->assertPostWithCsrf($this->mergeLinkedContextIntoUrl($csrfRedirect));
 
         require __DIR__ . '/../../config/db.php';
         $tasksModel = new WorkflowTaskModel($conn);
@@ -785,6 +792,11 @@ final class WorkflowController extends BaseController
         } catch (\Throwable $e) {
             $this->flashError(__t('task_save_failed') . ': ' . $e->getMessage());
             app_log('[WorkflowController@save] Exception', ['error' => $e->getMessage()], 'error');
+        }
+
+        if (!empty($context['returnTo'])) {
+            header('Location: ' . $this->mergeLinkedContextIntoUrl((string)$context['returnTo']));
+            exit;
         }
 
         $this->redirectToWorkflowList($context);
@@ -3054,6 +3066,72 @@ final class WorkflowController extends BaseController
         ];
     }
 
+    private function normalizeWorkflowReturnTo(string $returnTo): string
+    {
+        $returnTo = trim($returnTo);
+        if ($returnTo === '' || preg_match('~[\r\n]~', $returnTo)) {
+            return '';
+        }
+        if (preg_match('~^https?://~i', $returnTo)) {
+            $parts = parse_url($returnTo);
+            $path = (string)($parts['path'] ?? '');
+            $query = (string)($parts['query'] ?? '');
+            $fragment = (string)($parts['fragment'] ?? '');
+            $indexPos = stripos($path, 'index.php');
+            if ($indexPos === false) {
+                return '';
+            }
+            $returnTo = substr($path, $indexPos);
+            if ($query !== '') {
+                $returnTo .= '?' . $query;
+            }
+            if ($fragment !== '') {
+                $returnTo .= '#' . $fragment;
+            }
+        }
+        if (str_starts_with($returnTo, '?')) {
+            $returnTo = 'index.php' . $returnTo;
+        }
+        if (!str_starts_with($returnTo, 'index.php')) {
+            $indexPos = stripos($returnTo, 'index.php');
+            if ($indexPos !== false) {
+                $returnTo = substr($returnTo, $indexPos);
+            }
+        }
+        if (!str_starts_with($returnTo, 'index.php')) {
+            return '';
+        }
+
+        $path = parse_url($returnTo, PHP_URL_PATH);
+        if ($path !== 'index.php') {
+            return '';
+        }
+
+        $query = parse_url($returnTo, PHP_URL_QUERY);
+        if (!is_string($query) || $query === '') {
+            return '';
+        }
+
+        parse_str($query, $params);
+        $route = trim((string)($params['route'] ?? ''));
+        $allowedRoutes = [
+            'workflow/list',
+            'workflow/edit',
+            'workflow-projects/list',
+            'workflow-projects/summary',
+            'workflow-projects/form',
+            'workflow-requirements/list',
+            'workflow-requirements/summary',
+            'workflow-requirements/matrix',
+            'workflow-requirements/form',
+        ];
+        if (!in_array($route, $allowedRoutes, true)) {
+            return '';
+        }
+
+        return $returnTo;
+    }
+
     private function workflowRedirectContextFromPost(): array
     {
         $taskScope = strtolower(trim((string) ($_POST['task_scope'] ?? 'received')));
@@ -3075,6 +3153,7 @@ final class WorkflowController extends BaseController
             'task_scope' => $taskScope,
             'assignedToUserID' => ($_POST['assignedToUserID'] ?? '') !== '' ? (int) $_POST['assignedToUserID'] : null,
             'iframe' => !empty($_POST['iframe']),
+            'returnTo' => $this->normalizeWorkflowReturnTo((string)($_POST['returnTo'] ?? '')),
         ];
     }
 
@@ -3099,6 +3178,7 @@ final class WorkflowController extends BaseController
             'task_scope' => $taskScope,
             'assignedToUserID' => ($_GET['assignedToUserID'] ?? '') !== '' ? (int) $_GET['assignedToUserID'] : null,
             'iframe' => !empty($_GET['iframe']),
+            'returnTo' => $this->normalizeWorkflowReturnTo((string)($_GET['returnTo'] ?? '')),
         ];
     }
 
@@ -3142,6 +3222,9 @@ final class WorkflowController extends BaseController
         }
         if ($context['iframe']) {
             $qs['iframe'] = '1';
+        }
+        if (!empty($context['returnTo'])) {
+            $qs['returnTo'] = (string)$context['returnTo'];
         }
 
         header('Location: ' . $this->mergeLinkedContextIntoUrl('index.php?' . http_build_query($qs)));

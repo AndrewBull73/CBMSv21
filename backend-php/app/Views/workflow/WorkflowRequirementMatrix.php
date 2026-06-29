@@ -388,7 +388,7 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
                   <td class="text-end">
                     <div class="d-inline-flex gap-1 align-items-center">
                       <?php if ($projectId > 0 && $canCreateWorkflowTask): ?>
-                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&workflowRequirementID=<?= $id ?>" title="<?= h(__t('workflow_project_create_task')) ?>" aria-label="<?= h(__t('workflow_project_create_task')) ?>">
+                        <a class="btn btn-sm btn-outline-success" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&workflowRequirementID=<?= $id ?>&returnTo=<?= $workflowRequirementMatrixReturnParam ?>" title="<?= h(__t('workflow_project_create_task')) ?>" aria-label="<?= h(__t('workflow_project_create_task')) ?>">
                           <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                         </a>
                       <?php endif; ?>

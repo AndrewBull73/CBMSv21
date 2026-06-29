@@ -104,6 +104,7 @@ $canAdminWorkflow = !empty($canAdminWorkflow);
 $currentUserId = (int)($currentUserId ?? 0);
 $projectTaskTypeID = (int)($projectTaskTypeID ?? 0);
 $detailsDisabled = $canManageTaskDetails ? '' : 'disabled';
+$returnTo = trim((string)($returnTo ?? ($_GET['returnTo'] ?? '')));
 
 // Preserve navigation/query context if provided
 $q        = (string)($_GET['q']        ?? '');
@@ -905,6 +906,9 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
 
       <?php if ($id > 0): ?>
         <input type="hidden" name="WorkflowTaskID" value="<?= h((string)$id) ?>">
+      <?php endif; ?>
+      <?php if ($returnTo !== ''): ?>
+        <input type="hidden" name="returnTo" value="<?= h($returnTo) ?>">
       <?php endif; ?>
 
       <!-- Preserve navigation context on SAVE -->

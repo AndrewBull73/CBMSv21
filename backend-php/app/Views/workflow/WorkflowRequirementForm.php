@@ -392,7 +392,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
               </button>
             <?php endif; ?>
             <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
-              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
+              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
             <?php endif; ?>
@@ -669,7 +669,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           </a>
           <div class="d-flex gap-2 flex-wrap">
             <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
-              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>" class="btn btn-outline-success">
+              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
             <?php endif; ?>
@@ -1053,7 +1053,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                         <td><?= h((string)($link['WorkflowTaskAssignedToName'] ?? '-')) ?></td>
                         <td><?= h(wf_requirement_date_value($link['WorkflowTaskDueDate'] ?? '') ?: '-') ?></td>
                         <td class="text-end">
-                          <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $workflowProjectID ?>">
+                          <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $workflowProjectID ?>&returnTo=<?= $currentRequirementReturnParam ?>">
                             <?= h(__t('open')) ?>
                           </a>
                         </td>
@@ -1101,7 +1101,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                               <a class="btn btn-sm btn-outline-secondary" href="<?= h($linkedUrl) ?>"><?= h(__t('open')) ?></a>
                             <?php endif; ?>
                             <?php if ($taskId > 0): ?>
-                              <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $workflowProjectID ?>"><?= h(__t('workflow_task_task')) ?></a>
+                              <a class="btn btn-sm btn-outline-primary" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $workflowProjectID ?>&returnTo=<?= $currentRequirementReturnParam ?>"><?= h(__t('workflow_task_task')) ?></a>
                             <?php endif; ?>
                           </div>
                         </td>

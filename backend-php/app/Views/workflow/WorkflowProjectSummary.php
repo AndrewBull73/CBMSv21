@@ -394,7 +394,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             </a>
           <?php endif; ?>
           <?php if ($canCreateWorkflowTask): ?>
-            <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-success">
+            <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-success">
               <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
             </a>
           <?php endif; ?>
@@ -687,7 +687,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
                         </div>
                       </div>
                       <?php if ($linkTaskId > 0): ?>
-                        <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow/edit&id=<?= $linkTaskId ?>&workflowProjectID=<?= $projectId ?>">
+                        <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow/edit&id=<?= $linkTaskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
                           <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_task')) ?>
                         </a>
                       <?php endif; ?>
@@ -742,7 +742,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
               <div class="project-summary-gantt-row">
                 <div class="small <?= $hasParent ? 'ps-4' : '' ?>">
                   <?php if ($hasParent): ?><i class="bi bi-arrow-return-right text-muted me-1"></i><?php endif; ?>
-                  <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>" class="fw-semibold">
+                  <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="fw-semibold">
                     <?= h($taskTitle !== '' ? $taskTitle : __t('workflow_task_number', ['id' => $taskId])) ?>
                   </a>
                   <div class="text-muted"><?= h($barStartDate->format('Y-m-d')) ?> - <?= h($barEndDate->format('Y-m-d')) ?></div>
@@ -776,7 +776,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             <div class="list-group">
               <?php foreach (array_slice($overdueTasks, 0, 6) as $task): ?>
                 <?php $taskId = (int)($task['WorkflowTaskID'] ?? 0); ?>
-                <a class="list-group-item list-group-item-action" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>">
+                <a class="list-group-item list-group-item-action" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
                   <div class="d-flex justify-content-between gap-2">
                     <span class="fw-semibold"><?= h((string)($task['Title'] ?? __t('workflow_task_number', ['id' => $taskId]))) ?></span>
                     <span class="text-danger small"><?= h(wf_project_summary_date_text($task['DueDate'] ?? null)) ?></span>
@@ -795,7 +795,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             <div class="list-group">
               <?php foreach (array_slice($upcomingTasks, 0, 6) as $task): ?>
                 <?php $taskId = (int)($task['WorkflowTaskID'] ?? 0); ?>
-                <a class="list-group-item list-group-item-action" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>">
+                <a class="list-group-item list-group-item-action" href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
                   <div class="d-flex justify-content-between gap-2">
                     <span class="fw-semibold"><?= h((string)($task['Title'] ?? __t('workflow_task_number', ['id' => $taskId]))) ?></span>
                     <span class="small"><?= h(wf_project_summary_date_text($task['DueDate'] ?? null)) ?></span>
@@ -838,7 +838,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
                 <tr>
                   <td class="<?= $hasParent ? 'ps-4' : '' ?>">
                     <?php if ($hasParent): ?><i class="bi bi-arrow-return-right text-muted me-1"></i><?php endif; ?>
-                    <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>">
+                    <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
                       <?= h((string)($task['Title'] ?? __t('workflow_task_number', ['id' => $taskId]))) ?>
                     </a>
                   </td>
