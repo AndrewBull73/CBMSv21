@@ -1056,6 +1056,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
               <div class="col-12 col-md-4 col-lg-2">
                 <label class="form-label" for="PlannedEndDate"><?= h(__t('workflow_task_planned_end')) ?></label>
                 <input type="date" class="form-control" id="PlannedEndDate" name="PlannedEndDate" value="<?= h($valPlannedEndDate) ?>" <?= $detailsDisabled ?>>
+                <div class="invalid-feedback"><?= h(__t('workflow_task_planned_dates_invalid')) ?></div>
               </div>
               <div class="col-12 col-md-4 col-lg-2">
                 <label class="form-label" for="PercentComplete"><?= h(__t('workflow_task_percent_complete')) ?></label>
@@ -2574,6 +2575,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
   const plannedStartInput = document.getElementById('PlannedStartDate');
   const plannedEndInput = document.getElementById('PlannedEndDate');
   const projectBoundedDateInputs = [dueDateInput, plannedStartInput, plannedEndInput].filter(input => input);
+  const plannedDatesInvalidMessage = <?= json_encode(__t('workflow_task_planned_dates_invalid'), JSON_UNESCAPED_SLASHES) ?>;
   const taskTypeInitiallyDisabled = taskTypeSelect ? taskTypeSelect.disabled : false;
   const workflowGroupsInitiallyDisabled = workflowGroupsSelect ? workflowGroupsSelect.disabled : false;
   const projectTaskTypeID = taskTypeSelect ? parseInt(taskTypeSelect.getAttribute('data-project-task-type-id') || '0', 10) : 0;
@@ -2614,6 +2616,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         input.removeAttribute('max');
       }
     });
+    syncPlannedDateConstraints(projectStartDate);
     if (workflowGroupsPanel) {
       workflowGroupsPanel.classList.toggle('d-none', !!hasProject);
     }
@@ -2626,15 +2629,44 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
       }
     }
   };
+  const syncPlannedDateConstraints = (projectStartDate = '') => {
+    if (!plannedEndInput) {
+      return;
+    }
+
+    const plannedStartDate = plannedStartInput ? plannedStartInput.value : '';
+    const minDate = [projectStartDate, plannedStartDate]
+      .filter(value => value !== '')
+      .sort()
+      .pop() || '';
+
+    if (minDate !== '') {
+      plannedEndInput.setAttribute('min', minDate);
+    } else {
+      plannedEndInput.removeAttribute('min');
+    }
+
+    const invalidRange = plannedStartDate !== ''
+      && plannedEndInput.value !== ''
+      && plannedEndInput.value < plannedStartDate;
+    plannedEndInput.setCustomValidity(invalidRange ? plannedDatesInvalidMessage : '');
+  };
   if (projectSelect && projectSelect.tagName === 'SELECT') {
     projectSelect.addEventListener('change', syncProjectTaskType);
   }
+  [plannedStartInput, plannedEndInput].forEach(input => {
+    if (input) {
+      input.addEventListener('input', syncProjectTaskType);
+      input.addEventListener('change', syncProjectTaskType);
+    }
+  });
   syncProjectTaskType();
 
   const forms = document.querySelectorAll('.needs-validation');
   Array.from(forms).forEach(form => {
     form.addEventListener('submit', e => {
       syncProjectTaskType();
+      syncPlannedDateConstraints(getProjectValue() !== '' ? getProjectAttribute('data-project-start') : '');
       if (!syncWorkflowRichTextEditors(form)) {
         e.preventDefault();
         e.stopPropagation();

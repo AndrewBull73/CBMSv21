@@ -357,6 +357,10 @@ final class WorkFlowTaskModel
 
     public function createAndReturnId(array $data): int
     {
+        if (!$this->validateProjectTaskDates($data)) {
+            return 0;
+        }
+
         $sql = "
             INSERT INTO dbo.tblWorkflowTasks
                 (TaskTypeID, StatusID, Title, Description,
@@ -428,6 +432,10 @@ final class WorkFlowTaskModel
 
     public function update(int $id, array $data): bool
     {
+        if (!$this->validateProjectTaskDates($data)) {
+            return false;
+        }
+
         $sql = "
             UPDATE dbo.tblWorkflowTasks
             SET TaskTypeID = :TaskTypeID,
@@ -1804,6 +1812,76 @@ final class WorkFlowTaskModel
     private function normalizePercentComplete($value): float
     {
         return max(0, min(100, round((float)$value, 2)));
+    }
+
+    private function validateProjectTaskDates(array $data): bool
+    {
+        $workflowProjectID = !empty($data['WorkflowProjectID']) ? (int)$data['WorkflowProjectID'] : 0;
+        $plannedStartDate = $this->normalizeTaskDateForCompare($data['PlannedStartDate'] ?? null);
+        $plannedEndDate = $this->normalizeTaskDateForCompare($data['PlannedEndDate'] ?? null);
+
+        if ($plannedStartDate !== '' && $plannedEndDate !== '' && $plannedEndDate < $plannedStartDate) {
+            $this->lastError = 'Planned end date cannot be before planned start date.';
+            return false;
+        }
+
+        if ($workflowProjectID <= 0 || !$this->tableExists('dbo.tblWorkflowProjects')) {
+            return true;
+        }
+
+        try {
+            $st = $this->conn->prepare("
+                SELECT TOP 1 StartDate, TargetEndDate
+                FROM dbo.tblWorkflowProjects
+                WHERE WorkflowProjectID = :workflowProjectID
+            ");
+            $st->execute([':workflowProjectID' => $workflowProjectID]);
+            $project = $st->fetch(PDO::FETCH_ASSOC);
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
+
+        if (!$project) {
+            $this->lastError = 'Workflow project not found.';
+            return false;
+        }
+
+        $projectStartDate = $this->normalizeTaskDateForCompare($project['StartDate'] ?? null);
+        $projectEndDate = $this->normalizeTaskDateForCompare($project['TargetEndDate'] ?? null);
+        $dateFields = [
+            'DueDate' => 'Due date',
+            'PlannedStartDate' => 'Planned start date',
+            'PlannedEndDate' => 'Planned end date',
+        ];
+
+        foreach ($dateFields as $field => $label) {
+            $taskDate = $this->normalizeTaskDateForCompare($data[$field] ?? null);
+            if ($taskDate === '') {
+                continue;
+            }
+            if ($projectStartDate !== '' && $taskDate < $projectStartDate) {
+                $this->lastError = $label . ' must be on or after the project start date (' . $projectStartDate . ').';
+                return false;
+            }
+            if ($projectEndDate !== '' && $taskDate > $projectEndDate) {
+                $this->lastError = $label . ' must be on or before the project target end date (' . $projectEndDate . ').';
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function normalizeTaskDateForCompare($value): string
+    {
+        $date = trim((string)$value);
+        if ($date === '') {
+            return '';
+        }
+
+        $timestamp = strtotime($date);
+        return $timestamp ? gmdate('Y-m-d', $timestamp) : $date;
     }
 
     private function normalizeDueState($value): string
