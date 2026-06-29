@@ -125,7 +125,11 @@ final class WorkflowProjectModel
                     p.UpdatedBy,
                     owner.DisplayName,
                     owner.Username
-                ORDER BY p.Active DESC, p.ProjectStatusCode ASC, p.ProjectName ASC
+                ORDER BY
+                    CASE WHEN p.StartDate IS NULL THEN 1 ELSE 0 END ASC,
+                    p.StartDate ASC,
+                    p.ProjectName ASC,
+                    p.WorkflowProjectID ASC
             ";
             $stmt = $this->conn->prepare($sql);
             $stmt->execute($params);
