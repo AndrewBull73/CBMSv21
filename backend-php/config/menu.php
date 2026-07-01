@@ -350,6 +350,7 @@ return [
         'children' => [
           ['label' => 'Test Scripts', 'code' => 'TSSC', 'route' => 'screen-tests/scenarios', 'icon' => 'list-check', 'active' => ['screen-tests/scenarios', 'screen-tests/runner'], 'roles' => [], 'perms' => ['AUTHENTICATED'], 'enabled' => $testingEnabled],
           ['label' => 'Test Results', 'code' => 'TSSR', 'route' => 'screen-tests/summary', 'icon' => 'table', 'active' => ['screen-tests/summary'], 'roles' => [], 'perms' => ['AUTHENTICATED'], 'enabled' => $testingEnabled],
+          ['label' => 'Test Script Catalogue', 'code' => 'TSTC', 'route' => 'screen-tests-admin/scenarios', 'icon' => 'journal-text', 'active' => ['screen-tests-admin/*'], 'roles' => [], 'perms' => ['USERS_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
         ],
       ],
     ],
@@ -460,14 +461,36 @@ return [
     'icon'  => 'list-task',
     'roles' => [],
     'perms' => ['WORKFLOW_OPERATIONS_VIEW','WORKFLOW_OPERATIONS_EDIT','WORKFLOW_OPERATIONS_ADMIN','WORKFLOW_PROJECTS_VIEW','WORKFLOW_PROJECTS_CREATE','WORKFLOW_PROJECTS_EDIT','WORKFLOW_PROJECTS_DELETE','WORKFLOW_REQUIREMENTS_VIEW','WORKFLOW_REQUIREMENTS_CREATE','WORKFLOW_REQUIREMENTS_EDIT','WORKFLOW_REQUIREMENTS_DELETE','USERS_VIEW','USERS_ADMIN','ADMIN_ALL','SYSADMIN'],
-    'active' => ['workflow/*','workflow-projects/*','workflow-requirements/*','workflow-user-groups/*'],
+    'active' => ['workflow/*','workflow-projects/*','workflow-requirements/*','workflow-issues/*','workflow-user-groups/*'],
     'children' => [
       ['label'=>__t('menu_workflow_tasks'),'code'=>'ADWF','route'=>'workflow/list','icon'=>'list-task','active'=>['workflow/*'],'roles'=>[],'perms'=>['WORKFLOW_OPERATIONS_VIEW','WORKFLOW_OPERATIONS_EDIT','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>__t('workflow_projects'),'code'=>'ADWP','route'=>'workflow-projects/list','icon'=>'kanban','active'=>['workflow-projects/*'],'roles'=>[],'perms'=>['WORKFLOW_PROJECTS_VIEW','WORKFLOW_PROJECTS_CREATE','WORKFLOW_PROJECTS_EDIT','WORKFLOW_PROJECTS_DELETE','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>__t('workflow_requirements'),'code'=>'ADWR','route'=>'workflow-requirements/list','icon'=>'journal-richtext','active'=>['workflow-requirements/*'],'roles'=>[],'perms'=>['WORKFLOW_REQUIREMENTS_VIEW','WORKFLOW_REQUIREMENTS_CREATE','WORKFLOW_REQUIREMENTS_EDIT','WORKFLOW_REQUIREMENTS_DELETE','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>__t('workflow_requirement_summary'),'code'=>'ADRS','route'=>'workflow-requirements/summary','icon'=>'speedometer2','active'=>['workflow-requirements/summary'],'roles'=>[],'perms'=>['WORKFLOW_REQUIREMENTS_VIEW','WORKFLOW_REQUIREMENTS_CREATE','WORKFLOW_REQUIREMENTS_EDIT','WORKFLOW_REQUIREMENTS_DELETE','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>__t('workflow_requirement_matrix'),'code'=>'ADRM','route'=>'workflow-requirements/matrix','icon'=>'diagram-3','active'=>['workflow-requirements/matrix'],'roles'=>[],'perms'=>['WORKFLOW_REQUIREMENTS_VIEW','WORKFLOW_REQUIREMENTS_CREATE','WORKFLOW_REQUIREMENTS_EDIT','WORKFLOW_REQUIREMENTS_DELETE','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>__t('workflow_issues'),'code'=>'ADWI','route'=>'workflow-issues/list','icon'=>'exclamation-triangle','active'=>['workflow-issues/*'],'roles'=>[],'perms'=>['WORKFLOW_ISSUES_VIEW','WORKFLOW_ISSUES_CREATE','WORKFLOW_ISSUES_EDIT','WORKFLOW_ISSUES_DELETE','WORKFLOW_OPERATIONS_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'Workflow User Groups','code'=>'ADWG','route'=>'workflow-user-groups/list','icon'=>'people','active'=>['workflow-user-groups/*'],'roles'=>[],'perms'=>['WORKFLOW_OPERATIONS_VIEW','WORKFLOW_OPERATIONS_EDIT','WORKFLOW_OPERATIONS_ADMIN','USERS_VIEW','USERS_ADMIN','ADMIN_ALL','SYSADMIN']],
+    ],
+  ],
+
+  [
+    'label' => 'Training',
+    'code'  => 'TR',
+    'icon'  => 'mortarboard',
+    'roles' => [],
+    'perms' => ['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],
+    'active' => ['training/*','training-admin/*','training-certifications/*'],
+    'enabled' => $trainingEnabled,
+    'children' => [
+      ['label'=>'Training Dashboard','code'=>'TRDB','route'=>'training/dashboard','icon'=>'speedometer2','active'=>['training/dashboard'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Scenarios','code'=>'TRSC','route'=>'training/scenarios','icon'=>'list-check','active'=>['training/scenarios','training/runner','training/users','training/users-edit'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Certifications','code'=>'TRCF','route'=>'training-certifications/modules','icon'=>'award','active'=>['training-certifications/modules','training-certifications/take','training-certifications/result'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Operations','code'=>'TROP','route'=>'training-admin/operations','icon'=>'clipboard2-check','active'=>['training-admin/operations','training-admin/session-dashboard','training-admin/validation'],'roles'=>[],'perms'=>['TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Summary','code'=>'TRSM','route'=>'training/summary','icon'=>'mortarboard','active'=>['training/summary'],'roles'=>[],'perms'=>['TRAINING_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Certification Results','code'=>'TRCR','route'=>'training-certifications/results','icon'=>'table','active'=>['training-certifications/results'],'roles'=>[],'perms'=>['TRAINING_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Catalogue','code'=>'TRCG','route'=>'training-admin/scenarios','icon'=>'journal-text','active'=>['training-admin/scenarios','training-admin/scenario-form','training-admin/steps','training-admin/step-form','training-admin/translations'],'roles'=>[],'perms'=>['TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Certification Catalogue','code'=>'TRCC','route'=>'training-certifications/admin','icon'=>'award-fill','active'=>['training-certifications/admin','training-certifications/form','training-certifications/questions','training-certifications/question-form'],'roles'=>[],'perms'=>['TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Matrix','code'=>'TRMX','route'=>'training-admin/matrix','icon'=>'diagram-3','active'=>['training-admin/matrix'],'roles'=>[],'perms'=>['TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
     ],
   ],
 
@@ -477,7 +500,7 @@ return [
     'icon'  => 'gear',
     'roles' => [],
     'perms' => ['USERS_VIEW','ROLES_VIEW','AUDIT_VIEW','HEALTH_VIEW','SESSION_VIEW','METRICS_VIEW','SYSADMIN','ADMIN_ALL'],
-    'active' => ['users/*','roles/*','access-matrix/*','sessions/*','session/*','training/*','training-admin/*','screen-tests-admin/*','audit/*','metrics/*','health/*','application-log/*','emailqueue/*','email-templates/*'],
+    'active' => ['users/*','roles/*','access-matrix/*','sessions/*','session/*','audit/*','metrics/*','health/*','application-log/*','emailqueue/*','email-templates/*'],
     'children' => [
       [
         'label' => 'Access & Security',
@@ -491,22 +514,6 @@ return [
           ['label'=>'Access Matrix','code'=>'ADAX','route'=>'access-matrix/index','icon'=>'shield-check','active'=>['access-matrix/*'],'roles'=>[],'perms'=>['ROLES_VIEW','ROLES_ADMIN','ADMIN_ALL','SYSADMIN']],
           ['label'=>__t('menu_active_sessions'),'code'=>'ADSE','route'=>'sessions/index','icon'=>'activity','active'=>['sessions/*'],'roles'=>[],'perms'=>['SESSION_VIEW']],
           ['label'=>__t('menu_session_vars'),'code'=>'ADSV','route'=>'session/list','icon'=>'person-badge','active'=>['session/*'],'roles'=>[],'perms'=>['SESSION_VIEW','ADMIN_ALL','SYSADMIN']],
-        ],
-      ],
-      [
-        'label' => 'Training',
-        'code'  => 'ADTR',
-        'icon'  => 'mortarboard',
-        'roles' => [],
-        'perms' => ['USERS_VIEW','USERS_EDIT','USERS_ADMIN','ADMIN_ALL','SYSADMIN'],
-        'enabled' => $trainingEnabled,
-        'children' => [
-          ['label'=>'Training Scenarios','code'=>'ADTC','route'=>'training/scenarios','icon'=>'list-check','active'=>['training/*'],'roles'=>[],'perms'=>['USERS_VIEW','USERS_EDIT','USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-          ['label'=>'Training Summary','code'=>'ADTS','route'=>'training/summary','icon'=>'mortarboard','active'=>['training/*'],'roles'=>[],'perms'=>['USERS_VIEW','USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-          ['label'=>'Training Catalogue','code'=>'ADTG','route'=>'training-admin/scenarios','icon'=>'journal-text','active'=>['training-admin/scenarios','training-admin/scenario-form','training-admin/steps','training-admin/step-form','training-admin/translations'],'roles'=>[],'perms'=>['USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-          ['label'=>'Training Matrix','code'=>'ADTM','route'=>'training-admin/matrix','icon'=>'diagram-3','active'=>['training-admin/matrix'],'roles'=>[],'perms'=>['USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-          ['label'=>'Training Operations','code'=>'ADTO','route'=>'training-admin/operations','icon'=>'clipboard2-check','active'=>['training-admin/operations','training-admin/session-dashboard','training-admin/validation'],'roles'=>[],'perms'=>['USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-          ['label'=>'Test Script Catalogue','code'=>'ADTT','route'=>'screen-tests-admin/scenarios','icon'=>'journal-text','active'=>['screen-tests-admin/*'],'roles'=>[],'perms'=>['USERS_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$testingEnabled],
         ],
       ],
       [

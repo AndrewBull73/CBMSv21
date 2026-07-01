@@ -13,8 +13,9 @@ class HelpController extends BaseController
         $safeScreen = preg_replace('/[^a-zA-Z0-9_\-\/]/', '', strtolower($screen));
 
         // Build base key: e.g. "users/list" → "UsersList"
-        $parts   = explode('/', $safeScreen);
+        $parts = preg_split('/[\/_-]+/', $safeScreen) ?: [];
         $viewKey = implode('', array_map('ucfirst', $parts));
+        $legacyViewKey = implode('', array_map('ucfirst', explode('/', $safeScreen)));
 
         // Active language, e.g. "en", "fr", "es"
         $lang = Lang::getActiveLang();
@@ -22,9 +23,17 @@ class HelpController extends BaseController
         // Try language-specific file first: UsersList.en.php
         $viewFile = __DIR__ . "/../Views/help/{$viewKey}.{$lang}.php";
 
+        if (!is_file($viewFile) && $legacyViewKey !== $viewKey) {
+            $viewFile = __DIR__ . "/../Views/help/{$legacyViewKey}.{$lang}.php";
+        }
+
         // If not found, try English fallback
         if (!is_file($viewFile)) {
             $viewFile = __DIR__ . "/../Views/help/{$viewKey}.en.php";
+        }
+
+        if (!is_file($viewFile) && $legacyViewKey !== $viewKey) {
+            $viewFile = __DIR__ . "/../Views/help/{$legacyViewKey}.en.php";
         }
 
         // If still not found, fall back to default help in the active language

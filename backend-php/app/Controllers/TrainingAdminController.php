@@ -5,6 +5,7 @@ namespace App\Controllers;
 
 use App\Models\TrainingCatalogAdminModel;
 use App\Models\TrainingManagementModel;
+use App\Models\WorkflowUserGroupModel;
 use App\Shared\Lang;
 use App\Shared\SessionHelper;
 
@@ -14,7 +15,41 @@ require_once __DIR__ . '/../../shared/training_features.php';
 final class TrainingAdminController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'scenarios' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'scenario-form' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'scenarioForm' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-scenario' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveScenario' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'steps' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'step-form' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'stepForm' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-step' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveStep' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'archive-step' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'archiveStep' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'translations' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-translations' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveTranslations' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'operations' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'matrix' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'user-search' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'userSearch' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-path' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'savePath' => ['auth' => true, 'permsAny' => ['TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-assignment' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveAssignment' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cancel-assignment' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cancelAssignment' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-session' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveSession' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'session-dashboard' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'sessionDashboard' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-evidence' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveEvidence' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'validation' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'resolve-stuck' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'resolveStuck' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function scenarios(): void
@@ -23,6 +58,7 @@ final class TrainingAdminController extends BaseController
 
         $filters = [
             'q' => trim((string) ($_GET['q'] ?? '')),
+            'module' => trim((string) ($_GET['module'] ?? '')),
             'active' => trim((string) ($_GET['active'] ?? '1')),
         ];
 
@@ -32,6 +68,7 @@ final class TrainingAdminController extends BaseController
             'title' => 'Training Catalogue',
             'rows' => $tableInstalled ? $model->listScenarios($filters) : [],
             'filters' => $filters,
+            'moduleOptions' => $tableInstalled ? $model->listModuleOptions() : [],
             'tableInstalled' => $tableInstalled,
         ]);
     }
@@ -144,7 +181,7 @@ final class TrainingAdminController extends BaseController
             'stepSupport' => ($tableInstalled && $scenarioCode !== '' && $stepNo > 0)
                 ? $this->managementModel()->getStepSupport($scenarioCode, $stepNo)
                 : [],
-            'managementInstalled' => $this->managementModel()->supportsManagementTables(),
+            'managementInstalled' => $this->managementModel()->supportsStepSupportTables(),
         ]);
     }
 
@@ -313,21 +350,82 @@ final class TrainingAdminController extends BaseController
 
         $catalog = $this->model();
         $management = $this->managementModel();
+        $workflowUserGroupModel = new WorkflowUserGroupModel($this->db);
         $catalogInstalled = $catalog->supportsScenarioCatalog();
         $managementInstalled = $management->supportsManagementTables();
+        $workflowUserGroupsInstalled = $workflowUserGroupModel->supportsWorkflowUserGroups();
         $scenarioOptions = $catalogInstalled ? $catalog->listScenarioOptions(false) : [];
+        $paths = $managementInstalled ? $management->listPaths() : [];
+        $selectedPathSessionKey = 'training.operations.selected_path_code';
+        if (isset($_GET['clear_path'])) {
+            SessionHelper::forget($selectedPathSessionKey);
+        }
+        $selectedPathCode = array_key_exists('path_code', $_GET)
+            ? trim((string) ($_GET['path_code'] ?? ''))
+            : trim((string) SessionHelper::get($selectedPathSessionKey, ''));
+        $selectedPath = null;
+        if ($selectedPathCode !== '' && $managementInstalled) {
+            $selectedPath = $management->getPath($selectedPathCode);
+            if ($selectedPath === null) {
+                $selectedPathCode = '';
+                SessionHelper::forget($selectedPathSessionKey);
+            } else {
+                SessionHelper::set($selectedPathSessionKey, $selectedPathCode);
+            }
+        } elseif (array_key_exists('path_code', $_GET) || isset($_GET['clear_path'])) {
+            SessionHelper::forget($selectedPathSessionKey);
+        }
 
         $this->render('trainingadmin/Operations', [
             'title' => 'Training Operations',
             'catalogInstalled' => $catalogInstalled,
             'managementInstalled' => $managementInstalled,
-            'paths' => $managementInstalled ? $management->listPaths() : [],
-            'assignments' => $managementInstalled ? $management->listAssignments(['status' => 'assigned']) : [],
+            'paths' => $paths,
+            'selectedPathCode' => $selectedPathCode,
+            'selectedPath' => $selectedPath,
+            'assignments' => $managementInstalled ? $management->listAssignments(['status' => 'open', 'path_code' => $selectedPathCode]) : [],
             'sessions' => $managementInstalled ? $management->listSessions() : [],
             'stuckEvents' => $managementInstalled ? $management->listStuckEvents('open') : [],
             'cleanupTags' => $managementInstalled ? $management->listCleanupTags() : [],
             'scenarioOptions' => $scenarioOptions,
+            'workflowUserGroups' => $workflowUserGroupsInstalled ? $workflowUserGroupModel->listGroups('', '1') : [],
+            'workflowUserGroupsInstalled' => $workflowUserGroupsInstalled,
         ]);
+    }
+
+    public function userSearch(): void
+    {
+        $this->ensureTrainingEnabled();
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            $this->ensureManagementInstalled();
+            $rows = $this->managementModel()->searchUsers(
+                trim((string) ($_GET['q'] ?? '')),
+                (int) ($_GET['limit'] ?? 50)
+            );
+            $items = [];
+            foreach ($rows as $row) {
+                $userId = (int) ($row['UserID'] ?? 0);
+                if ($userId <= 0) {
+                    continue;
+                }
+                $displayName = trim((string) ($row['DisplayName'] ?? ''));
+                $username = trim((string) ($row['Username'] ?? ''));
+                $email = trim((string) ($row['Email'] ?? ''));
+                $label = $displayName !== '' ? $displayName : ($username !== '' ? $username : ('User #' . $userId));
+                $items[] = [
+                    'id' => $userId,
+                    'label' => $label,
+                    'username' => $username,
+                    'email' => $email,
+                ];
+            }
+            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
     }
 
     public function matrix(): void
@@ -410,6 +508,7 @@ final class TrainingAdminController extends BaseController
                 'ActiveFlag' => isset($_POST['ActiveFlag']) ? 1 : 0,
                 'ScenarioCodes' => trim((string) ($_POST['ScenarioCodes'] ?? '')),
             ], (int) SessionHelper::get('auth.user_id', 0));
+            SessionHelper::set('training.operations.selected_path_code', $pathCode);
             $this->flashSuccess('Training path saved.');
             header('Location: index.php?route=training-admin/operations&path_code=' . urlencode($pathCode));
             return;
@@ -429,21 +528,80 @@ final class TrainingAdminController extends BaseController
             return;
         }
 
+        $returnPathCode = trim((string) ($_POST['return_path_code'] ?? $_POST['PathCode'] ?? ''));
+
         try {
             $this->ensureManagementInstalled();
-            $count = $this->managementModel()->saveAssignment([
-                'UserIDs' => trim((string) ($_POST['UserIDs'] ?? '')),
+            $selectedUserIds = is_array($_POST['AssignmentUserIDs'] ?? null) ? $_POST['AssignmentUserIDs'] : [];
+            $selectedUserIdsText = implode(',', array_filter(array_map(
+                static fn($userId): string => (string) max(0, (int) $userId),
+                $selectedUserIds
+            )));
+            $manualUserIdsText = trim((string) ($_POST['ManualUserIDs'] ?? $_POST['UserIDs'] ?? ''));
+            $selectedGroupIds = $this->normalizeIntArray($_POST['WorkflowUserGroupIDs'] ?? []);
+            $groupUserIds = [];
+            if ($selectedGroupIds !== []) {
+                $workflowUserGroupModel = new WorkflowUserGroupModel($this->db);
+                if (!$workflowUserGroupModel->supportsWorkflowUserGroups()) {
+                    throw new \RuntimeException('Workflow user group tables are not installed.');
+                }
+                foreach ($workflowUserGroupModel->listActiveMembersForGroups($selectedGroupIds) as $row) {
+                    $groupUserId = (int) ($row['UserID'] ?? 0);
+                    if ($groupUserId > 0) {
+                        $groupUserIds[] = $groupUserId;
+                    }
+                }
+            }
+            $groupUserIdsText = implode(',', $groupUserIds);
+            $userIdsText = trim($selectedUserIdsText . ',' . $manualUserIdsText . ',' . $groupUserIdsText, " \t\n\r\0\x0B,");
+
+            $result = $this->managementModel()->saveAssignment([
+                'UserIDs' => $userIdsText,
                 'PathCode' => trim((string) ($_POST['PathCode'] ?? '')),
                 'ScenarioCode' => trim((string) ($_POST['ScenarioCode'] ?? '')),
                 'DueDate' => trim((string) ($_POST['DueDate'] ?? '')),
                 'Notes' => trim((string) ($_POST['Notes'] ?? '')),
+                'SourceRef' => 'self_paced',
             ], (int) SessionHelper::get('auth.user_id', 0));
-            $this->flashSuccess($count . ' training assignment' . ($count === 1 ? '' : 's') . ' created.');
+            $created = (int) ($result['created'] ?? 0);
+            $skipped = (int) ($result['skipped'] ?? 0);
+            $message = $created . ' training assignment' . ($created === 1 ? '' : 's') . ' created.';
+            if ($skipped > 0) {
+                $message .= ' ' . $skipped . ' already assigned and skipped.';
+            }
+            $this->flashSuccess($message);
         } catch (\Throwable $e) {
             $this->flashError('Training assignment failed: ' . $e->getMessage());
         }
 
-        header('Location: index.php?route=training-admin/operations');
+        header('Location: index.php?route=training-admin/operations' . ($returnPathCode !== '' ? '&path_code=' . urlencode($returnPathCode) : '') . '#training-ops-assignments');
+    }
+
+    public function cancelAssignment(): void
+    {
+        $this->ensureTrainingEnabled();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        $returnPathCode = trim((string) ($_POST['return_path_code'] ?? ''));
+        $assignmentId = (int) ($_POST['TrainingAssignmentID'] ?? 0);
+
+        try {
+            $this->ensureManagementInstalled();
+            $cancelled = $this->managementModel()->cancelAssignment($assignmentId, (int) SessionHelper::get('auth.user_id', 0));
+            if ($cancelled) {
+                $this->flashSuccess('Training assignment removed.');
+            } else {
+                $this->flashError('Training assignment could not be removed. It may already be completed or cancelled.');
+            }
+        } catch (\Throwable $e) {
+            $this->flashError('Training assignment remove failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=training-admin/operations' . ($returnPathCode !== '' ? '&path_code=' . urlencode($returnPathCode) : '') . '#training-ops-assignments');
     }
 
     public function saveSession(): void
@@ -455,25 +613,73 @@ final class TrainingAdminController extends BaseController
             return;
         }
 
+        $returnPathCode = trim((string) ($_POST['return_path_code'] ?? $_POST['PathCode'] ?? ''));
+
         try {
             $this->ensureManagementInstalled();
+            $sessionUserIds = is_array($_POST['SessionUserIDs'] ?? null) ? $_POST['SessionUserIDs'] : [];
+            $sessionUserIdsText = implode(',', array_filter(array_map(
+                static fn($userId): string => (string) max(0, (int) $userId),
+                $sessionUserIds
+            )));
+            $legacyUserIdsText = trim((string) ($_POST['UserIDs'] ?? ''));
+            $participantUserIdsText = trim($sessionUserIdsText . ',' . $legacyUserIdsText, " \t\n\r\0\x0B,");
+            $pathCode = trim((string) ($_POST['PathCode'] ?? ''));
+            $scenarioCode = trim((string) ($_POST['ScenarioCode'] ?? ''));
+            $auditUserId = (int) SessionHelper::get('auth.user_id', 0);
+
             $sessionId = $this->managementModel()->saveSession([
                 'SessionCode' => trim((string) ($_POST['SessionCode'] ?? '')),
                 'SessionTitle' => trim((string) ($_POST['SessionTitle'] ?? '')),
                 'InstructorUserID' => (int) ($_POST['InstructorUserID'] ?? 0),
-                'PathCode' => trim((string) ($_POST['PathCode'] ?? '')),
-                'ScenarioCode' => trim((string) ($_POST['ScenarioCode'] ?? '')),
+                'PathCode' => $pathCode,
+                'ScenarioCode' => $scenarioCode,
                 'ScheduledAt' => trim((string) ($_POST['ScheduledAt'] ?? '')),
                 'Status' => trim((string) ($_POST['Status'] ?? 'planned')),
                 'Notes' => trim((string) ($_POST['Notes'] ?? '')),
-                'UserIDs' => trim((string) ($_POST['UserIDs'] ?? '')),
-            ], (int) SessionHelper::get('auth.user_id', 0));
-            $this->flashSuccess('Training session saved.');
+                'UserIDs' => $participantUserIdsText,
+            ], $auditUserId);
+
+            $assignmentMessage = '';
+            if (isset($_POST['CreateParticipantAssignments'])) {
+                if ($participantUserIdsText === '') {
+                    $assignmentMessage = ' No participant dashboard assignments were created because no participants were selected.';
+                } elseif ($pathCode === '' && $scenarioCode === '') {
+                    throw new \RuntimeException('To add participants to learner dashboards, select a course/path or scenario scope.');
+                } else {
+                    $assignmentResult = $this->managementModel()->saveAssignment([
+                        'UserIDs' => $participantUserIdsText,
+                        'PathCode' => $pathCode,
+                        'ScenarioCode' => $scenarioCode,
+                        'DueDate' => '',
+                        'Notes' => 'Created from instructor-led session #' . $sessionId . '.',
+                        'SourceRef' => 'training_session:' . $sessionId,
+                    ], $auditUserId);
+                    $created = (int) ($assignmentResult['created'] ?? 0);
+                    $skipped = (int) ($assignmentResult['skipped'] ?? 0);
+                    $assignmentMessage = ' ' . $created . ' participant dashboard assignment' . ($created === 1 ? '' : 's') . ' created.';
+                    if ($skipped > 0) {
+                        $assignmentMessage .= ' ' . $skipped . ' already assigned and skipped.';
+                    }
+                }
+            }
+
+            $this->flashSuccess('Training session saved.' . $assignmentMessage);
             header('Location: index.php?route=training-admin/session-dashboard&session_id=' . $sessionId);
             return;
         } catch (\Throwable $e) {
-            $this->flashError('Training session save failed: ' . $e->getMessage());
-            header('Location: index.php?route=training-admin/operations');
+            if (function_exists('app_log')) {
+                app_log('Training session save failed', [
+                    'error' => $e->getMessage(),
+                    'session_code' => trim((string) ($_POST['SessionCode'] ?? '')),
+                    'path_code' => $returnPathCode,
+                ], 'error');
+            }
+            $message = $e instanceof \RuntimeException && !$e instanceof \PDOException
+                ? $e->getMessage()
+                : 'An unexpected error occurred while saving the training session. Please check the application log for details.';
+            $this->flashError('Training session save failed: ' . $message);
+            header('Location: index.php?route=training-admin/operations' . ($returnPathCode !== '' ? '&path_code=' . urlencode($returnPathCode) : '') . '#training-ops-sessions');
             return;
         }
     }
@@ -719,6 +925,23 @@ final class TrainingAdminController extends BaseController
             }
             return true;
         }));
+    }
+
+    private function normalizeIntArray($raw): array
+    {
+        if (!is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        $ids = [];
+        foreach ($raw as $value) {
+            $id = (int) $value;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return array_values($ids);
     }
 
     private function ensureCatalogInstalled(): void

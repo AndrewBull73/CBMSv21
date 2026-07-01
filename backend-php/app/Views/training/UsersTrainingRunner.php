@@ -10,6 +10,52 @@ if (!function_exists('h')) {
     }
 }
 
+if (!function_exists('training_runner_normalize_checkpoint')) {
+    function training_runner_normalize_checkpoint(array $checkpoint): array
+    {
+        if (($checkpoint['type'] ?? '') === 'multiple_choice' && !empty($checkpoint['options'])) {
+            return $checkpoint;
+        }
+
+        $expectedAnswer = trim((string) ($checkpoint['expected_answer'] ?? ''));
+        if ($expectedAnswer === '' || !str_starts_with($expectedAnswer, '{')) {
+            return $checkpoint;
+        }
+
+        $payload = json_decode($expectedAnswer, true);
+        if (!is_array($payload) || strtolower(trim((string) ($payload['type'] ?? ''))) !== 'multiple_choice') {
+            return $checkpoint;
+        }
+
+        $options = [];
+        foreach (array_values(is_array($payload['options'] ?? null) ? $payload['options'] : []) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $key = trim((string) ($option['key'] ?? ''));
+            $label = trim((string) ($option['label'] ?? $option['text'] ?? ''));
+            if ($key === '' || $label === '') {
+                continue;
+            }
+            $options[] = [
+                'key' => $key,
+                'label' => $label,
+            ];
+        }
+
+        if ($options === []) {
+            return $checkpoint;
+        }
+
+        $checkpoint['type'] = 'multiple_choice';
+        $checkpoint['correct'] = trim((string) ($payload['correct'] ?? ''));
+        $checkpoint['options'] = $options;
+        $checkpoint['explanation'] = trim((string) ($payload['explanation'] ?? ($checkpoint['explanation'] ?? '')));
+
+        return $checkpoint;
+    }
+}
+
 $scenario = is_array($scenario ?? null) ? $scenario : [];
 $trainingState = is_array($trainingState ?? null) ? $trainingState : null;
 $currentStep = is_array($currentStep ?? null) ? $currentStep : null;
@@ -26,6 +72,32 @@ $currentStepNote = trim((string) ($currentStepNote ?? ''));
 $scenarioId = (string) ($scenario['id'] ?? \App\Shared\TrainingScenarioCatalog::USERS_CREATE_DEMO);
 $scenarioTitle = (string) ($scenario['title'] ?? __t('training_scenario_title_default'));
 $scenarioRunnerUrl = \App\Shared\TrainingScenarioCatalog::startRoute($scenarioId);
+$assignmentMode = strtolower(trim((string) ($_GET['assignment_mode'] ?? ($trainingState['assignment_mode'] ?? 'self_paced'))));
+$assignmentMode = $assignmentMode === 'instructor_led' ? 'instructor_led' : 'self_paced';
+$assignmentId = (int) ($_GET['assignment_id'] ?? ($trainingState['assignment_id'] ?? 0));
+$scenarioFinishUrl = $isCompleted ? 'index.php?route=training/dashboard' : $scenarioRunnerUrl;
+$workflowOverviewCheckpoint = [
+    'question' => 'Which answer best explains why keeping Workflow Operations inside CBMS improves project governance?',
+    'expected_answer' => '{"type":"multiple_choice","correct":"B","options":[{"key":"A","label":"It replaces the need for project ownership and review meetings."},{"key":"B","label":"It links projects, requirements, tasks, issues, evidence, and ownership in one governed record set."},{"key":"C","label":"It only changes the page layout so the screens are easier to read."},{"key":"D","label":"It prevents any changes after a project has been created."}],"explanation":"Integrated workflow records improve governance by giving visibility and control across project scope, ownership, tasks, issues, evidence, quality, and lifecycle support."}',
+    'required' => true,
+    'type' => 'multiple_choice',
+    'correct' => 'B',
+    'options' => [
+        ['key' => 'A', 'label' => 'It replaces the need for project ownership and review meetings.'],
+        ['key' => 'B', 'label' => 'It links projects, requirements, tasks, issues, evidence, and ownership in one governed record set.'],
+        ['key' => 'C', 'label' => 'It only changes the page layout so the screens are easier to read.'],
+        ['key' => 'D', 'label' => 'It prevents any changes after a project has been created.'],
+    ],
+    'explanation' => 'Integrated workflow records improve governance by giving visibility and control across project scope, ownership, tasks, issues, evidence, quality, and lifecycle support.',
+];
+$currentStepTitleForCheckpoint = strtolower((string) ($currentStep['title'] ?? ''));
+$currentStepInstructionForCheckpoint = strtolower((string) ($currentStep['instruction'] ?? ''));
+$isWorkflowOverviewCheckpointStep = $currentStepNumber === 4
+    && (
+        $scenarioId === 'workflow_ops_overview'
+        || str_contains($currentStepTitleForCheckpoint, 'checkpoint: governance purpose')
+        || str_contains($currentStepInstructionForCheckpoint, 'which answer best explains why keeping workflow operations inside cbms improves project governance')
+    );
 $startedAt = trim((string) ($trainingState['started_at'] ?? ''));
 $completedAt = trim((string) ($trainingState['completed_at'] ?? ''));
 $durationLabel = '';
@@ -48,9 +120,14 @@ if ($startedAt !== '') {
 }
 $runnerPayload = [
     'stateUrl' => 'index.php?route=training/state&scenario_id=' . rawurlencode($scenarioId),
+    'completeUrl' => 'index.php?route=training/complete',
     'hasActiveState' => $trainingState !== null,
     'totalSteps' => $totalStepCount,
     'scenarioTitle' => $scenarioTitle,
+    'scenarioId' => $scenarioId,
+    'csrf' => csrf_token(),
+    'canManageTraining' => $canManageTraining,
+    'workflowOverviewCheckpoint' => $workflowOverviewCheckpoint,
 ];
 ?>
 
@@ -161,6 +238,8 @@ $runnerPayload = [
                   <form method="post" action="index.php?route=training/start">
                     <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
                     <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
+                    <input type="hidden" name="assignment_mode" value="<?= h($assignmentMode) ?>">
+                    <input type="hidden" name="assignment_id" value="<?= h((string) $assignmentId) ?>">
                     <input type="hidden" name="start_mode" value="beginning">
                     <button type="submit" class="btn btn-sm btn-primary"><?= __t('training_start_scenario') ?></button>
                   </form>
@@ -172,6 +251,75 @@ $runnerPayload = [
                   <div class="small text-muted mb-2" id="training-current-step-label"><?= __t('training_current_step_label') ?></div>
                   <div class="fw-semibold" id="training-current-step-title"><?= h((string) ($currentStep['title'] ?? '')) ?></div>
                   <div class="small text-muted mb-3" id="training-current-step-instruction"><?= h((string) ($currentStep['instruction'] ?? '')) ?></div>
+                  <div id="training-runner-checkpoint-wrap">
+                    <?php if ($isWorkflowOverviewCheckpointStep): ?>
+                      <form method="post" action="index.php?route=training/complete" class="alert alert-info py-2 mb-3" data-training-checkpoint-form>
+                        <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
+                        <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
+                        <input type="hidden" name="step_number" value="<?= h((string) $currentStepNumber) ?>">
+                        <div class="small text-uppercase fw-semibold mb-1">Checkpoint - Required</div>
+                        <div class="small mb-2"><?= h($workflowOverviewCheckpoint['question']) ?></div>
+                        <?php foreach ($workflowOverviewCheckpoint['options'] as $option): ?>
+                          <?php
+                          $optionKey = (string) ($option['key'] ?? '');
+                          $optionId = 'training-runner-workflow-overview-' . preg_replace('/[^A-Za-z0-9_-]/', '', $optionKey);
+                          ?>
+                          <div class="form-check small">
+                            <input class="form-check-input" type="radio" name="checkpoint_answer" id="<?= h($optionId) ?>" value="<?= h($optionKey) ?>">
+                            <label class="form-check-label" for="<?= h($optionId) ?>">
+                              <span class="fw-semibold"><?= h($optionKey) ?>.</span> <?= h((string) ($option['label'] ?? '')) ?>
+                            </label>
+                          </div>
+                        <?php endforeach; ?>
+                        <div class="small mt-2 d-none" data-training-checkpoint-feedback></div>
+                        <button type="submit" class="btn btn-sm btn-primary mt-2">Submit Answer and Continue</button>
+                      </form>
+                    <?php else: ?>
+                    <?php $currentCheckpoint = training_runner_normalize_checkpoint(is_array($currentStep['checkpoint'] ?? null) ? $currentStep['checkpoint'] : []); ?>
+                    <?php
+                    $hasCheckpointOptions = ($currentCheckpoint['type'] ?? '') === 'multiple_choice'
+                        && !empty($currentCheckpoint['options'])
+                        && is_array($currentCheckpoint['options']);
+                    if (!$hasCheckpointOptions && $isWorkflowOverviewCheckpointStep) {
+                        $currentCheckpoint = $workflowOverviewCheckpoint;
+                    }
+                    ?>
+                    <?php if (!empty($currentCheckpoint['question'])): ?>
+                      <div class="alert alert-info py-2 mb-3">
+                        <div class="small text-uppercase fw-semibold mb-1">Checkpoint<?= !empty($currentCheckpoint['required']) ? ' - Required' : '' ?></div>
+                        <div class="small"><?= h((string) ($currentCheckpoint['question'] ?? '')) ?></div>
+                        <?php $checkpointOptions = array_values(is_array($currentCheckpoint['options'] ?? null) ? $currentCheckpoint['options'] : []); ?>
+                        <?php if (($currentCheckpoint['type'] ?? '') === 'multiple_choice' && $checkpointOptions !== []): ?>
+                          <form method="post" action="index.php?route=training/complete" class="mt-2" data-training-checkpoint-form>
+                            <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
+                            <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
+                            <input type="hidden" name="step_number" value="<?= h((string) $currentStepNumber) ?>">
+                            <?php foreach ($checkpointOptions as $option): ?>
+                              <?php
+                              $optionKey = (string) ($option['key'] ?? '');
+                              $optionId = 'training-runner-checkpoint-' . preg_replace('/[^A-Za-z0-9_-]/', '', $optionKey);
+                              ?>
+                              <div class="form-check small">
+                                <input class="form-check-input" type="radio" name="checkpoint_answer" id="<?= h($optionId) ?>" value="<?= h($optionKey) ?>">
+                                <label class="form-check-label" for="<?= h($optionId) ?>">
+                                  <span class="fw-semibold"><?= h($optionKey) ?>.</span> <?= h((string) ($option['label'] ?? '')) ?>
+                                </label>
+                              </div>
+                            <?php endforeach; ?>
+                            <div class="small mt-2 d-none" data-training-checkpoint-feedback></div>
+                            <button type="submit" class="btn btn-sm btn-primary mt-2">Submit Answer and Continue</button>
+                          </form>
+                        <?php endif; ?>
+                        <?php if ($canManageTraining && !empty($currentCheckpoint['expected_answer'])): ?>
+                          <div class="small text-muted mt-2">
+                            <span class="fw-semibold">Expected answer:</span>
+                            <?= h((string) ($currentCheckpoint['explanation'] ?? $currentCheckpoint['expected_answer'] ?? '')) ?>
+                          </div>
+                        <?php endif; ?>
+                      </div>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                  </div>
                 <?php elseif ($isCompleted): ?>
                   <div class="alert alert-success py-2 mb-3" id="training-complete-alert">
                     <div class="fw-semibold"><?= __t('training_scenario_complete_title') ?></div>
@@ -187,6 +335,8 @@ $runnerPayload = [
                     <form method="post" action="index.php?route=training/start" class="d-inline">
                       <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
                       <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
+                      <input type="hidden" name="assignment_mode" value="<?= h($assignmentMode) ?>">
+                      <input type="hidden" name="assignment_id" value="<?= h((string) $assignmentId) ?>">
                       <input type="hidden" name="start_mode" value="current">
                       <button type="submit" class="btn btn-sm btn-outline-primary"><?= __t('training_restart_current') ?></button>
                     </form>
@@ -194,13 +344,15 @@ $runnerPayload = [
                   <form method="post" action="index.php?route=training/start" class="d-inline">
                     <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
                     <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
+                    <input type="hidden" name="assignment_mode" value="<?= h($assignmentMode) ?>">
+                    <input type="hidden" name="assignment_id" value="<?= h((string) $assignmentId) ?>">
                     <input type="hidden" name="start_mode" value="beginning">
                     <button type="submit" class="btn btn-sm btn-outline-secondary"><?= __t('training_restart_beginning') ?></button>
                   </form>
                   <form method="post" action="index.php?route=training/stop" class="d-inline">
                     <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
                     <input type="hidden" name="scenario_id" value="<?= h($scenarioId) ?>">
-                    <input type="hidden" name="return" value="<?= h($scenarioRunnerUrl) ?>">
+                    <input type="hidden" name="return" value="<?= h($scenarioFinishUrl) ?>">
                     <button type="submit" class="btn btn-sm <?= $isCompleted ? 'btn-outline-secondary' : 'btn-outline-danger' ?>"><?= $isCompleted ? __t('training_finish_scenario') : __t('training_leave_scenario') ?></button>
                   </form>
                 </div>
@@ -322,6 +474,209 @@ document.addEventListener('DOMContentLoaded', () => {
   const stepInstructionEl = document.getElementById('training-current-step-instruction');
   const stepLabelEl = document.getElementById('training-current-step-label');
   const openTargetBtn = document.getElementById('training-open-target-btn');
+  const checkpointWrap = document.getElementById('training-runner-checkpoint-wrap');
+
+  const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  }[char]));
+
+  const normalizeCheckpoint = (checkpoint) => {
+    if (!checkpoint || typeof checkpoint !== 'object') { return null; }
+    if (checkpoint.type === 'multiple_choice' && Array.isArray(checkpoint.options) && checkpoint.options.length > 0) {
+      return checkpoint;
+    }
+
+    const expectedAnswer = String(checkpoint.expected_answer || '').trim();
+    if (!expectedAnswer.startsWith('{')) { return checkpoint; }
+
+    try {
+      const payload = JSON.parse(expectedAnswer);
+      if (!payload || String(payload.type || '').toLowerCase() !== 'multiple_choice') {
+        return checkpoint;
+      }
+
+      const options = Array.isArray(payload.options)
+        ? payload.options
+            .map((option) => ({
+              key: String(option && option.key ? option.key : '').trim(),
+              label: String(option && (option.label || option.text) ? (option.label || option.text) : '').trim(),
+            }))
+            .filter((option) => option.key !== '' && option.label !== '')
+        : [];
+      if (options.length === 0) { return checkpoint; }
+
+      return {
+        ...checkpoint,
+        type: 'multiple_choice',
+        correct: String(payload.correct || '').trim(),
+        options,
+        explanation: String(payload.explanation || checkpoint.explanation || '').trim(),
+      };
+    } catch (error) {
+      return checkpoint;
+    }
+  };
+
+  const checkpointForStep = (step, currentStepNumber) => {
+    const stepNumber = Number(step && step.number ? step.number : currentStepNumber);
+    const stepTitle = String(step && step.title ? step.title : '').toLowerCase();
+    const stepInstruction = String(step && step.instruction ? step.instruction : '').toLowerCase();
+    const checkpoint = normalizeCheckpoint(step && step.checkpoint ? step.checkpoint : null);
+    const hasCheckpointOptions = checkpoint
+      && checkpoint.type === 'multiple_choice'
+      && Array.isArray(checkpoint.options)
+      && checkpoint.options.length > 0;
+    if (hasCheckpointOptions) {
+      return checkpoint;
+    }
+    if (stepNumber === 4 && (
+      String(config.scenarioId || '') === 'workflow_ops_overview'
+      || stepTitle.includes('checkpoint: governance purpose')
+      || stepInstruction.includes('which answer best explains why keeping workflow operations inside cbms improves project governance')
+    )) {
+      return config.workflowOverviewCheckpoint || null;
+    }
+    return checkpoint;
+  };
+
+  const renderCheckpoint = (checkpoint, stepNumber) => {
+    if (!checkpointWrap) { return; }
+    checkpoint = normalizeCheckpoint(checkpoint);
+
+    if (!checkpoint || !checkpoint.question) {
+      checkpointWrap.innerHTML = '';
+      return;
+    }
+
+    const options = Array.isArray(checkpoint.options) ? checkpoint.options : [];
+    const requiredLabel = checkpoint.required ? ' - Required' : '';
+    let html = `
+      <div class="alert alert-info py-2 mb-3">
+        <div class="small text-uppercase fw-semibold mb-1">Checkpoint${requiredLabel}</div>
+        <div class="small">${escapeHtml(checkpoint.question)}</div>
+    `;
+
+    if (checkpoint.type === 'multiple_choice' && options.length > 0) {
+      html += `
+        <form method="post" action="${escapeHtml(config.completeUrl || 'index.php?route=training/complete')}" class="mt-2" data-training-checkpoint-form>
+          <input type="hidden" name="_csrf" value="${escapeHtml(config.csrf || '')}">
+          <input type="hidden" name="scenario_id" value="${escapeHtml(config.scenarioId || '')}">
+          <input type="hidden" name="step_number" value="${escapeHtml(stepNumber)}">
+      `;
+      options.forEach((option) => {
+        const key = String(option.key || '');
+        const label = String(option.label || '');
+        const optionId = `training-runner-checkpoint-${key.replace(/[^A-Za-z0-9_-]/g, '')}`;
+        html += `
+          <div class="form-check small">
+            <input class="form-check-input" type="radio" name="checkpoint_answer" id="${escapeHtml(optionId)}" value="${escapeHtml(key)}">
+            <label class="form-check-label" for="${escapeHtml(optionId)}"><span class="fw-semibold">${escapeHtml(key)}.</span> ${escapeHtml(label)}</label>
+          </div>
+        `;
+      });
+      html += `
+          <div class="small mt-2 d-none" data-training-checkpoint-feedback></div>
+          <button type="submit" class="btn btn-sm btn-primary mt-2">Submit Answer and Continue</button>
+        </form>
+      `;
+    }
+
+    if (config.canManageTraining && checkpoint.expected_answer) {
+      html += `
+        <div class="small text-muted mt-2">
+          <span class="fw-semibold">Expected answer:</span>
+          ${escapeHtml(checkpoint.explanation || checkpoint.expected_answer || '')}
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    checkpointWrap.innerHTML = html;
+  };
+
+  const renderVisibleWorkflowOverviewCheckpoint = () => {
+    if (!checkpointWrap || checkpointWrap.querySelector('[data-training-checkpoint-form]')) {
+      return;
+    }
+
+    const visibleTitle = String(stepTitleEl ? stepTitleEl.textContent : '').toLowerCase();
+    const visibleInstruction = String(stepInstructionEl ? stepInstructionEl.textContent : '').toLowerCase();
+    const isGovernanceCheckpoint = visibleTitle.includes('checkpoint: governance purpose')
+      || visibleInstruction.includes('which answer best explains why keeping workflow operations inside cbms improves project governance');
+    if (!isGovernanceCheckpoint) {
+      return;
+    }
+
+    renderCheckpoint(config.workflowOverviewCheckpoint || null, 4);
+  };
+
+  runner.addEventListener('submit', async (event) => {
+    const checkpointForm = event.target && event.target.closest
+      ? event.target.closest('[data-training-checkpoint-form]')
+      : null;
+    if (!checkpointForm || !runner.contains(checkpointForm)) { return; }
+
+    event.preventDefault();
+
+    const feedback = checkpointForm.querySelector('[data-training-checkpoint-feedback]');
+    if (feedback) {
+      feedback.textContent = '';
+      feedback.className = 'small mt-2 d-none';
+    }
+
+    const selected = checkpointForm.querySelector('input[name="checkpoint_answer"]:checked');
+    if (!selected) {
+      if (feedback) {
+        feedback.textContent = 'Select an answer before continuing.';
+        feedback.className = 'small mt-2 text-danger';
+      }
+      return;
+    }
+
+    const submitButton = checkpointForm.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
+    try {
+      const response = await fetch(String(config.completeUrl || checkpointForm.action || ''), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: new URLSearchParams(new FormData(checkpointForm)).toString(),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        if (feedback) {
+          feedback.textContent = payload && payload.message ? String(payload.message) : 'The answer could not be submitted.';
+          feedback.className = 'small mt-2 text-danger';
+        }
+        return;
+      }
+
+      if (feedback) {
+        feedback.textContent = 'Correct.';
+        feedback.className = 'small mt-2 text-success';
+      }
+      window.setTimeout(() => renderState(payload), 900);
+    } catch (error) {
+      console.error('Training checkpoint submission failed.', error);
+      if (feedback) {
+        feedback.textContent = 'The answer could not be submitted.';
+        feedback.className = 'small mt-2 text-danger';
+      }
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+    }
+  });
 
   const renderState = (payload) => {
     const state = payload && payload.state ? payload.state : null;
@@ -329,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isCompleted = state && state.status === 'completed';
     const currentStepNumber = Number(state && state.current_step ? state.current_step : 0);
     const totalSteps = Number((state && state.total_steps) || config.totalSteps || 0);
+    const checkpoint = checkpointForStep(step, currentStepNumber);
 
     document.querySelectorAll('[data-training-step-status]').forEach((badge) => {
       const stepNumber = Number(badge.getAttribute('data-training-step-status') || '0');
@@ -370,6 +726,9 @@ document.addEventListener('DOMContentLoaded', () => {
       stepLabelEl.textContent = isCompleted ? 'Outcome' : 'Current Step';
     }
 
+    renderCheckpoint(isCompleted ? null : checkpoint, Number(step && step.number ? step.number : currentStepNumber));
+    renderVisibleWorkflowOverviewCheckpoint();
+
     let completeAlert = document.getElementById('training-complete-alert');
     if (isCompleted && !completeAlert && stepInstructionEl) {
       completeAlert = document.createElement('div');
@@ -399,6 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  renderVisibleWorkflowOverviewCheckpoint();
   pollState();
   window.setInterval(pollState, 2000);
 });

@@ -39,6 +39,12 @@ foreach ($scenarios as $scenario) {
         <h3 class="mb-0"><i class="bi bi-mortarboard me-2"></i><?= __t('training_scenarios_title') ?></h3>
       </div>
       <div class="d-inline-flex gap-2">
+        <a href="index.php?route=training/dashboard" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-speedometer2 me-1"></i>Dashboard
+        </a>
+        <a href="index.php?route=training-certifications/modules" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-award me-1"></i>Certifications
+        </a>
         <a href="index.php?route=training/summary" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-table me-1"></i><?= __t('training_summary_title') ?>
         </a>
@@ -88,7 +94,7 @@ foreach ($scenarios as $scenario) {
           <button type="submit" class="btn btn-sm btn-outline-primary flex-fill">
             <i class="bi bi-funnel me-1"></i><?= __t('filter') ?>
           </button>
-          <a href="index.php?route=training/scenarios" class="btn btn-sm btn-outline-secondary flex-fill">
+          <a href="index.php?route=training/scenarios&amp;reset_filters=1" class="btn btn-sm btn-outline-secondary flex-fill">
             <?= __t('reset') ?>
           </a>
         </div>
@@ -107,15 +113,30 @@ foreach ($scenarios as $scenario) {
         <div class="text-center text-muted py-4"><?= __t('training_no_scenarios_match_filters') ?></div>
       <?php else: ?>
         <?php foreach ($scenariosByModule as $moduleName => $moduleScenarios): ?>
+          <?php
+          $orderedModuleScenarios = $moduleScenarios;
+          usort($orderedModuleScenarios, static function (array $left, array $right): int {
+              $leftOrder = (int) ($left['sort_order'] ?? 0);
+              $rightOrder = (int) ($right['sort_order'] ?? 0);
+              if ($leftOrder !== $rightOrder) {
+                  return $leftOrder <=> $rightOrder;
+              }
+
+              $leftTitle = trim((string) ($left['title'] ?? $left['id'] ?? ''));
+              $rightTitle = trim((string) ($right['title'] ?? $right['id'] ?? ''));
+              return strcasecmp($leftTitle, $rightTitle);
+          });
+          ?>
           <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
             <div class="d-flex align-items-center gap-2">
               <h5 class="mb-0"><?= h($moduleName) ?></h5>
-              <span class="badge text-bg-light border"><?= h((string) count($moduleScenarios)) ?></span>
+              <span class="badge text-bg-light border"><?= h((string) count($orderedModuleScenarios)) ?></span>
             </div>
+            <div class="small text-muted">Shown in recommended completion order</div>
           </div>
 
           <div class="row g-3">
-            <?php foreach ($moduleScenarios as $scenario): ?>
+            <?php foreach ($orderedModuleScenarios as $moduleScenarioIndex => $scenario): ?>
               <?php
               $scenarioId = (string) ($scenario['id'] ?? '');
               $state = $scenarioId !== '' ? ($userScenarioStates[$scenarioId] ?? null) : null;
@@ -146,6 +167,9 @@ foreach ($scenarios as $scenario) {
                 <div class="card shadow-sm h-100">
                   <div class="card-header d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
+                      <span class="badge text-bg-primary" title="Recommended completion order">
+                        <?= h((string) ($moduleScenarioIndex + 1)) ?>
+                      </span>
                       <span class="badge text-bg-light border"><?= h((string) ($scenario['screen_family'] ?? 'training')) ?></span>
                       <?php if (is_array($assignment)): ?>
                         <span class="badge text-bg-info">Assigned</span>
@@ -169,11 +193,15 @@ foreach ($scenarios as $scenario) {
                     <?php endif; ?>
 
                     <div class="row g-2 mb-3 small">
+                      <div class="col-sm-4">
+                        <div class="text-muted">Recommended order</div>
+                        <div class="fw-semibold"><?= h((string) ($moduleScenarioIndex + 1)) ?></div>
+                      </div>
                       <div class="col-sm-6">
                         <div class="text-muted"><?= __t('training_module_label') ?></div>
                         <div class="fw-semibold"><?= h((string) ($scenario['module'] ?? '')) ?></div>
                       </div>
-                      <div class="col-sm-6">
+                      <div class="col-sm-4">
                         <div class="text-muted"><?= __t('training_audience_label') ?></div>
                         <div class="fw-semibold"><?= h((string) ($scenario['audience'] ?? '')) ?></div>
                       </div>

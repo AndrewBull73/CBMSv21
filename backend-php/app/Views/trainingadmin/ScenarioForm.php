@@ -65,15 +65,15 @@ foreach ($samples as $sample) {
 
         <div class="col-md-4">
           <label class="form-label">Scenario Code</label>
-          <input type="text" name="ScenarioCode" class="form-control form-control-sm" value="<?= h($scenarioCode) ?>" <?= $scenarioCode !== '' ? 'readonly' : 'required' ?> placeholder="users_create_demo">
+          <input id="TrainingScenarioCode" type="text" name="ScenarioCode" class="form-control form-control-sm" value="<?= h($scenarioCode) ?>" <?= $scenarioCode !== '' ? 'readonly' : 'required' ?> placeholder="users_create_demo">
         </div>
         <div class="col-md-5">
           <label class="form-label">Scenario Title</label>
-          <input type="text" name="ScenarioTitle" class="form-control form-control-sm" value="<?= h((string) ($record['ScenarioTitle'] ?? '')) ?>" required>
+          <input id="TrainingScenarioTitle" type="text" name="ScenarioTitle" class="form-control form-control-sm" value="<?= h((string) ($record['ScenarioTitle'] ?? '')) ?>" required>
         </div>
         <div class="col-md-3">
           <label class="form-label">Status</label>
-          <select name="ActiveFlag" class="form-select form-select-sm">
+          <select id="TrainingScenarioActiveFlag" name="ActiveFlag" class="form-select form-select-sm">
             <option value="1" <?= ((int) ($record['ActiveFlag'] ?? 1) === 1) ? 'selected' : '' ?>>Active</option>
             <option value="0" <?= ((int) ($record['ActiveFlag'] ?? 1) === 0) ? 'selected' : '' ?>>Inactive</option>
           </select>
@@ -81,28 +81,28 @@ foreach ($samples as $sample) {
 
         <div class="col-md-4">
           <label class="form-label">Screen Family</label>
-          <input type="text" name="ScreenFamily" class="form-control form-control-sm" value="<?= h((string) ($record['ScreenFamily'] ?? '')) ?>" required placeholder="users">
+          <input id="TrainingScenarioScreenFamily" type="text" name="ScreenFamily" class="form-control form-control-sm" value="<?= h((string) ($record['ScreenFamily'] ?? '')) ?>" required placeholder="users">
         </div>
         <div class="col-md-4">
           <label class="form-label">Module</label>
-          <input type="text" name="ModuleName" class="form-control form-control-sm" value="<?= h((string) ($record['ModuleName'] ?? '')) ?>" required placeholder="Administration">
+          <input id="TrainingScenarioModuleName" type="text" name="ModuleName" class="form-control form-control-sm" value="<?= h((string) ($record['ModuleName'] ?? '')) ?>" required placeholder="Administration">
         </div>
         <div class="col-md-4">
           <label class="form-label">Audience</label>
-          <input type="text" name="Audience" class="form-control form-control-sm" value="<?= h((string) ($record['Audience'] ?? '')) ?>" placeholder="System Administrator / User Administrator">
+          <input id="TrainingScenarioAudience" type="text" name="Audience" class="form-control form-control-sm" value="<?= h((string) ($record['Audience'] ?? '')) ?>" placeholder="System Administrator / User Administrator">
         </div>
 
         <div class="col-md-4">
           <label class="form-label">Difficulty</label>
-          <input type="text" name="Difficulty" class="form-control form-control-sm" value="<?= h((string) ($record['Difficulty'] ?? '')) ?>" placeholder="Introductory">
+          <input id="TrainingScenarioDifficulty" type="text" name="Difficulty" class="form-control form-control-sm" value="<?= h((string) ($record['Difficulty'] ?? '')) ?>" placeholder="Introductory">
         </div>
         <div class="col-md-4">
           <label class="form-label">Runner Route</label>
-          <input type="text" name="RunnerRoute" class="form-control form-control-sm" value="<?= h((string) ($record['RunnerRoute'] ?? '')) ?>" required placeholder="training/users">
+          <input id="TrainingScenarioRunnerRoute" type="text" name="RunnerRoute" class="form-control form-control-sm" value="<?= h((string) ($record['RunnerRoute'] ?? '')) ?>" required placeholder="training/users">
         </div>
         <div class="col-md-4">
           <label class="form-label">Next Scenario</label>
-          <select name="NextScenarioCode" class="form-select form-select-sm">
+          <select id="TrainingScenarioNextScenarioCode" name="NextScenarioCode" class="form-select form-select-sm">
             <option value="">No next scenario</option>
             <?php foreach ($scenarioOptions as $option): ?>
               <?php $optionCode = (string) ($option['ScenarioCode'] ?? ''); ?>
@@ -116,27 +116,27 @@ foreach ($samples as $sample) {
 
         <div class="col-md-2">
           <label class="form-label">Sort Order</label>
-          <input type="number" name="SortOrder" class="form-control form-control-sm" value="<?= h((string) ($record['SortOrder'] ?? '0')) ?>" min="0" step="10">
+          <input id="TrainingScenarioSortOrder" type="number" name="SortOrder" class="form-control form-control-sm" value="<?= h((string) ($record['SortOrder'] ?? '0')) ?>" min="0" step="10">
         </div>
         <div class="col-md-10">
           <label class="form-label">Description</label>
-          <textarea name="Description" class="form-control form-control-sm" rows="3"><?= h((string) ($record['Description'] ?? '')) ?></textarea>
+          <textarea id="TrainingScenarioDescription" name="Description" class="form-control form-control-sm" rows="3"><?= h((string) ($record['Description'] ?? '')) ?></textarea>
         </div>
 
         <div class="col-md-6">
           <label class="form-label">Prerequisites</label>
-          <textarea name="Prerequisites" class="form-control form-control-sm font-monospace" rows="7" placeholder="One prerequisite per line"><?= h(implode(PHP_EOL, array_map('strval', $prerequisites))) ?></textarea>
+          <textarea id="TrainingScenarioPrerequisites" name="Prerequisites" class="form-control form-control-sm font-monospace" rows="7" placeholder="One prerequisite per line"><?= h(implode(PHP_EOL, array_map('strval', $prerequisites))) ?></textarea>
           <div class="small text-muted mt-1">One prerequisite per line. These appear on the scenario catalogue and runner.</div>
         </div>
         <div class="col-md-6">
           <label class="form-label">Sample Templates</label>
-          <textarea name="Samples" class="form-control form-control-sm font-monospace" rows="7" placeholder="SampleKey=SampleValueTemplate"><?= h(implode(PHP_EOL, $sampleLines)) ?></textarea>
+          <textarea id="TrainingScenarioSamples" name="Samples" class="form-control form-control-sm font-monospace" rows="7" placeholder="SampleKey=SampleValueTemplate"><?= h(implode(PHP_EOL, $sampleLines)) ?></textarea>
           <div class="small text-muted mt-1">Use one <code>key=value</code> entry per line. Sample keys can then be referenced from steps.</div>
         </div>
 
         <div class="col-12 d-flex justify-content-between">
           <a href="index.php?route=training-admin/scenarios" class="btn btn-sm btn-outline-secondary">Back</a>
-          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>Save Scenario</button>
+          <button id="training-scenario-save-btn" type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>Save Scenario</button>
         </div>
       </form>
       <?php endif; ?>

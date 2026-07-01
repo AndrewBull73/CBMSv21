@@ -28,6 +28,18 @@ final class TrainingManagementModel
             && (int) ($row['StuckTableId'] ?? 0) > 0;
     }
 
+    public function supportsStepSupportTables(): bool
+    {
+        $row = $this->db->query("
+            SELECT
+                OBJECT_ID(N'dbo.tblTrainingStepInstructorNotes', N'U') AS NotesTableId,
+                OBJECT_ID(N'dbo.tblTrainingStepCheckpoints', N'U') AS CheckpointsTableId
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        return (int) ($row['NotesTableId'] ?? 0) > 0
+            && (int) ($row['CheckpointsTableId'] ?? 0) > 0;
+    }
+
     public function listPaths(): array
     {
         if (!$this->supportsManagementTables()) {
@@ -50,6 +62,47 @@ final class TrainingManagementModel
             FROM dbo.tblTrainingPaths p
             ORDER BY p.SortOrder, p.PathTitle, p.PathCode
         ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function searchUsers(string $query = '', int $limit = 50): array
+    {
+        $query = trim($query);
+        $limit = max(1, min(100, $limit));
+        $where = 'IsActive = 1';
+        $params = [];
+        if ($query !== '') {
+            $where .= " AND (
+                Username LIKE :q_username
+                OR Email LIKE :q_email
+                OR DisplayName LIKE :q_display
+                OR FirstName LIKE :q_first
+                OR LastName LIKE :q_last
+                OR CONVERT(NVARCHAR(20), UserID) = :exact_id
+            )";
+            $likeQuery = '%' . $query . '%';
+            $params[':q_username'] = $likeQuery;
+            $params[':q_email'] = $likeQuery;
+            $params[':q_display'] = $likeQuery;
+            $params[':q_first'] = $likeQuery;
+            $params[':q_last'] = $likeQuery;
+            $params[':exact_id'] = $query;
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT TOP ({$limit})
+                UserID,
+                Username,
+                LTRIM(RTRIM(DisplayName)) AS DisplayName,
+                Email
+            FROM dbo.tblUsers
+            WHERE {$where}
+            ORDER BY LTRIM(RTRIM(DisplayName)) ASC, Username ASC
+        ");
+        foreach ($params as $name => $value) {
+            $stmt->bindValue($name, $value, \PDO::PARAM_STR);
+        }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     public function getPath(string $pathCode): ?array
@@ -115,8 +168,9 @@ final class TrainingManagementModel
 
             $existsStmt = $this->db->prepare("SELECT 1 FROM dbo.tblTrainingPaths WHERE PathCode = :code");
             $existsStmt->execute([':code' => $pathCode]);
+            $pathExists = (bool) $existsStmt->fetchColumn();
 
-            if ($existsStmt->fetchColumn()) {
+            if ($pathExists) {
                 $stmt = $this->db->prepare("
                     UPDATE dbo.tblTrainingPaths
                     SET PathTitle = :title,
@@ -132,10 +186,10 @@ final class TrainingManagementModel
                 $stmt = $this->db->prepare("
                     INSERT INTO dbo.tblTrainingPaths
                         (PathCode, PathTitle, Audience, Description, ActiveFlag, SortOrder, CreatedBy, UpdatedBy)
-                    VALUES (:code, :title, :audience, :description, :active, :sort_order, :updated_by, :updated_by)
+                    VALUES (:code, :title, :audience, :description, :active, :sort_order, :created_by, :updated_by)
                 ");
             }
-            $stmt->execute($params);
+            $stmt->execute($params + ($pathExists ? [] : [':created_by' => $updatedBy > 0 ? $updatedBy : null]));
 
             $this->syncPathScenarios($pathCode, (string) ($data['ScenarioCodes'] ?? ''), $updatedBy);
             $this->db->commit();
@@ -157,8 +211,17 @@ final class TrainingManagementModel
         $params = [];
         $status = trim((string) ($filters['status'] ?? ''));
         if ($status !== '') {
-            $where[] = 'a.Status = :status';
-            $params[':status'] = $status;
+            if ($status === 'open') {
+                $where[] = "a.Status IN (N'assigned', N'active', N'in_progress')";
+            } else {
+                $where[] = 'a.Status = :status';
+                $params[':status'] = $status;
+            }
+        }
+        $pathCode = trim((string) ($filters['path_code'] ?? ''));
+        if ($pathCode !== '') {
+            $where[] = 'a.PathCode = :path_code';
+            $params[':path_code'] = $pathCode;
         }
 
         return $this->prepareFetchAll("
@@ -192,65 +255,162 @@ final class TrainingManagementModel
         }
 
         return $this->prepareFetchAll("
-            SELECT
-                a.TrainingAssignmentID,
-                a.UserID,
-                a.PathCode,
-                a.ScenarioCode,
-                EffectiveScenarioCode = COALESCE(a.ScenarioCode, ps.ScenarioCode),
-                a.DueDate,
-                a.Status,
-                a.AssignedAt,
-                a.CompletedAt,
-                a.Notes,
-                p.PathTitle,
-                s.ScenarioTitle
-            FROM dbo.tblTrainingAssignments a
-            LEFT JOIN dbo.tblTrainingPathScenarios ps
-                ON ps.PathCode = a.PathCode
-               AND a.ScenarioCode IS NULL
-            LEFT JOIN dbo.tblTrainingPaths p
-                ON p.PathCode = a.PathCode
-            LEFT JOIN dbo.tblTrainingScenarios s
-                ON s.ScenarioCode = COALESCE(a.ScenarioCode, ps.ScenarioCode)
-            WHERE a.UserID = :user_id
-              AND a.Status IN (N'assigned', N'active', N'in_progress')
-              AND COALESCE(a.ScenarioCode, ps.ScenarioCode) IS NOT NULL
-            ORDER BY ISNULL(a.DueDate, CONVERT(date, '9999-12-31')), a.AssignedAt DESC
-        ", [':user_id' => $userId]);
+            SELECT *
+            FROM (
+                SELECT
+                    a.TrainingAssignmentID,
+                    a.UserID,
+                    a.PathCode,
+                    a.ScenarioCode,
+                    EffectiveScenarioCode = COALESCE(a.ScenarioCode, ps.ScenarioCode),
+                    a.DueDate,
+                    a.Status,
+                    a.AssignedAt,
+                    a.CompletedAt,
+                    a.Notes,
+                    AssignmentMode = CASE
+                        WHEN a.Notes LIKE N'Created from instructor-led session #%' THEN N'Instructor-led'
+                        ELSE N'Self-paced'
+                    END,
+                    p.PathTitle,
+                    s.ScenarioTitle
+                FROM dbo.tblTrainingAssignments a
+                LEFT JOIN dbo.tblTrainingPathScenarios ps
+                    ON ps.PathCode = a.PathCode
+                   AND a.ScenarioCode IS NULL
+                LEFT JOIN dbo.tblTrainingPaths p
+                    ON p.PathCode = a.PathCode
+                LEFT JOIN dbo.tblTrainingScenarios s
+                    ON s.ScenarioCode = COALESCE(a.ScenarioCode, ps.ScenarioCode)
+                WHERE a.UserID = :user_id
+                  AND a.Status IN (N'assigned', N'active', N'in_progress', N'completed')
+                  AND COALESCE(a.ScenarioCode, ps.ScenarioCode) IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    TrainingAssignmentID = -su.TrainingSessionUserID,
+                    su.UserID,
+                    sess.PathCode,
+                    sess.ScenarioCode,
+                    EffectiveScenarioCode = COALESCE(sess.ScenarioCode, ps.ScenarioCode),
+                    DueDate = CAST(NULL AS DATE),
+                    Status = CASE
+                        WHEN sess.Status = N'completed' OR su.Status = N'completed' THEN N'completed'
+                        WHEN sess.Status = N'cancelled' THEN N'cancelled'
+                        ELSE N'assigned'
+                    END,
+                    AssignedAt = COALESCE(sess.ScheduledAt, su.CreatedDate),
+                    CompletedAt = su.CompletedAt,
+                    Notes = N'Created from instructor-led session #' + CONVERT(NVARCHAR(20), sess.TrainingSessionID) + N'.',
+                    AssignmentMode = N'Instructor-led',
+                    p.PathTitle,
+                    sc.ScenarioTitle
+                FROM dbo.tblTrainingSessionUsers su
+                INNER JOIN dbo.tblTrainingSessions sess
+                    ON sess.TrainingSessionID = su.TrainingSessionID
+                LEFT JOIN dbo.tblTrainingPathScenarios ps
+                    ON ps.PathCode = sess.PathCode
+                   AND sess.ScenarioCode IS NULL
+                LEFT JOIN dbo.tblTrainingPaths p
+                    ON p.PathCode = sess.PathCode
+                LEFT JOIN dbo.tblTrainingScenarios sc
+                    ON sc.ScenarioCode = COALESCE(sess.ScenarioCode, ps.ScenarioCode)
+                WHERE su.UserID = :session_user_id
+                  AND sess.Status <> N'cancelled'
+                  AND COALESCE(sess.ScenarioCode, ps.ScenarioCode) IS NOT NULL
+                  AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.tblTrainingAssignments a
+                        WHERE a.UserID = su.UserID
+                          AND a.Status IN (N'assigned', N'active', N'in_progress', N'completed')
+                          AND ISNULL(a.PathCode, N'') = ISNULL(sess.PathCode, N'')
+                          AND (
+                                (a.ScenarioCode IS NULL AND sess.ScenarioCode IS NULL)
+                                OR a.ScenarioCode = sess.ScenarioCode
+                          )
+                          AND a.Notes = N'Created from instructor-led session #' + CONVERT(NVARCHAR(20), sess.TrainingSessionID) + N'.'
+                  )
+            ) assigned
+            WHERE assigned.Status <> N'cancelled'
+            ORDER BY ISNULL(assigned.DueDate, CONVERT(date, '9999-12-31')), assigned.AssignedAt DESC
+        ", [
+            ':user_id' => $userId,
+            ':session_user_id' => $userId,
+        ]);
     }
 
-    public function saveAssignment(array $data, int $updatedBy): int
+    public function saveAssignment(array $data, int $updatedBy): array
     {
-        $userIds = $this->parseIntList((string) ($data['UserIDs'] ?? ''));
+        $userIds = array_values(array_unique($this->parseIntList((string) ($data['UserIDs'] ?? ''))));
         $pathCode = $this->nullIfEmpty($data['PathCode'] ?? null);
         $scenarioCode = $this->nullIfEmpty($data['ScenarioCode'] ?? null);
+        $notes = $this->nullIfEmpty($data['Notes'] ?? null);
+        $sourceRef = trim((string) ($data['SourceRef'] ?? ''));
         if ($userIds === [] || ($pathCode === null && $scenarioCode === null)) {
             throw new \RuntimeException('At least one user and either a path or scenario are required.');
         }
+
+        $duplicateWhere = [
+            'UserID = :user_id_check',
+            "Status IN (N'assigned', N'active', N'in_progress')",
+            $pathCode === null ? 'PathCode IS NULL' : 'PathCode = :path_code_check',
+            $scenarioCode === null ? 'ScenarioCode IS NULL' : 'ScenarioCode = :scenario_code_check',
+        ];
+        if (str_starts_with($sourceRef, 'training_session:')) {
+            $duplicateWhere[] = $notes === null ? 'Notes IS NULL' : 'Notes = :notes_check';
+        } elseif ($sourceRef === 'self_paced') {
+            $duplicateWhere[] = "(Notes IS NULL OR Notes NOT LIKE N'Created from instructor-led session #%')";
+        }
+        $duplicateStmt = $this->db->prepare("
+            SELECT TOP 1 TrainingAssignmentID
+            FROM dbo.tblTrainingAssignments
+            WHERE " . implode(' AND ', $duplicateWhere) . "
+        ");
 
         $stmt = $this->db->prepare("
             INSERT INTO dbo.tblTrainingAssignments
                 (UserID, PathCode, ScenarioCode, DueDate, Status, AssignedBy, Notes, CreatedBy, UpdatedBy)
             VALUES
-                (:user_id, :path_code, :scenario_code, :due_date, N'assigned', :assigned_by, :notes, :updated_by, :updated_by)
+                (:user_id, :path_code, :scenario_code, :due_date, N'assigned', :assigned_by, :notes, :created_by, :updated_by)
         ");
 
         $count = 0;
+        $skipped = 0;
+        $auditUserId = $updatedBy > 0 ? $updatedBy : null;
         foreach ($userIds as $userId) {
+            $duplicateParams = [
+                ':user_id_check' => $userId,
+            ];
+            if ($pathCode !== null) {
+                $duplicateParams[':path_code_check'] = $pathCode;
+            }
+            if ($scenarioCode !== null) {
+                $duplicateParams[':scenario_code_check'] = $scenarioCode;
+            }
+            if (str_starts_with($sourceRef, 'training_session:') && $notes !== null) {
+                $duplicateParams[':notes_check'] = $notes;
+            }
+            $duplicateStmt->execute($duplicateParams);
+            if ($duplicateStmt->fetchColumn()) {
+                $skipped++;
+                continue;
+            }
+
             $stmt->execute([
                 ':user_id' => $userId,
                 ':path_code' => $pathCode,
                 ':scenario_code' => $scenarioCode,
                 ':due_date' => $this->nullIfEmpty($data['DueDate'] ?? null),
-                ':assigned_by' => $updatedBy > 0 ? $updatedBy : null,
-                ':notes' => $this->nullIfEmpty($data['Notes'] ?? null),
-                ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
+                ':assigned_by' => $auditUserId,
+                ':notes' => $notes,
+                ':created_by' => $auditUserId,
+                ':updated_by' => $auditUserId,
             ]);
             $count++;
         }
 
-        return $count;
+        return ['created' => $count, 'skipped' => $skipped];
     }
 
     public function markAssignmentsCompleted(int $userId, string $scenarioCode, int $updatedBy): void
@@ -275,6 +435,7 @@ final class TrainingManagementModel
             WHERE UserID = :user_id
               AND ScenarioCode = :scenario_code
               AND Status IN (N'assigned', N'active', N'in_progress')
+              AND (Notes IS NULL OR Notes NOT LIKE N'Created from instructor-led session #%')
         ");
         $directStmt->execute($params);
 
@@ -289,6 +450,7 @@ final class TrainingManagementModel
               AND a.ScenarioCode IS NULL
               AND a.PathCode IS NOT NULL
               AND a.Status IN (N'assigned', N'active', N'in_progress')
+              AND (a.Notes IS NULL OR a.Notes NOT LIKE N'Created from instructor-led session #%')
               AND EXISTS (
                     SELECT 1
                     FROM dbo.tblTrainingPathScenarios ps
@@ -312,6 +474,52 @@ final class TrainingManagementModel
         $pathStmt->execute($params);
     }
 
+    public function markAssignmentCompleted(int $assignmentId, int $userId, int $updatedBy): void
+    {
+        if ($assignmentId <= 0 || $userId <= 0 || !$this->supportsManagementTables()) {
+            return;
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE dbo.tblTrainingAssignments
+            SET Status = N'completed',
+                CompletedAt = SYSUTCDATETIME(),
+                UpdatedBy = :updated_by,
+                UpdatedDate = SYSUTCDATETIME()
+            WHERE TrainingAssignmentID = :assignment_id
+              AND UserID = :user_id
+              AND Status IN (N'assigned', N'active', N'in_progress')
+              AND (Notes IS NULL OR Notes NOT LIKE N'Created from instructor-led session #%')
+        ");
+        $stmt->execute([
+            ':assignment_id' => $assignmentId,
+            ':user_id' => $userId,
+            ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
+        ]);
+    }
+
+    public function cancelAssignment(int $assignmentId, int $updatedBy): bool
+    {
+        if ($assignmentId <= 0 || !$this->supportsManagementTables()) {
+            return false;
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE dbo.tblTrainingAssignments
+            SET Status = N'cancelled',
+                UpdatedBy = :updated_by,
+                UpdatedDate = SYSUTCDATETIME()
+            WHERE TrainingAssignmentID = :assignment_id
+              AND Status IN (N'assigned', N'active', N'in_progress')
+        ");
+        $stmt->execute([
+            ':assignment_id' => $assignmentId,
+            ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
     public function listSessions(): array
     {
         if (!$this->supportsManagementTables()) {
@@ -332,6 +540,25 @@ final class TrainingManagementModel
                 InstructorName = COALESCE(NULLIF(i.DisplayName, N''), i.Username),
                 p.PathTitle,
                 sc.ScenarioTitle,
+                ParticipantUserIDs = ISNULL(STUFF((
+                    SELECT N',' + CONVERT(NVARCHAR(20), su.UserID)
+                    FROM dbo.tblTrainingSessionUsers su
+                    WHERE su.TrainingSessionID = s.TrainingSessionID
+                    ORDER BY su.UserID
+                    FOR XML PATH(''), TYPE
+                ).value(N'.', N'NVARCHAR(MAX)'), 1, 1, N''), N''),
+                ParticipantUsersJson = ISNULL((
+                    SELECT
+                        su.UserID AS id,
+                        COALESCE(NULLIF(u.DisplayName, N''), u.Username, N'User #' + CONVERT(NVARCHAR(20), su.UserID)) AS label,
+                        ISNULL(u.Username, N'') AS username,
+                        ISNULL(u.Email, N'') AS email
+                    FROM dbo.tblTrainingSessionUsers su
+                    LEFT JOIN dbo.tblUsers u ON u.UserID = su.UserID
+                    WHERE su.TrainingSessionID = s.TrainingSessionID
+                    ORDER BY COALESCE(NULLIF(u.DisplayName, N''), u.Username, N'User #' + CONVERT(NVARCHAR(20), su.UserID))
+                    FOR JSON PATH
+                ), N'[]'),
                 ParticipantCount = (
                     SELECT COUNT(*)
                     FROM dbo.tblTrainingSessionUsers su
@@ -349,8 +576,11 @@ final class TrainingManagementModel
     {
         $sessionCode = trim((string) ($data['SessionCode'] ?? ''));
         $sessionTitle = trim((string) ($data['SessionTitle'] ?? ''));
-        if ($sessionCode === '' || $sessionTitle === '') {
-            throw new \RuntimeException('Session code and title are required.');
+        if ($sessionTitle === '') {
+            throw new \RuntimeException('Session title is required.');
+        }
+        if ($sessionCode === '') {
+            $sessionCode = $this->generateSessionCode();
         }
 
         $this->db->beginTransaction();
@@ -361,7 +591,7 @@ final class TrainingManagementModel
                 ':instructor_user_id' => $this->intOrNull($data['InstructorUserID'] ?? null),
                 ':path_code' => $this->nullIfEmpty($data['PathCode'] ?? null),
                 ':scenario_code' => $this->nullIfEmpty($data['ScenarioCode'] ?? null),
-                ':scheduled_at' => $this->nullIfEmpty($data['ScheduledAt'] ?? null),
+                ':scheduled_at' => $this->normalizeSqlDateTime($data['ScheduledAt'] ?? null),
                 ':status' => trim((string) ($data['Status'] ?? 'planned')) ?: 'planned',
                 ':notes' => $this->nullIfEmpty($data['Notes'] ?? null),
                 ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
@@ -369,8 +599,9 @@ final class TrainingManagementModel
 
             $existsStmt = $this->db->prepare("SELECT 1 FROM dbo.tblTrainingSessions WHERE SessionCode = :code");
             $existsStmt->execute([':code' => $sessionCode]);
+            $sessionExists = (bool) $existsStmt->fetchColumn();
 
-            if ($existsStmt->fetchColumn()) {
+            if ($sessionExists) {
                 $stmt = $this->db->prepare("
                     UPDATE dbo.tblTrainingSessions
                     SET SessionTitle = :title,
@@ -388,10 +619,10 @@ final class TrainingManagementModel
                 $stmt = $this->db->prepare("
                     INSERT INTO dbo.tblTrainingSessions
                         (SessionCode, SessionTitle, InstructorUserID, PathCode, ScenarioCode, ScheduledAt, Status, Notes, CreatedBy, UpdatedBy)
-                    VALUES (:code, :title, :instructor_user_id, :path_code, :scenario_code, :scheduled_at, :status, :notes, :updated_by, :updated_by)
+                    VALUES (:code, :title, :instructor_user_id, :path_code, :scenario_code, :scheduled_at, :status, :notes, :created_by, :updated_by)
                 ");
             }
-            $stmt->execute($params);
+            $stmt->execute($params + ($sessionExists ? [] : [':created_by' => $updatedBy > 0 ? $updatedBy : null]));
 
             $sessionId = $this->sessionIdForCode($sessionCode);
             $this->syncSessionUsers($sessionId, (string) ($data['UserIDs'] ?? ''), $updatedBy);
@@ -494,7 +725,7 @@ final class TrainingManagementModel
     public function getStepSupport(string $scenarioCode, int $stepNo): array
     {
         $scenarioCode = trim($scenarioCode);
-        if ($scenarioCode === '' || $stepNo <= 0 || !$this->supportsManagementTables()) {
+        if ($scenarioCode === '' || $stepNo <= 0 || !$this->supportsStepSupportTables()) {
             return [];
         }
 
@@ -524,7 +755,7 @@ final class TrainingManagementModel
     {
         $scenarioCode = trim((string) ($data['ScenarioCode'] ?? ''));
         $stepNo = (int) ($data['StepNo'] ?? 0);
-        if ($scenarioCode === '' || $stepNo <= 0 || !$this->supportsManagementTables()) {
+        if ($scenarioCode === '' || $stepNo <= 0 || !$this->supportsStepSupportTables()) {
             return;
         }
 
@@ -542,7 +773,8 @@ final class TrainingManagementModel
             WHERE ScenarioCode = :code AND StepNo = :step_no
         ");
         $noteExists->execute([':code' => $scenarioCode, ':step_no' => $stepNo]);
-        if ($noteExists->fetchColumn()) {
+        $hasNote = (bool) $noteExists->fetchColumn();
+        if ($hasNote) {
             $stmt = $this->db->prepare("
                 UPDATE dbo.tblTrainingStepInstructorNotes
                 SET TrainerNote = :trainer_note,
@@ -557,10 +789,10 @@ final class TrainingManagementModel
             $stmt = $this->db->prepare("
                 INSERT INTO dbo.tblTrainingStepInstructorNotes
                     (ScenarioCode, StepNo, TrainerNote, ExpectedOutcome, CommonIssues, CreatedBy, UpdatedBy)
-                VALUES (:code, :step_no, :trainer_note, :expected_outcome, :common_issues, :updated_by, :updated_by)
+                VALUES (:code, :step_no, :trainer_note, :expected_outcome, :common_issues, :created_by, :updated_by)
             ");
         }
-        $stmt->execute($noteParams);
+        $stmt->execute($noteParams + ($hasNote ? [] : [':created_by' => $updatedBy > 0 ? $updatedBy : null]));
 
         $checkpointParams = [
             ':code' => $scenarioCode,
@@ -577,7 +809,8 @@ final class TrainingManagementModel
             WHERE ScenarioCode = :code AND StepNo = :step_no
         ");
         $checkpointExists->execute([':code' => $scenarioCode, ':step_no' => $stepNo]);
-        if ($checkpointExists->fetchColumn()) {
+        $hasCheckpoint = (bool) $checkpointExists->fetchColumn();
+        if ($hasCheckpoint) {
             $checkpointStmt = $this->db->prepare("
                 UPDATE dbo.tblTrainingStepCheckpoints
                 SET QuestionText = :question_text,
@@ -593,10 +826,10 @@ final class TrainingManagementModel
             $checkpointStmt = $this->db->prepare("
                 INSERT INTO dbo.tblTrainingStepCheckpoints
                     (ScenarioCode, StepNo, QuestionText, ExpectedAnswer, RequiredFlag, ActiveFlag, CreatedBy, UpdatedBy)
-                VALUES (:code, :step_no, :question_text, :expected_answer, :required_flag, :active_flag, :updated_by, :updated_by)
+                VALUES (:code, :step_no, :question_text, :expected_answer, :required_flag, :active_flag, :created_by, :updated_by)
             ");
         }
-        $checkpointStmt->execute($checkpointParams);
+        $checkpointStmt->execute($checkpointParams + ($hasCheckpoint ? [] : [':created_by' => $updatedBy > 0 ? $updatedBy : null]));
     }
 
     public function validateCatalog(array $routes, string $viewRoot): array
@@ -807,15 +1040,17 @@ final class TrainingManagementModel
             INSERT INTO dbo.tblTrainingPathScenarios
                 (PathCode, ScenarioCode, RequiredFlag, SortOrder, CreatedBy, UpdatedBy)
             VALUES
-                (:path_code, :scenario_code, 1, :sort_order, :updated_by, :updated_by)
+                (:path_code, :scenario_code, 1, :sort_order, :created_by, :updated_by)
         ");
 
+        $auditUserId = $updatedBy > 0 ? $updatedBy : null;
         foreach ($codes as $index => $scenarioCode) {
             $stmt->execute([
                 ':path_code' => $pathCode,
                 ':scenario_code' => $scenarioCode,
                 ':sort_order' => ($index + 1) * 10,
-                ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
+                ':created_by' => $auditUserId,
+                ':updated_by' => $auditUserId,
             ]);
         }
     }
@@ -848,19 +1083,20 @@ final class TrainingManagementModel
             INSERT INTO dbo.tblTrainingSessionUsers
                 (TrainingSessionID, UserID, Status, CreatedBy, UpdatedBy)
             VALUES
-                (:session_id, :user_id, N'assigned', :updated_by, :updated_by)
+                (:session_id, :user_id, N'assigned', :created_by, :updated_by)
         ");
+        $auditUserId = $updatedBy > 0 ? $updatedBy : null;
         foreach ($userIds as $userId) {
             $params = [
                 ':session_id' => $sessionId,
                 ':user_id' => $userId,
-                ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
+                ':updated_by' => $auditUserId,
             ];
             $existsStmt->execute([':session_id' => $sessionId, ':user_id' => $userId]);
             if ($existsStmt->fetchColumn()) {
                 $updateStmt->execute($params);
             } else {
-                $insertStmt->execute($params);
+                $insertStmt->execute($params + [':created_by' => $auditUserId]);
             }
         }
     }
@@ -870,6 +1106,19 @@ final class TrainingManagementModel
         $stmt = $this->db->prepare("SELECT TrainingSessionID FROM dbo.tblTrainingSessions WHERE SessionCode = :code");
         $stmt->execute([':code' => trim($sessionCode)]);
         return (int) ($stmt->fetchColumn() ?: 0);
+    }
+
+    private function generateSessionCode(): string
+    {
+        $prefix = 'TRN-' . gmdate('Ymd-His');
+        for ($index = 1; $index <= 99; $index++) {
+            $code = $prefix . '-' . str_pad((string) $index, 2, '0', STR_PAD_LEFT);
+            if ($this->sessionIdForCode($code) <= 0) {
+                return $code;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique session code. Please try again.');
     }
 
     private function scanKnownElementIds(string $viewRoot): array
@@ -946,5 +1195,31 @@ final class TrainingManagementModel
     {
         $value = trim((string) $value);
         return $value === '' ? null : $value;
+    }
+
+    private function normalizeSqlDateTime(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $value = str_replace('T', ' ', $value);
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/', $value, $matches)) {
+            throw new \RuntimeException('Scheduled Date/Time must be a valid date and time.');
+        }
+
+        $year = (int) $matches[1];
+        $month = (int) $matches[2];
+        $day = (int) $matches[3];
+        $hour = (int) $matches[4];
+        $minute = (int) $matches[5];
+        $second = isset($matches[6]) ? (int) $matches[6] : 0;
+
+        if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
+            throw new \RuntimeException('Scheduled Date/Time must be a valid date and time.');
+        }
+
+        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second);
     }
 }

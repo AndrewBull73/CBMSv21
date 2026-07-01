@@ -571,6 +571,7 @@ BEGIN
         CHECK (LinkTypeCode IN (
             N'RELATED_ITEM',
             N'REQUIREMENT',
+            N'ISSUE',
             N'TRAINING_SCENARIO',
             N'TRAINING_ASSIGNMENT',
             N'TRAINING_SESSION',
@@ -1150,5 +1151,209 @@ IF OBJECT_ID(N'dbo.tblWorkflowRequirementAttachments', N'U') IS NOT NULL
 BEGIN
     CREATE INDEX IX_tblWorkflowRequirementAttachments_UploadedBy
         ON dbo.tblWorkflowRequirementAttachments (UploadedByUserID, UploadedAt DESC);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblWorkflowIssues
+    (
+        WorkflowIssueID INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_tblWorkflowIssues PRIMARY KEY,
+        WorkflowProjectID INT NULL,
+        WorkflowRequirementID INT NULL,
+        IssueCode NVARCHAR(50) NULL,
+        IssueTitle NVARCHAR(255) NOT NULL,
+        IssueDescription NVARCHAR(MAX) NULL,
+        IssueTypeCode NVARCHAR(30) NOT NULL CONSTRAINT DF_tblWorkflowIssues_IssueTypeCode DEFAULT (N'BUG'),
+        SeverityCode NVARCHAR(20) NOT NULL CONSTRAINT DF_tblWorkflowIssues_SeverityCode DEFAULT (N'MEDIUM'),
+        PriorityCode NVARCHAR(20) NOT NULL CONSTRAINT DF_tblWorkflowIssues_PriorityCode DEFAULT (N'SHOULD'),
+        IssueStatusCode NVARCHAR(30) NOT NULL CONSTRAINT DF_tblWorkflowIssues_IssueStatusCode DEFAULT (N'OPEN'),
+        RaisedByUserID INT NULL,
+        OwnerUserID INT NULL,
+        RaisedAt DATETIME2(0) NOT NULL CONSTRAINT DF_tblWorkflowIssues_RaisedAt DEFAULT SYSUTCDATETIME(),
+        DueDate DATE NULL,
+        ResolvedAt DATETIME2(0) NULL,
+        ResolutionSummary NVARCHAR(MAX) NULL,
+        Active BIT NOT NULL CONSTRAINT DF_tblWorkflowIssues_Active DEFAULT (1),
+        CreatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_tblWorkflowIssues_CreatedAt DEFAULT SYSUTCDATETIME(),
+        CreatedBy INT NULL,
+        UpdatedAt DATETIME2(0) NULL,
+        UpdatedBy INT NULL
+    );
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'CK_tblWorkflowIssues_IssueTypeCode')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT CK_tblWorkflowIssues_IssueTypeCode
+        CHECK (IssueTypeCode IN (N'BUG', N'GAP', N'RISK', N'DECISION', N'DATA', N'DEPENDENCY', N'CHANGE_REQUEST', N'OTHER'));
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'CK_tblWorkflowIssues_SeverityCode')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT CK_tblWorkflowIssues_SeverityCode
+        CHECK (SeverityCode IN (N'CRITICAL', N'HIGH', N'MEDIUM', N'LOW'));
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'CK_tblWorkflowIssues_PriorityCode')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT CK_tblWorkflowIssues_PriorityCode
+        CHECK (PriorityCode IN (N'MUST', N'SHOULD', N'COULD', N'WONT'));
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'CK_tblWorkflowIssues_IssueStatusCode')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT CK_tblWorkflowIssues_IssueStatusCode
+        CHECK (IssueStatusCode IN (N'OPEN', N'TRIAGED', N'IN_PROGRESS', N'BLOCKED', N'RESOLVED', N'CLOSED', N'DEFERRED'));
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblWorkflowProjects', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'FK_tblWorkflowIssues_Project')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT FK_tblWorkflowIssues_Project
+        FOREIGN KEY (WorkflowProjectID)
+        REFERENCES dbo.tblWorkflowProjects (WorkflowProjectID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblWorkflowRequirements', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'FK_tblWorkflowIssues_Requirement')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT FK_tblWorkflowIssues_Requirement
+        FOREIGN KEY (WorkflowRequirementID)
+        REFERENCES dbo.tblWorkflowRequirements (WorkflowRequirementID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblUsers', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'FK_tblWorkflowIssues_RaisedBy')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT FK_tblWorkflowIssues_RaisedBy
+        FOREIGN KEY (RaisedByUserID)
+        REFERENCES dbo.tblUsers (UserID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblUsers', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'FK_tblWorkflowIssues_Owner')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssues
+    ADD CONSTRAINT FK_tblWorkflowIssues_Owner
+        FOREIGN KEY (OwnerUserID)
+        REFERENCES dbo.tblUsers (UserID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'UX_tblWorkflowIssues_IssueCode')
+BEGIN
+    CREATE UNIQUE INDEX UX_tblWorkflowIssues_IssueCode
+        ON dbo.tblWorkflowIssues (IssueCode)
+        WHERE IssueCode IS NOT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'IX_tblWorkflowIssues_ProjectStatus')
+BEGIN
+    CREATE INDEX IX_tblWorkflowIssues_ProjectStatus
+        ON dbo.tblWorkflowIssues (WorkflowProjectID, Active, IssueStatusCode, SeverityCode, DueDate);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.tblWorkflowIssues') AND name = N'IX_tblWorkflowIssues_Requirement')
+BEGIN
+    CREATE INDEX IX_tblWorkflowIssues_Requirement
+        ON dbo.tblWorkflowIssues (WorkflowRequirementID, Active, IssueStatusCode);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblWorkflowIssueAttachments
+    (
+        WorkflowIssueAttachmentID INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_tblWorkflowIssueAttachments PRIMARY KEY,
+        WorkflowIssueID INT NOT NULL,
+        OriginalFileName NVARCHAR(255) NOT NULL,
+        StoredFileName NVARCHAR(255) NOT NULL,
+        StoragePath NVARCHAR(1000) NOT NULL,
+        MimeType NVARCHAR(255) NULL,
+        FileSizeBytes BIGINT NOT NULL CONSTRAINT DF_tblWorkflowIssueAttachments_FileSizeBytes DEFAULT (0),
+        UploadedByUserID INT NULL,
+        UploadedAt DATETIME2(0) NOT NULL CONSTRAINT DF_tblWorkflowIssueAttachments_UploadedAt DEFAULT SYSUTCDATETIME(),
+        Deleted BIT NOT NULL CONSTRAINT DF_tblWorkflowIssueAttachments_Deleted DEFAULT (0),
+        DeletedByUserID INT NULL,
+        DeletedAt DATETIME2(0) NULL
+    );
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblWorkflowIssues', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssueAttachments') AND name = N'FK_tblWorkflowIssueAttachments_Issue')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssueAttachments
+    ADD CONSTRAINT FK_tblWorkflowIssueAttachments_Issue
+        FOREIGN KEY (WorkflowIssueID)
+        REFERENCES dbo.tblWorkflowIssues (WorkflowIssueID)
+        ON DELETE CASCADE;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblUsers', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssueAttachments') AND name = N'FK_tblWorkflowIssueAttachments_UploadedBy')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssueAttachments
+    ADD CONSTRAINT FK_tblWorkflowIssueAttachments_UploadedBy
+        FOREIGN KEY (UploadedByUserID)
+        REFERENCES dbo.tblUsers (UserID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblUsers', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE parent_object_id = OBJECT_ID(N'dbo.tblWorkflowIssueAttachments') AND name = N'FK_tblWorkflowIssueAttachments_DeletedBy')
+BEGIN
+    ALTER TABLE dbo.tblWorkflowIssueAttachments
+    ADD CONSTRAINT FK_tblWorkflowIssueAttachments_DeletedBy
+        FOREIGN KEY (DeletedByUserID)
+        REFERENCES dbo.tblUsers (UserID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.tblWorkflowIssueAttachments') AND name = N'IX_tblWorkflowIssueAttachments_Issue')
+BEGIN
+    CREATE INDEX IX_tblWorkflowIssueAttachments_Issue
+        ON dbo.tblWorkflowIssueAttachments (WorkflowIssueID, Deleted, UploadedAt DESC);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblWorkflowIssueAttachments', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.tblWorkflowIssueAttachments') AND name = N'IX_tblWorkflowIssueAttachments_UploadedBy')
+BEGIN
+    CREATE INDEX IX_tblWorkflowIssueAttachments_UploadedBy
+        ON dbo.tblWorkflowIssueAttachments (UploadedByUserID, UploadedAt DESC);
 END;
 GO

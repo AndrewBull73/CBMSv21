@@ -1,166 +1,329 @@
-# Handoff Notes - Workflow Projects, Requirements, and Task Return Navigation (2026-06-30)
+# Handoff Notes - Workflow Operations Build-Out (2026-06-30)
 
-## Session Summary
+## Current Resume Context
 
-- Continued the Workflow Operations build-out for CBMSv21.
-- Added and refined Workflow Projects and Workflow Requirements capability.
-- Tidied project and requirement action buttons so the screens are less cluttered.
-- Added detailed project/requirement permissions for view, create, edit, and delete/archive.
-- Changed Workflow Projects list ordering to Project Start Date.
-- Fixed workflow task save navigation so tasks created from project/requirement screens return to the originating screen after save.
+This handoff captures the current state of the Workflow Operations work in `C:\CBMS\CBMSv21`.
 
-This note is the current handoff baseline for the Workflow Operations work completed on 30 June 2026.
+The work is not committed. Several files are modified and the new Issues Log files are still untracked. Treat the workspace as intentionally dirty and do not reset it.
 
-## Recent Commits
+## High-Level Summary
 
-- `d494507` - Return workflow task saves to origin screen
-- `cdf12e5` - Order workflow projects by start date
-- `8db30ad` - Add workflow project and requirement permissions
-- `4adf5d6` - Tidy workflow requirement actions
-- `c16ad2c` - Shorten project task action label
-- `1f51abd` - Tidy workflow project actions
-- `966a3d9` - Validate project task dates
-- `47972bb` - Add project user role editing
-- `f71c884` - Checkpoint workflow operations and training features
+Workflow Operations is close to feature-complete for this pass. The session expanded Projects, Requirements, Tasks, Issues, traceability, navigation, print/export, helper text, selected-project usability, training hooks, read-only styling, delete behavior, and tabbed layouts.
 
-## Major Outcomes Completed
+The main functional areas now covered are:
 
-### 1. Workflow Projects And Requirements Schema
+- Workflow Projects
+- Workflow Requirements and Requirement Matrix
+- Workflow Tasks
+- Workflow Issues Log
+- Project Summary with tabs and issue visibility
+- Selected Project sticky context
+- Training module hooks for future scenario authoring
+- Print and Excel export for operation screens
 
-- Workflow Projects, Project Users, Task Dependencies, Entity Links, Requirements, Requirement History, and Requirement Attachments are defined in:
+## Important Workspace State
+
+`git status --short` currently shows:
+
+- Modified:
+  - `SCREEN_UI_STANDARD.md`
+  - `backend-php/app/Controllers/BaseController.php`
+  - `backend-php/app/Controllers/WorkflowController.php`
+  - `backend-php/app/Controllers/WorkflowProjectController.php`
+  - `backend-php/app/Controllers/WorkflowRequirementController.php`
+  - `backend-php/app/Models/WorkflowLinkModel.php`
+  - `backend-php/app/Views/layouts/main.php`
+  - `backend-php/app/Views/strategy/_RouteHelp.php`
+  - multiple `backend-php/app/Views/workflow/*.php`
+  - `backend-php/config/menu.php`
+  - `backend-php/config/quick_links.php`
+  - `backend-php/config/routes.php`
   - `backend-php/config/sql/create_workflow_projects.sql`
+  - `backend-php/config/sql/sync_role_permission_model_v4.sql`
+  - `backend-php/lang/en.php`
+  - `backend-php/lang/fr.php`
 
-- Supporting seed/demo scripts are present:
-  - `backend-php/config/sql/seed_workflow_requirements_demo.sql`
-  - `backend-php/config/sql/seed_workflow_project_demo_tasks.sql`
+- Untracked new files:
+  - `backend-php/app/Controllers/WorkflowIssueController.php`
+  - `backend-php/app/Models/WorkflowIssueModel.php`
+  - `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+  - `backend-php/app/Views/workflow/WorkflowIssueList.php`
+  - `backend-php/app/Views/workflow/_SelectedProjectCue.php`
+  - `backend-php/config/sql/alter_tblWorkflowIssues_add_other_issue_type.sql`
 
-Important:
+## Major Changes Completed This Session
 
-- Run `backend-php/config/sql/create_workflow_projects.sql` against the active database before using the Workflow Projects / Requirements screens in a fresh database.
-- The script is written to be mostly idempotent and additive.
+### 1. Issues Log
 
-### 2. Workflow Project Screen Was Tidied
+Added a proper Issues Log linked to:
 
-- Project list actions were reduced and moved into compact dropdown actions where appropriate.
-- The task create button label was shortened from `Create Task` to `+ Task`.
-- Project summary and project form/Gantt links were kept available but less visually noisy.
+- Workflow Projects
+- Workflow Requirements
+- Workflow Tasks via workflow entity links
+
+Issue work includes:
+
+- Issue list screen
+- Create/Edit Issue screen
+- Issue Code generated on save
+- Requirement dropdown filtered by selected project
+- Attachments on issues
+- Create task from issue
+- Project Summary shows project issues
+- Issue type now requires user selection on create
+- Added `Other` issue type
 
 Key files:
 
-- `backend-php/app/Views/workflow/WorkflowProjectList.php`
-- `backend-php/app/Views/workflow/WorkflowProjectSummary.php`
-- `backend-php/app/Views/workflow/WorkflowProjectForm.php`
+- `backend-php/app/Controllers/WorkflowIssueController.php`
+- `backend-php/app/Models/WorkflowIssueModel.php`
+- `backend-php/app/Views/workflow/WorkflowIssueList.php`
+- `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+- `backend-php/config/routes.php`
+- `backend-php/config/menu.php`
+- `backend-php/config/quick_links.php`
+- `backend-php/config/sql/create_workflow_projects.sql`
+- `backend-php/config/sql/alter_tblWorkflowIssues_add_other_issue_type.sql`
+- `backend-php/lang/en.php`
+- `backend-php/lang/fr.php`
 
-### 3. Workflow Requirement Side Was Tidied
+Important database note:
 
-- Requirement row actions were consolidated so the list/matrix screens feel less busy.
-- Requirement create/edit/delete/task actions are now permission-aware.
-- Requirement forms support read-only behavior when the user only has view permission.
+- Fresh installs use `create_workflow_projects.sql`.
+- Existing installs that already have the issue type check constraint need:
+  - `backend-php/config/sql/alter_tblWorkflowIssues_add_other_issue_type.sql`
 
-Key files:
+### 2. Sticky Selected Project
 
-- `backend-php/app/Views/workflow/WorkflowRequirementList.php`
-- `backend-php/app/Views/workflow/WorkflowRequirementMatrix.php`
-- `backend-php/app/Views/workflow/WorkflowRequirementSummary.php`
-- `backend-php/app/Views/workflow/WorkflowRequirementForm.php`
-
-### 4. Detailed Workflow Project And Requirement Permissions Were Added
-
-New permissions:
-
-- `WORKFLOW_PROJECTS_VIEW`
-- `WORKFLOW_PROJECTS_CREATE`
-- `WORKFLOW_PROJECTS_EDIT`
-- `WORKFLOW_PROJECTS_DELETE`
-- `WORKFLOW_REQUIREMENTS_VIEW`
-- `WORKFLOW_REQUIREMENTS_CREATE`
-- `WORKFLOW_REQUIREMENTS_EDIT`
-- `WORKFLOW_REQUIREMENTS_DELETE`
+Added sticky selected project behavior so users do not have to reselect the project on each Workflow Operations screen.
 
 Behavior:
 
-- Project/requirement menus and quick links use the new permissions.
-- View-only users can open records but forms are read-only.
-- Create/edit/delete/archive controls only appear when allowed.
-- Delete is implemented as archive/deactivate, not hard delete.
+- Project context is remembered in session.
+- Requirements Summary, Requirements Matrix, Tasks, and Issues can default from the remembered project.
+- Clearing the project filter clears the sticky context.
+- Create Issue now defaults the sticky project when `workflowProjectID` is not supplied in the URL.
 
 Key files:
 
-- `backend-php/config/sql/sync_role_permission_model_v4.sql`
 - `backend-php/app/Controllers/BaseController.php`
-- `backend-php/app/Controllers/WorkflowProjectController.php`
+- `backend-php/app/Controllers/WorkflowController.php`
 - `backend-php/app/Controllers/WorkflowRequirementController.php`
-- `backend-php/app/Models/WorkflowProjectModel.php`
-- `backend-php/app/Models/WorkflowRequirementModel.php`
-- `backend-php/config/menu.php`
-- `backend-php/config/quick_links.php`
-- `backend-php/config/routes.php`
-- `backend-php/lang/en.php`
-- `backend-php/lang/fr.php`
+- `backend-php/app/Controllers/WorkflowIssueController.php`
+- `backend-php/app/Views/workflow/_SelectedProjectCue.php`
+- `backend-php/app/Views/workflow/WorkflowList.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementList.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementSummary.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementMatrix.php`
+- `backend-php/app/Views/workflow/WorkflowIssueList.php`
 
-Important:
+### 3. Project Summary Tabs
 
-- Run `backend-php/config/sql/sync_role_permission_model_v4.sql` against the active database so the new permissions exist and are assigned to roles.
+Project Summary was reorganized into tabs to reduce visual overload:
 
-### 5. Workflow Projects Are Ordered By Start Date
+- Overview
+- Issues
+- Linked Work
+- Schedule
+- Tasks
 
-- Workflow Projects list now sorts by:
-  - `StartDate` ascending
-  - projects with no start date at the bottom
-  - `ProjectName`
-  - `WorkflowProjectID`
+Project Issues now appear on Project Summary, with actions to open the issue or create a task from the issue.
 
 Key file:
 
-- `backend-php/app/Models/WorkflowProjectModel.php`
+- `backend-php/app/Views/workflow/WorkflowProjectSummary.php`
 
-### 6. Task Save Returns To Origin Screen
+### 4. Edit Task Tabs
 
-- Workflow task create/edit can now carry a safe local `returnTo` URL.
-- After saving a task, the app returns to the originating project or requirement screen instead of dropping back to the default task/home flow.
-- Supported return targets include:
-  - Workflow task list/edit
-  - Workflow project list/summary/form
-  - Workflow requirement list/summary/matrix/form
+Edit Task screen was reorganized into tabs to reduce clutter:
+
+- Details
+- Project Plan
+- Assignment
+- Notifications
+- Existing lower workflow panels remain available for comments, attachments, links, history/views, etc.
+
+Validation now opens the tab containing the first invalid field.
+
+Key file:
+
+- `backend-php/app/Views/workflow/WorkflowForm.php`
+
+### 5. Edit Project Tabs
+
+Edit Project screen was reorganized into tabs:
+
+- Details
+- Team
+- Schedule
+
+The Schedule tab contains the Gantt/task section. Existing `#workflow-project-gantt` links now open the Schedule tab automatically.
+
+Key file:
+
+- `backend-php/app/Views/workflow/WorkflowProjectForm.php`
+
+### 6. Read-Only Field Visual Standard
+
+Read-only fields now have consistent visual treatment:
+
+- Greyed/read-only control styling
+- Read-only badge where appropriate
+- Issue Code shows “Generated on Save” and has the read-only visual state
+
+The UI template/standard was updated.
 
 Key files:
 
+- `SCREEN_UI_STANDARD.md`
+- `backend-php/app/Views/layouts/main.php`
+- `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+
+### 7. Delete Behavior
+
+Delete/archive behavior was expanded and tightened.
+
+Current rule:
+
+- System/workflow administrators can delete.
+- Record creators can delete their own items where the model has a creator field.
+
+Notes:
+
+- Projects, Requirements, and Issues use archive/deactivate style delete.
+- Tasks use the existing task delete method, now with server-side creator/admin permission checks.
+- Delete buttons were added or exposed where needed:
+  - Project List
+  - Project Summary
+  - Project Edit
+  - Requirement List/Form
+  - Issue List/Form
+  - Task List/Edit
+
+Key files:
+
+- `backend-php/app/Controllers/WorkflowProjectController.php`
+- `backend-php/app/Controllers/WorkflowRequirementController.php`
+- `backend-php/app/Controllers/WorkflowIssueController.php`
 - `backend-php/app/Controllers/WorkflowController.php`
-- `backend-php/app/Views/workflow/WorkflowForm.php`
 - `backend-php/app/Views/workflow/WorkflowProjectList.php`
 - `backend-php/app/Views/workflow/WorkflowProjectSummary.php`
 - `backend-php/app/Views/workflow/WorkflowProjectForm.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementList.php`
 - `backend-php/app/Views/workflow/WorkflowRequirementForm.php`
+- `backend-php/app/Views/workflow/WorkflowIssueList.php`
+- `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+- `backend-php/app/Views/workflow/WorkflowList.php`
+- `backend-php/app/Views/workflow/WorkflowForm.php`
+- `backend-php/lang/en.php`
+- `backend-php/lang/fr.php`
+
+### 8. Print And Excel Export
+
+Workflow operation list/report screens now have print and Excel export actions.
+
+Covered screens include:
+
+- Workflow Projects
+- Workflow Tasks
+- Workflow Requirements
+- Requirement Summary
+- Requirement Matrix
+- Workflow Issues
+
+Key files:
+
+- `backend-php/app/Controllers/WorkflowProjectController.php`
+- `backend-php/app/Controllers/WorkflowRequirementController.php`
+- `backend-php/app/Controllers/WorkflowIssueController.php`
+- `backend-php/app/Controllers/WorkflowController.php`
+- list/report views under `backend-php/app/Views/workflow/`
+
+### 9. Helper Instructions Updated
+
+Workflow Operation helper instructions were updated so the screen help aligns with the new workflows.
+
+Key file:
+
+- `backend-php/app/Views/strategy/_RouteHelp.php`
+
+### 10. Training Module Hooks
+
+Reviewed Training module hooks and added stable explicit IDs for future training scenarios.
+
+Confirmed:
+
+- Global training auto-hook include exists in `backend-php/app/Views/layouts/main.php`.
+- Explicit IDs were added to important workflow forms, filters, tables, tabs, and action buttons.
+- Duplicate `workflow-*` IDs were checked and none were found at the time of verification.
+
+Key files:
+
+- `backend-php/app/Views/layouts/main.php`
+- `backend-php/app/Views/training/_TrainingAutoHooks.php`
+- `backend-php/app/Views/workflow/WorkflowProjectList.php`
+- `backend-php/app/Views/workflow/WorkflowProjectForm.php`
+- `backend-php/app/Views/workflow/WorkflowProjectSummary.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementList.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementSummary.php`
 - `backend-php/app/Views/workflow/WorkflowRequirementMatrix.php`
+- `backend-php/app/Views/workflow/WorkflowRequirementForm.php`
+- `backend-php/app/Views/workflow/WorkflowIssueList.php`
+- `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+- `backend-php/app/Views/workflow/WorkflowList.php`
+- `backend-php/app/Views/workflow/WorkflowForm.php`
 
-Security note:
+## Requirement Acceptance Criteria And Matrix Gaps
 
-- `returnTo` is normalized server-side and only accepts local `index.php?route=...` workflow routes.
-- Absolute browser referrers are stripped back to local `index.php?...` paths before use.
+Current design:
 
-## Current Environment State
+- Acceptance Criteria is still free text.
+- It should be treated as the requirement’s “definition of done”.
+- Matrix gaps are determined from structured fields/links, not semantic reading of the free text.
 
-### Workspace
+Gap examples:
 
-- Current workspace:
-  - `C:\CBMS\CBMSv21`
+- Missing acceptance criteria
+- No linked task
+- Open linked tasks
+- No testing link
+- No training link
+- Has defect/issue links
 
-### Git
+Suggested future enhancement:
 
-- Working tree was clean after the latest commit.
-- Latest commit at handoff:
-  - `d494507 Return workflow task saves to origin screen`
+- Add structured acceptance/evidence checklist items if stronger reporting is needed:
+  - Testing required
+  - Training required
+  - Procedure update required
+  - Communications required
+  - UAT evidence required
 
-## Verification Completed
+## Important SQL Scripts
 
-PHP syntax checks were run successfully on the touched workflow files during the session, including:
+Run as needed:
+
+- `backend-php/config/sql/create_workflow_projects.sql`
+- `backend-php/config/sql/sync_role_permission_model_v4.sql`
+- `backend-php/config/sql/alter_workflow_tasks_add_response_forwarding_activity.sql`
+- `backend-php/config/sql/alter_tblWorkflowIssues_add_other_issue_type.sql`
+
+Important:
+
+- The Issues Log depends on the workflow project SQL objects.
+- Existing databases may need the new `alter_tblWorkflowIssues_add_other_issue_type.sql` patch to allow Issue Type `OTHER`.
+
+## Verification Completed During Session
+
+PHP syntax checks were run successfully for the touched workflow files throughout the session, including:
 
 - `backend-php/app/Controllers/WorkflowController.php`
 - `backend-php/app/Controllers/WorkflowProjectController.php`
 - `backend-php/app/Controllers/WorkflowRequirementController.php`
-- `backend-php/app/Models/WorkflowProjectModel.php`
-- `backend-php/app/Models/WorkflowRequirementModel.php`
+- `backend-php/app/Controllers/WorkflowIssueController.php`
+- `backend-php/app/Models/WorkflowIssueModel.php`
 - `backend-php/app/Views/workflow/WorkflowForm.php`
+- `backend-php/app/Views/workflow/WorkflowList.php`
 - `backend-php/app/Views/workflow/WorkflowProjectForm.php`
 - `backend-php/app/Views/workflow/WorkflowProjectList.php`
 - `backend-php/app/Views/workflow/WorkflowProjectSummary.php`
@@ -168,70 +331,205 @@ PHP syntax checks were run successfully on the touched workflow files during the
 - `backend-php/app/Views/workflow/WorkflowRequirementList.php`
 - `backend-php/app/Views/workflow/WorkflowRequirementMatrix.php`
 - `backend-php/app/Views/workflow/WorkflowRequirementSummary.php`
-- `backend-php/config/menu.php`
-- `backend-php/config/quick_links.php`
-- `backend-php/config/routes.php`
+- `backend-php/app/Views/workflow/WorkflowIssueForm.php`
+- `backend-php/app/Views/workflow/WorkflowIssueList.php`
+- `backend-php/app/Views/workflow/_SelectedProjectCue.php`
 - `backend-php/lang/en.php`
 - `backend-php/lang/fr.php`
 
-`git diff --check` was run for the recent changes and showed no whitespace errors. It did show the repository's normal LF-to-CRLF warnings.
+`git diff --check` was run multiple times and was clean apart from normal LF-to-CRLF warnings.
 
-## Items To Verify In Browser
+## Browser Verification Still Recommended
 
-1. Open Workflow Projects:
-   - confirm projects sort by Project Start Date
-   - confirm undated projects appear after dated projects
-   - confirm row actions are compact
+1. Workflow Projects
+   - Create/edit project.
+   - Confirm tabs: Details, Team, Schedule.
+   - Confirm `#workflow-project-gantt` opens Schedule tab.
+   - Confirm project delete appears only for admin/creator.
 
-2. Open a Workflow Project Summary:
-   - click `+ Task`
-   - save the task
-   - confirm the app returns to the same project summary screen
+2. Workflow Project Summary
+   - Confirm tabs render correctly.
+   - Confirm Issues tab shows project issues.
+   - Confirm Add Issue and Add Task actions keep the project context.
 
-3. Open a Workflow Project Form / Gantt section:
-   - click `+ Task` from the task/Gantt area
-   - save the task
-   - confirm the app returns to the project form/Gantt area
+3. Workflow Issues
+   - Create issue from sticky project context without `workflowProjectID` in URL.
+   - Confirm project defaults from sticky selected project.
+   - Confirm Issue Type starts blank and user must select.
+   - Confirm Issue Type includes Other.
+   - Confirm Requirement dropdown filters by selected Project.
+   - Upload/download/delete an issue attachment.
+   - Create task from issue and verify project date range validation.
 
-4. Open a Workflow Requirement Form:
-   - click `+ Task`
-   - save the task
-   - confirm the app returns to the requirement form
+4. Workflow Requirements
+   - Create high-level and detailed requirements.
+   - Confirm detailed requirement parent behavior.
+   - Confirm Create Issue from requirement carries project/requirement.
+   - Confirm Matrix gaps show expected no-training/no-testing/no-task states.
 
-5. Open Requirements Matrix:
-   - click `+ Task` from a requirement row
-   - save the task
-   - confirm the app returns to the matrix with filters preserved
+5. Workflow Tasks
+   - Create task from project, requirement, and issue.
+   - Confirm return navigation works.
+   - Confirm task edit tabs render and validation opens invalid tab.
+   - Confirm delete appears for task creator/admin only.
 
-6. Test permissions with representative roles:
-   - Workflow Operations User: view only for projects/requirements
-   - Workflow Operations Editor: view/create/edit for projects/requirements
-   - Workflow Operations Administrator: view/create/edit/delete for projects/requirements
+6. Print/Excel
+   - Test print buttons and Excel downloads on the operation screens.
 
-## Recommended Next Steps
+7. Permissions
+   - Test with representative roles:
+     - View-only user
+     - Editor/creator
+     - Workflow Operations Administrator
+     - System Administrator
 
-1. Run the SQL scripts in the active database if not already done:
-   - `backend-php/config/sql/create_workflow_projects.sql`
-   - `backend-php/config/sql/sync_role_permission_model_v4.sql`
+## Known Caveats / Follow-Up Items
 
-2. Browser-test the Workflow Projects and Requirements flows listed above.
+- Issue files are still untracked. Make sure they are added when committing.
+- The create workflow SQL still has default Issue Type `BUG` at the DB level for compatibility, but the UI now requires explicit selection. App-side save validation prevents blank Issue Type.
+- Existing DBs with old issue type constraints require the new `alter_tblWorkflowIssues_add_other_issue_type.sql` patch.
+- Acceptance Criteria remains free text. Structured acceptance/evidence checklist is a future enhancement, not implemented yet.
+- Consider adding an automated smoke checklist later. Manual browser testing is still recommended before commit.
 
-3. Review whether requirement approval should receive its own separate permission in future:
-   - current approval/status-governance behavior still relies on workflow operations admin-level permissions.
+## Suggested Resume Point
 
-4. Consider adding a small workflow regression checklist or smoke-test script for:
-   - creating a project
-   - creating a requirement
-   - creating a task from each originating screen
-   - verifying return navigation
-   - verifying permission visibility
+Start here:
 
-## Resume Point
+1. Run `git status --short`.
+2. Browser-test Workflow Issues create flow:
+   - sticky project default
+   - issue type required
+   - Other issue type saves
+3. Browser-test Project Edit tabs and Task Edit tabs.
+4. Review untracked issue files and SQL patch before committing.
 
-Start by opening:
+Useful routes:
 
 - `index.php?route=workflow-projects/list`
+- `index.php?route=workflow-projects/summary&id=<projectId>`
 - `index.php?route=workflow-requirements/list`
 - `index.php?route=workflow-requirements/matrix`
+- `index.php?route=workflow-issues/list`
+- `index.php?route=workflow/list`
 
-Then validate task creation from projects and requirements. If anything feels awkward, the next likely refinement area is UI flow polish rather than schema work.
+## Update - Detailed Workflow Operations Help Files
+
+Added detailed context-sensitive modal help files for Workflow Operations screens.
+
+New/updated files:
+
+- `backend-php/app/Controllers/HelpController.php`
+- `backend-php/app/Views/help/_ScreenHelpTemplate.php`
+- `backend-php/app/Views/help/_WorkflowOperationsHelp.php`
+- `backend-php/app/Views/help/WorkflowProjectsList.en.php`
+- `backend-php/app/Views/help/WorkflowProjectsForm.en.php`
+- `backend-php/app/Views/help/WorkflowProjectsSummary.en.php`
+- `backend-php/app/Views/help/WorkflowRequirementsList.en.php`
+- `backend-php/app/Views/help/WorkflowRequirementsForm.en.php`
+- `backend-php/app/Views/help/WorkflowRequirementsSummary.en.php`
+- `backend-php/app/Views/help/WorkflowRequirementsMatrix.en.php`
+- `backend-php/app/Views/help/WorkflowList.en.php`
+- `backend-php/app/Views/help/WorkflowForm.en.php`
+- `backend-php/app/Views/help/WorkflowIssuesList.en.php`
+- `backend-php/app/Views/help/WorkflowIssuesForm.en.php`
+- `backend-php/app/Views/help/WorkflowUserGroupsList.en.php`
+- `backend-php/app/Views/help/WorkflowUserGroupsForm.en.php`
+- `backend-php/app/Views/help/WorkflowOperationsOverview.en.php`
+
+HelpController now resolves hyphenated routes such as `workflow-projects/list` to clean help filenames such as `WorkflowProjectsList.en.php`, with fallback support for older literal route-style filenames.
+
+The shared help file template now uses a restrained documentation-style layout:
+
+- Compact icon/title header
+- Section rows with small left-side icons
+- Subtle dot bullets for help points
+- Left-accented note callout
+
+Use `backend-php/app/Views/help/_ScreenHelpTemplate.php` as the standard template for new detailed help pages across the application. Module-specific wrappers can set `$helpEyebrow` before requiring the template; Workflow Operations does this through `_WorkflowOperationsHelp.php`.
+
+Recommended help depth:
+
+- Explain what the screen is for.
+- Describe the main actions and filters.
+- Explain key fields where users must make decisions.
+- Include permission, workflow, or data-impact cautions.
+- Keep long policy/process detail out of the modal unless it is needed to complete the screen.
+
+Added a conceptual Workflow Operations module overview help page:
+
+- Screen key: `workflow-operations/overview`
+- File: `backend-php/app/Views/help/WorkflowOperationsOverview.en.php`
+- Purpose: explain the module concept, governance/control value, whole-project visibility, integrity and quality benefits, core entities, typical flow, how screens fit together, and good operating habits.
+- Link approach: Workflow Operations helper cards now show a `Module Overview` button that opens this overview in the existing Help modal. This does not replace the normal screen-specific Help button.
+
+Verification:
+
+- `php -l` passed for `HelpController.php`.
+- `php -l` passed for `_ScreenHelpTemplate.php`.
+- `php -l` passed for `_WorkflowOperationsHelp.php`.
+- `php -l` passed for `WorkflowOperationsOverview.en.php`.
+- `php -l` passed for `_RouteHelp.php`.
+- `php -l` passed for all new `Workflow*.en.php` help files.
+- Route coverage check confirmed help files exist for:
+  - `workflow-projects/list`
+  - `workflow-projects/form`
+  - `workflow-projects/summary`
+  - `workflow-requirements/list`
+  - `workflow-requirements/form`
+  - `workflow-requirements/summary`
+  - `workflow-requirements/matrix`
+  - `workflow/list`
+  - `workflow/form`
+  - `workflow-issues/list`
+  - `workflow-issues/form`
+  - `workflow-user-groups/list`
+- `workflow-user-groups/form`
+
+## Update - Workflow Operations Training Scenarios
+
+Added an initial Workflow Operations training seed script:
+
+- `backend-php/config/sql/seed_training_workflow_operations.sql`
+
+The seed creates non-destructive orientation scenarios for:
+
+- `workflow_ops_overview` - module concept, governance purpose, and module-vs-screen help.
+- `workflow_ops_project_register` - project register filters, table, and export.
+- `workflow_ops_project_form` - project form details, owner, team tab, and save action orientation.
+- `workflow_ops_requirements_register` - requirement register filters, levels, priority, table, and actions menu.
+- `workflow_ops_requirement_matrix` - traceability matrix filters, coverage gaps, table, and export.
+- `workflow_ops_issue_log` - issue filters, severity/status/project review, table, and export.
+- `workflow_ops_task_queue` - task filters, status/project filtering, table, and export.
+
+Design choice:
+
+- These are orientation scenarios, not data-creation scenarios.
+- They avoid save/delete requirements except for reviewing the project form save button.
+- They use existing stable screen IDs and `manual_continue` / `click_target` completion modes.
+- The Workflow Operations Module Overview scenario uses manual continue steps for help modal reading. It no longer advances from a button click into a separate `helpModal` step, so learners can scroll/read the Module Overview and screen Help before choosing Continue.
+- Data-entry scenarios can be added later once training sample data and cleanup rules are agreed.
+
+Verification:
+
+- Target ID coverage check passed for every target element used by `seed_training_workflow_operations.sql`.
+- `git diff --check` passed for the new seed script.
+
+Training Scenarios screen ordering update:
+
+- `backend-php/app/Models/TrainingScenarioModel.php` now exposes scenario `sort_order`.
+- `backend-php/app/Controllers/TrainingController.php` now sorts scenarios by module, then `sort_order`, then title.
+- `backend-php/app/Views/training/TrainingScenarios.php` now shows a recommended completion order badge on each scenario card and labels module groups as shown in recommended completion order.
+- `NextScenarioCode` still provides the recommended next scenario after completion.
+- The Training Scenarios Module filter is sticky in session. Choosing All Modules or clicking Reset clears the sticky module filter.
+- Navigation polish: Training Catalogue is now available in Administration quick links, and Training Scenarios / Training Summary use separate active menu rules so they do not both appear selected.
+- Training Catalogue now has a Module filter sourced from distinct scenario module names.
+- Added a sample multiple-choice checkpoint question as the final Workflow Operations Module Overview step. The seed stores structured checkpoint metadata for that step when `tblTrainingStepCheckpoints` exists.
+- Active checkpoint questions now display on the live training overlay and runner page. Required multiple-choice checkpoints must be answered correctly before Continue advances; the runner page shows radio-button answers with a Submit Answer and Continue action, and expected answers/explanations are only shown to trainer/admin users.
+- Removed the checkpoint runner reload workaround after it caused scenario pages to refresh repeatedly. The runner now renders checkpoint choices in place from the polled state, and the live overlay updates to the completed state without forcing a page replace.
+- Added a controller fallback for the Workflow Operations Module Overview final checkpoint so A/B/C/D choices still display in the runner if the checkpoint support table row is missing or still has old free-text expected-answer content.
+
+Training stop fix:
+
+- `backend-php/app/Models/TrainingProgressModel.php` fixed an ODBC/PDO SQL parameter issue in `stopScenario()`.
+- The update statement previously reused `:stoppedAt` for both `StoppedAt` and `LastActivityAt`, which caused SQL Server ODBC error `COUNT field incorrect or syntax error` on `training/stop`.
+- It now uses distinct `:stoppedAt` and `:lastActivityAt` parameters with the same timestamp value.

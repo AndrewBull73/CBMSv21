@@ -194,6 +194,7 @@ $requirementHierarchyInstalled = !empty($requirementHierarchyInstalled);
 $canCreateRequirement = !empty($canCreateRequirement);
 $canEditRequirement = !empty($canEditRequirement);
 $canDeleteRequirement = !empty($canDeleteRequirement);
+$canCreateIssue = !empty($canCreateIssue);
 $canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 $canReviewRequirement = !empty($canReviewRequirement);
 $canApproveRequirement = !empty($canApproveRequirement);
@@ -365,20 +366,13 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
         </div>
       <?php endif; ?>
 
-      <form method="post" action="index.php?route=workflow-requirements/save" class="needs-validation" novalidate>
+      <form id="workflow-requirement-form" method="post" action="index.php?route=workflow-requirements/save" class="needs-validation" novalidate>
         <?= csrf_field() ?>
         <input type="hidden" name="WorkflowRequirementID" value="<?= $requirementId ?>">
         <input type="hidden" name="returnTo" value="<?= h($returnTo) ?>">
@@ -386,14 +380,19 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
         <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3 requirement-form-actions-top">
           <div class="d-flex gap-2 flex-wrap">
             <?php if ($canSaveRequirement): ?>
-              <button type="submit" class="btn btn-primary">
+              <button id="workflow-requirement-save-btn" type="submit" class="btn btn-primary">
                 <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                 <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
               </button>
             <?php endif; ?>
             <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
-              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
+              <a id="workflow-requirement-create-task-btn" href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+              </a>
+            <?php endif; ?>
+            <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateIssue): ?>
+              <a id="workflow-requirement-create-issue-btn" href="index.php?route=workflow-issues/form&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i><?= h(__t('workflow_issue')) ?>
               </a>
             <?php endif; ?>
             <?php if ($requirementId > 0): ?>
@@ -412,7 +411,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   <?php if ($canDeleteRequirement && (int)($record['Active'] ?? 0) === 1): ?>
                     <?php if ($workflowProjectID > 0): ?><li><hr class="dropdown-divider"></li><?php endif; ?>
                     <li>
-                      <button type="submit" form="WorkflowRequirementDeleteForm" class="dropdown-item text-danger">
+                      <button id="workflow-requirement-delete-menu-btn" type="submit" form="WorkflowRequirementDeleteForm" class="dropdown-item text-danger">
                         <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
                       </button>
                     </li>
@@ -669,12 +668,17 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           </a>
           <div class="d-flex gap-2 flex-wrap">
             <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateWorkflowTask): ?>
-              <a href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
+              <a id="workflow-requirement-create-task-footer-btn" href="index.php?route=workflow/edit&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-success">
                 <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
               </a>
             <?php endif; ?>
+            <?php if ($workflowProjectID > 0 && $requirementId > 0 && $canCreateIssue): ?>
+              <a id="workflow-requirement-create-issue-footer-btn" href="index.php?route=workflow-issues/form&workflowProjectID=<?= $workflowProjectID ?>&workflowRequirementID=<?= $requirementId ?>&returnTo=<?= $currentRequirementReturnParam ?>" class="btn btn-outline-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i><?= h(__t('workflow_issue')) ?>
+              </a>
+            <?php endif; ?>
             <?php if ($canSaveRequirement): ?>
-              <button type="submit" class="btn btn-primary">
+              <button id="workflow-requirement-save-footer-btn" type="submit" class="btn btn-primary">
                 <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                 <i class="bi bi-save me-1"></i><?= h(__t('workflow_requirement_save')) ?>
               </button>
@@ -969,7 +973,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                 <?= h(__t('workflow_requirement_task_requires_project')) ?>
               </div>
             <?php else: ?>
-              <form method="post" action="index.php?route=workflow-requirements/create-task" class="needs-validation" novalidate>
+              <form id="workflow-requirement-create-task-form" method="post" action="index.php?route=workflow-requirements/create-task" class="needs-validation" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="WorkflowRequirementID" value="<?= $requirementId ?>">
                 <div class="row g-2 align-items-end">
@@ -996,7 +1000,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                     <div class="invalid-feedback"><?= h(__t('workflow_requirement_task_due_required')) ?></div>
                   </div>
                   <div class="col-12 col-lg-2">
-                    <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                    <button id="workflow-requirement-create-task-submit-btn" type="submit" class="btn btn-sm btn-outline-success w-100">
                       <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                       <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
                     </button>
@@ -1138,7 +1142,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
           </div>
         <?php else: ?>
           <?php if ($canEditRequirement): ?>
-            <form method="post"
+            <form id="workflow-requirement-attachment-upload-form" method="post"
                   action="index.php?route=workflow-requirements/upload-attachment"
                   enctype="multipart/form-data"
                   class="needs-validation mb-3"
@@ -1158,7 +1162,7 @@ $currentRequirementReturnParam = rawurlencode($currentRequirementUrl);
                   <div class="invalid-feedback"><?= h(__t('workflow_requirement_choose_file')) ?></div>
                 </div>
                 <div class="col-12 col-lg-auto">
-                  <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                  <button id="workflow-requirement-attachment-upload-btn" type="submit" class="btn btn-sm btn-outline-primary w-100">
                     <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                     <i class="bi bi-paperclip me-1"></i><?= h(__t('workflow_requirement_upload_attachment')) ?>
                   </button>

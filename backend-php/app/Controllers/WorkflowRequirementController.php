@@ -20,12 +20,15 @@ final class WorkflowRequirementController extends BaseController
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportExcel' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'summary' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportSummaryExcel' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'matrix' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportMatrixExcel' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'form' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'transition' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'create-task' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'upload-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'download-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
@@ -39,7 +42,7 @@ final class WorkflowRequirementController extends BaseController
 
         $filters = [
             'q' => trim((string)($_GET['q'] ?? '')),
-            'workflowProjectID' => ($_GET['workflowProjectID'] ?? '') !== '' ? (int)$_GET['workflowProjectID'] : 0,
+            'workflowProjectID' => $this->workflowProjectFilterFromRequest(),
             'deliveryClass' => strtoupper(trim((string)($_GET['deliveryClass'] ?? ''))),
             'status' => strtoupper(trim((string)($_GET['status'] ?? ''))),
             'type' => strtoupper(trim((string)($_GET['type'] ?? ''))),
@@ -62,6 +65,8 @@ final class WorkflowRequirementController extends BaseController
             'canCreateRequirement' => $this->canCreateRequirements(),
             'canEditRequirement' => $this->canEditRequirements(),
             'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'currentUserId' => (int)SessionHelper::get('auth.user_id', 0),
+            'canCreateIssue' => $this->canCreateIssues(),
             'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
@@ -71,13 +76,51 @@ final class WorkflowRequirementController extends BaseController
         }
     }
 
+    public function exportExcel(): void
+    {
+        $model = new WorkflowRequirementModel($this->db);
+        $filters = $this->requirementFiltersFromRequest();
+        $deliveryClassOptions = $model->deliveryClassOptions();
+        $typeOptions = $model->typeOptions();
+        $priorityOptions = $model->priorityOptions();
+        $statusOptions = $model->statusOptions();
+        $levelOptions = $model->requirementLevelOptions();
+        $label = static function (array $options, ?string $code): string {
+            $code = strtoupper(trim((string)$code));
+            $key = $options[$code] ?? '';
+            return $key !== '' ? __t($key) : $code;
+        };
+        $plain = static function ($value): string {
+            return function_exists('workflow_rich_text_to_plain_text')
+                ? workflow_rich_text_to_plain_text((string)$value)
+                : trim(strip_tags((string)$value));
+        };
+
+        $this->downloadExcel('Requirements', 'WorkflowRequirements', [
+            ['label' => 'Requirement Code', 'key' => 'RequirementCode'],
+            ['label' => __t('workflow_requirement'), 'key' => 'RequirementTitle'],
+            ['label' => __t('workflow_project_project'), 'key' => 'ProjectName'],
+            ['label' => __t('workflow_requirement_level'), 'value' => static fn(array $row): string => $label($levelOptions, (string)($row['RequirementLevelCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_parent'), 'value' => static fn(array $row): string => trim((string)($row['ParentRequirementCode'] ?? '') . ' ' . (string)($row['ParentRequirementTitle'] ?? ''))],
+            ['label' => __t('workflow_requirement_delivery_class'), 'value' => static fn(array $row): string => $label($deliveryClassOptions, (string)($row['DeliveryClassCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_type'), 'value' => static fn(array $row): string => $label($typeOptions, (string)($row['RequirementTypeCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_priority'), 'value' => static fn(array $row): string => $label($priorityOptions, (string)($row['PriorityCode'] ?? ''))],
+            ['label' => __t('status'), 'value' => static fn(array $row): string => $label($statusOptions, (string)($row['RequirementStatusCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_owner'), 'key' => 'OwnerName'],
+            ['label' => __t('workflow_requirement_requested_by'), 'key' => 'RequestedByName'],
+            ['label' => 'Description', 'value' => static fn(array $row): string => $plain($row['Description'] ?? '')],
+            ['label' => __t('workflow_requirement_acceptance_criteria'), 'value' => static fn(array $row): string => $plain($row['AcceptanceCriteria'] ?? '')],
+            ['label' => 'Active', 'value' => static fn(array $row): string => (int)($row['Active'] ?? 0) === 1 ? 'Yes' : 'No'],
+        ], $model->listRequirements($filters));
+    }
+
     public function summary(): void
     {
         $model = new WorkflowRequirementModel($this->db);
         $projectModel = new WorkflowProjectModel($this->db);
 
         $filters = [
-            'workflowProjectID' => ($_GET['workflowProjectID'] ?? '') !== '' ? (int)$_GET['workflowProjectID'] : 0,
+            'workflowProjectID' => $this->workflowProjectFilterFromRequest(),
             'deliveryClass' => strtoupper(trim((string)($_GET['deliveryClass'] ?? ''))),
             'status' => strtoupper(trim((string)($_GET['status'] ?? ''))),
             'type' => strtoupper(trim((string)($_GET['type'] ?? ''))),
@@ -106,6 +149,52 @@ final class WorkflowRequirementController extends BaseController
         }
     }
 
+    public function exportSummaryExcel(): void
+    {
+        $model = new WorkflowRequirementModel($this->db);
+        $filters = $this->requirementFiltersFromRequest(false);
+        $summary = $model->summarizeRequirements($filters);
+        $statusOptions = $model->statusOptions();
+        $priorityOptions = $model->priorityOptions();
+        $typeOptions = $model->typeOptions();
+        $deliveryClassOptions = $model->deliveryClassOptions();
+        $levelOptions = $model->requirementLevelOptions();
+        $label = static function (array $options, ?string $code): string {
+            $code = strtoupper(trim((string)$code));
+            $key = $options[$code] ?? '';
+            return $key !== '' ? __t($key) : $code;
+        };
+
+        $rows = [
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_total'), 'Value' => (string)(int)($summary['total'] ?? 0)],
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_active_count'), 'Value' => (string)(int)($summary['active'] ?? 0)],
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_level_high_level'), 'Value' => (string)(int)($summary['highLevel'] ?? 0)],
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_level_detailed'), 'Value' => (string)(int)($summary['detailed'] ?? 0)],
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_missing_owner'), 'Value' => (string)(int)($summary['missingOwner'] ?? 0)],
+            ['Group' => 'Metric', 'Item' => __t('workflow_requirement_missing_acceptance'), 'Value' => (string)(int)($summary['missingAcceptanceCriteria'] ?? 0)],
+        ];
+        foreach ([
+            'Status' => [$summary['byStatus'] ?? [], $statusOptions],
+            'Priority' => [$summary['byPriority'] ?? [], $priorityOptions],
+            'Type' => [$summary['byType'] ?? [], $typeOptions],
+            'Delivery Class' => [$summary['byDeliveryClass'] ?? [], $deliveryClassOptions],
+            'Level' => [$summary['byLevel'] ?? [], $levelOptions],
+        ] as $group => [$items, $options]) {
+            foreach ((array)$items as $code => $count) {
+                $rows[] = ['Group' => $group, 'Item' => $label($options, (string)$code), 'Value' => (string)(int)$count];
+            }
+        }
+        foreach ((array)($summary['byProject'] ?? []) as $projectName => $count) {
+            $rows[] = ['Group' => __t('workflow_project_project'), 'Item' => (string)$projectName, 'Value' => (string)(int)$count];
+        }
+
+        $this->downloadExcel('Requirement Summary', 'WorkflowRequirementSummary', [
+            ['label' => 'Group', 'key' => 'Group'],
+            ['label' => 'Item', 'key' => 'Item'],
+            ['label' => 'Value', 'key' => 'Value'],
+        ], $rows);
+    }
+
     public function matrix(): void
     {
         $model = new WorkflowRequirementModel($this->db);
@@ -130,7 +219,7 @@ final class WorkflowRequirementController extends BaseController
 
         $filters = [
             'q' => trim((string)($_GET['q'] ?? '')),
-            'workflowProjectID' => ($_GET['workflowProjectID'] ?? '') !== '' ? (int)$_GET['workflowProjectID'] : 0,
+            'workflowProjectID' => $this->workflowProjectFilterFromRequest(),
             'deliveryClass' => strtoupper(trim((string)($_GET['deliveryClass'] ?? ''))),
             'status' => strtoupper(trim((string)($_GET['status'] ?? ''))),
             'type' => strtoupper(trim((string)($_GET['type'] ?? ''))),
@@ -159,6 +248,7 @@ final class WorkflowRequirementController extends BaseController
             'canCreateRequirement' => $this->canCreateRequirements(),
             'canEditRequirement' => $this->canEditRequirements(),
             'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'currentUserId' => (int)SessionHelper::get('auth.user_id', 0),
             'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'flash' => SessionHelper::get('flash.message', null),
         ]);
@@ -166,6 +256,45 @@ final class WorkflowRequirementController extends BaseController
         if (SessionHelper::has('flash.message')) {
             SessionHelper::forget('flash.message');
         }
+    }
+
+    public function exportMatrixExcel(): void
+    {
+        $model = new WorkflowRequirementModel($this->db);
+        $filters = $this->requirementFiltersFromRequest(true);
+        $filters['coverage'] = $this->requirementCoverageFromRequest();
+        $rows = $model->listTraceabilityMatrix($filters);
+        $statusOptions = $model->statusOptions();
+        $priorityOptions = $model->priorityOptions();
+        $deliveryClassOptions = $model->deliveryClassOptions();
+        $levelOptions = $model->requirementLevelOptions();
+        $label = static function (array $options, ?string $code): string {
+            $code = strtoupper(trim((string)$code));
+            $key = $options[$code] ?? '';
+            return $key !== '' ? __t($key) : $code;
+        };
+        $gapLabel = static function (string $code): string {
+            $key = 'workflow_requirement_matrix_gap_' . strtolower($code);
+            $translated = __t($key);
+            return $translated === $key ? str_replace('_', ' ', $code) : $translated;
+        };
+
+        $this->downloadExcel('Requirement Matrix', 'WorkflowRequirementMatrix', [
+            ['label' => 'Requirement Code', 'key' => 'RequirementCode'],
+            ['label' => __t('workflow_requirement'), 'key' => 'RequirementTitle'],
+            ['label' => __t('workflow_project_project'), 'key' => 'ProjectName'],
+            ['label' => __t('workflow_requirement_level'), 'value' => static fn(array $row): string => $label($levelOptions, (string)($row['RequirementLevelCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_parent'), 'value' => static fn(array $row): string => trim((string)($row['ParentRequirementCode'] ?? '') . ' ' . (string)($row['ParentRequirementTitle'] ?? ''))],
+            ['label' => __t('workflow_requirement_delivery_class'), 'value' => static fn(array $row): string => $label($deliveryClassOptions, (string)($row['DeliveryClassCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_priority'), 'value' => static fn(array $row): string => $label($priorityOptions, (string)($row['PriorityCode'] ?? ''))],
+            ['label' => __t('status'), 'value' => static fn(array $row): string => $label($statusOptions, (string)($row['RequirementStatusCode'] ?? ''))],
+            ['label' => __t('workflow_requirement_matrix_linked_tasks'), 'key' => 'LinkedTaskTitles'],
+            ['label' => 'Open Tasks', 'key' => 'OpenTaskCount'],
+            ['label' => 'Testing Links', 'key' => 'TestingLinkCount'],
+            ['label' => 'Training Links', 'key' => 'TrainingLinkCount'],
+            ['label' => 'Defect Links', 'key' => 'DefectLinkCount'],
+            ['label' => __t('workflow_requirement_matrix_gaps'), 'value' => static fn(array $row): string => implode('; ', array_map($gapLabel, is_array($row['TraceabilityGapCodes'] ?? null) ? $row['TraceabilityGapCodes'] : []))],
+        ], $rows);
     }
 
     public function form(): void
@@ -269,7 +398,8 @@ final class WorkflowRequirementController extends BaseController
             'requirementHistory' => $id > 0 && $model->supportsRequirementHistory() ? $model->listRequirementHistory($id) : [],
             'canCreateRequirement' => $this->canCreateRequirements(),
             'canEditRequirement' => $this->canEditRequirements(),
-            'canDeleteRequirement' => $this->canDeleteRequirements(),
+            'canDeleteRequirement' => $this->canDeleteRequirementRecord($record),
+            'canCreateIssue' => $this->canCreateIssues(),
             'canCreateWorkflowTask' => $this->canCreateWorkflowTasks(),
             'canReviewRequirement' => $this->canReviewRequirements(),
             'canApproveRequirement' => $this->canApproveRequirements(),
@@ -333,7 +463,7 @@ final class WorkflowRequirementController extends BaseController
             'ApprovedAt' => trim((string)($_POST['ApprovedAt'] ?? '')),
             'Active' => isset($_POST['Active']) && (string)$_POST['Active'] !== '0' ? 1 : 0,
         ];
-        if ($id > 0 && (int)($before['Active'] ?? 0) === 1 && $payload['Active'] === 0 && !$this->canDeleteRequirements()) {
+        if ($id > 0 && (int)($before['Active'] ?? 0) === 1 && $payload['Active'] === 0 && !$this->canDeleteRequirementRecord($before)) {
             $this->flashError(__t('workflow_requirement_permission_delete'));
             header('Location: ' . $this->requirementFormRedirectUrl($id, $returnTo));
             return;
@@ -431,11 +561,6 @@ final class WorkflowRequirementController extends BaseController
         $model = new WorkflowRequirementModel($this->db);
         $returnTo = $this->normalizeRequirementReturnTo((string)($_POST['returnTo'] ?? ''));
         $redirect = $this->defaultRequirementBackUrl($returnTo, null, null);
-        if (!$this->canDeleteRequirements()) {
-            $this->flashError(__t('workflow_requirement_permission_delete'));
-            header('Location: ' . $redirect);
-            return;
-        }
         if (!$model->supportsRequirements()) {
             $this->flashError(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql']));
             header('Location: ' . $redirect);
@@ -446,6 +571,11 @@ final class WorkflowRequirementController extends BaseController
         $record = $id > 0 ? $model->findRequirement($id) : null;
         if (!$record) {
             $this->flashError(__t('workflow_requirement_not_found'));
+            header('Location: ' . $redirect);
+            return;
+        }
+        if (!$this->canDeleteRequirementRecord($record)) {
+            $this->flashError(__t('workflow_requirement_permission_delete'));
             header('Location: ' . $redirect);
             return;
         }
@@ -978,12 +1108,38 @@ final class WorkflowRequirementController extends BaseController
             'workflow-projects/summary',
             'workflow-projects/form',
             'workflow-projects/list',
+            'workflow-issues/list',
+            'workflow-issues/form',
         ];
         if (!in_array($route, $allowedRoutes, true)) {
             return '';
         }
 
         return $returnTo;
+    }
+
+    private function requirementFiltersFromRequest(bool $includeSearch = true): array
+    {
+        $filters = [
+            'workflowProjectID' => $this->workflowProjectFilterFromRequest(),
+            'deliveryClass' => strtoupper(trim((string)($_GET['deliveryClass'] ?? ''))),
+            'status' => strtoupper(trim((string)($_GET['status'] ?? ''))),
+            'type' => strtoupper(trim((string)($_GET['type'] ?? ''))),
+            'priority' => strtoupper(trim((string)($_GET['priority'] ?? ''))),
+            'requirementLevel' => strtoupper(trim((string)($_GET['requirementLevel'] ?? ''))),
+            'active' => trim((string)($_GET['active'] ?? ($includeSearch ? '1' : ''))),
+        ];
+        if ($includeSearch) {
+            $filters['q'] = trim((string)($_GET['q'] ?? ''));
+        }
+        return $filters;
+    }
+
+    private function requirementCoverageFromRequest(): string
+    {
+        $coverage = strtoupper(trim((string)($_GET['coverage'] ?? 'ALL')));
+        $allowed = ['ALL', 'NEEDS_TASK', 'OPEN_TASKS', 'NO_TESTING', 'NO_TRAINING', 'MISSING_ACCEPTANCE', 'HAS_DEFECTS', 'COMPLETE'];
+        return in_array($coverage, $allowed, true) ? $coverage : 'ALL';
     }
 
     private function defaultRequirementBackUrl(string $returnTo, ?int $parentRequirementID, ?int $workflowProjectID): string
@@ -1294,6 +1450,11 @@ final class WorkflowRequirementController extends BaseController
         return Rbac::canAny(['WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
     }
 
+    private function canCreateIssues(): bool
+    {
+        return Rbac::canAny(['WORKFLOW_ISSUES_CREATE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
     private function canViewRequirements(): bool
     {
         return Rbac::canAny(['WORKFLOW_REQUIREMENTS_VIEW', 'WORKFLOW_REQUIREMENTS_CREATE', 'WORKFLOW_REQUIREMENTS_EDIT', 'WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
@@ -1307,6 +1468,20 @@ final class WorkflowRequirementController extends BaseController
     private function canDeleteRequirements(): bool
     {
         return Rbac::canAny(['WORKFLOW_REQUIREMENTS_DELETE', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+    }
+
+    /**
+     * @param array<string, mixed>|null $record
+     */
+    private function canDeleteRequirementRecord(?array $record): bool
+    {
+        if ($this->canDeleteRequirements()) {
+            return true;
+        }
+        $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
+        return $record !== null
+            && $currentUserId > 0
+            && (int)($record['CreatedBy'] ?? 0) === $currentUserId;
     }
 
     private function canCreateWorkflowTasks(): bool

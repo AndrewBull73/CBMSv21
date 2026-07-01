@@ -69,19 +69,13 @@ if ($workflowRequirementSummaryQueryString !== '') {
     $workflowRequirementSummaryReturnTo = 'index.php?' . $workflowRequirementSummaryQueryString;
 }
 $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummaryReturnTo);
+$workflowRequirementSummaryExportUrl = 'index.php?' . http_build_query(array_merge($_GET, ['route' => 'workflow-requirements/export-summary-excel']));
 ?>
 
 <div class="container mt-4">
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
@@ -91,8 +85,14 @@ $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummar
       <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div class="text-muted small"><?= h(__t('workflow_requirement_summary_help')) ?></div>
         <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <button type="button" id="workflow-requirement-summary-print-btn" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i><?= h(__t('print')) ?>
+          </button>
+          <a id="workflow-requirement-summary-export-excel-btn" href="<?= h($workflowRequirementSummaryExportUrl) ?>" class="btn btn-sm btn-outline-success <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <i class="bi bi-file-earmark-excel me-1"></i><?= h(__t('export_excel')) ?>
+          </a>
           <?php if ($canCreateRequirement): ?>
-            <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementSummaryReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <a id="workflow-requirement-summary-create-btn" href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementSummaryReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
               <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
             </a>
           <?php endif; ?>
@@ -116,7 +116,9 @@ $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummar
         </div>
       </div>
 
-      <form method="get" action="index.php" class="row g-2 align-items-end mb-4">
+      <?php require __DIR__ . '/_SelectedProjectCue.php'; ?>
+
+      <form method="get" action="index.php" id="workflow-requirement-summary-filter-form" class="row g-2 align-items-end mb-4">
         <input type="hidden" name="route" value="workflow-requirements/summary">
         <div class="col-12 col-lg-3">
           <label class="form-label" for="workflowRequirementSummaryProject"><?= h(__t('workflow_project_project')) ?></label>
@@ -185,7 +187,7 @@ $workflowRequirementSummaryReturnParam = rawurlencode($workflowRequirementSummar
           </select>
         </div>
         <div class="col-6 col-lg-1 d-grid">
-          <button type="submit" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
+          <button type="submit" id="workflow-requirement-summary-filter-btn" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
         </div>
       </form>
 

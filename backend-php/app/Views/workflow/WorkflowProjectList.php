@@ -17,6 +17,7 @@ $canEditProject = !empty($canEditProject);
 $canDeleteProject = !empty($canDeleteProject);
 $canCreateRequirement = !empty($canCreateRequirement);
 $canCreateWorkflowTask = !empty($canCreateWorkflowTask);
+$currentUserId = (int)($currentUserId ?? 0);
 
 $activeCount = 0;
 $openTaskCount = 0;
@@ -37,6 +38,7 @@ if ($workflowProjectListQueryString !== '') {
     $workflowProjectListReturnTo = 'index.php?' . $workflowProjectListQueryString;
 }
 $workflowProjectListReturnParam = rawurlencode($workflowProjectListReturnTo);
+$workflowProjectExportUrl = 'index.php?' . http_build_query(array_merge($_GET, ['route' => 'workflow-projects/export-excel']));
 
 $statusLabel = static function (?string $code) use ($statusOptions): string {
     $code = strtoupper(trim((string)$code));
@@ -49,13 +51,6 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_project_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
@@ -71,14 +66,22 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
             <span><strong><?= $openTaskCount ?></strong> <?= h(__t('workflow_project_open_tasks')) ?></span>
           </div>
         </div>
-        <?php if ($canCreateProject): ?>
-          <a href="index.php?route=workflow-projects/form&returnTo=<?= $workflowProjectListReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
-            <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create')) ?>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <button type="button" id="workflow-projects-print-btn" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i><?= h(__t('print')) ?>
+          </button>
+          <a id="workflow-projects-export-excel-btn" href="<?= h($workflowProjectExportUrl) ?>" class="btn btn-sm btn-outline-success <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <i class="bi bi-file-earmark-excel me-1"></i><?= h(__t('export_excel')) ?>
           </a>
-        <?php endif; ?>
+          <?php if ($canCreateProject): ?>
+            <a id="workflow-projects-create-btn" href="index.php?route=workflow-projects/form&returnTo=<?= $workflowProjectListReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+              <i class="bi bi-plus-circle me-1"></i><?= h(__t('workflow_project_create')) ?>
+            </a>
+          <?php endif; ?>
+        </div>
       </div>
 
-      <form method="get" action="index.php" class="row g-2 align-items-end mb-3">
+      <form method="get" action="index.php" id="workflow-projects-filter-form" class="row g-2 align-items-end mb-3">
         <input type="hidden" name="route" value="workflow-projects/list">
         <div class="col-12 col-md-5">
           <label class="form-label" for="workflowProjectSearch"><?= h(__t('search')) ?></label>
@@ -102,15 +105,15 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
           </select>
         </div>
         <div class="col-6 col-md-1 d-grid">
-          <button type="submit" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
+          <button type="submit" id="workflow-projects-filter-btn" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
         </div>
         <div class="col-6 col-md-1 d-grid">
-          <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-projects/list"><?= h(__t('reset')) ?></a>
+          <a id="workflow-projects-reset-btn" class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-projects/list"><?= h(__t('reset')) ?></a>
         </div>
       </form>
 
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
+        <table id="workflow-projects-table" class="table table-sm table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th><?= h(__t('workflow_project_project')) ?></th>
@@ -132,6 +135,7 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                   $statusCode = strtoupper(trim((string)($row['ProjectStatusCode'] ?? '')));
                   $projectUserCount = (int)($row['ProjectUserCount'] ?? 0);
                   $projectUserOverflow = (int)($row['ProjectUserNamesOverflow'] ?? 0);
+                  $rowCanDeleteProject = $canDeleteProject || ($currentUserId > 0 && (int)($row['CreatedBy'] ?? 0) === $currentUserId);
                 ?>
                 <tr>
                   <td>
@@ -215,7 +219,7 @@ $statusLabel = static function (?string $code) use ($statusOptions): string {
                               <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
                             </a>
                           </li>
-                          <?php if ($canDeleteProject && (int)($row['Active'] ?? 0) === 1): ?>
+                          <?php if ($rowCanDeleteProject && (int)($row['Active'] ?? 0) === 1): ?>
                             <li><hr class="dropdown-divider"></li>
                             <li>
                               <form method="post"

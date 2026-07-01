@@ -94,6 +94,7 @@ if ($workflowRequirementMatrixQueryString !== '') {
     $workflowRequirementMatrixReturnTo = 'index.php?' . $workflowRequirementMatrixQueryString;
 }
 $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixReturnTo);
+$workflowRequirementMatrixExportUrl = 'index.php?' . http_build_query(array_merge($_GET, ['route' => 'workflow-requirements/export-matrix-excel']));
 ?>
 
 <style>
@@ -115,13 +116,6 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
@@ -135,8 +129,14 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
       <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div class="text-muted small"><?= h(__t('workflow_requirement_matrix_help')) ?></div>
         <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <button type="button" id="workflow-requirement-matrix-print-btn" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i><?= h(__t('print')) ?>
+          </button>
+          <a id="workflow-requirement-matrix-export-excel-btn" href="<?= h($workflowRequirementMatrixExportUrl) ?>" class="btn btn-sm btn-outline-success <?= (!$tableInstalled || !$workflowLinksInstalled) ? 'disabled' : '' ?>">
+            <i class="bi bi-file-earmark-excel me-1"></i><?= h(__t('export_excel')) ?>
+          </a>
           <?php if ($canCreateRequirement): ?>
-            <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementMatrixReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <a id="workflow-requirement-matrix-create-btn" href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementMatrixReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
               <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
             </a>
           <?php endif; ?>
@@ -160,7 +160,9 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
         </div>
       </div>
 
-      <form method="get" action="index.php" class="row g-2 align-items-end mb-3">
+      <?php require __DIR__ . '/_SelectedProjectCue.php'; ?>
+
+      <form method="get" action="index.php" id="workflow-requirement-matrix-filter-form" class="row g-2 align-items-end mb-3">
         <input type="hidden" name="route" value="workflow-requirements/matrix">
         <div class="col-12 col-xl-3">
           <label class="form-label" for="workflowRequirementMatrixSearch"><?= h(__t('search')) ?></label>
@@ -241,10 +243,10 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
           </select>
         </div>
         <div class="col-6 col-md-3 col-xl-1 d-grid">
-          <button type="submit" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
+          <button type="submit" id="workflow-requirement-matrix-filter-btn" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
         </div>
         <div class="col-6 col-md-3 col-xl-1 d-grid">
-          <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-requirements/matrix"><?= h(__t('reset')) ?></a>
+          <a id="workflow-requirement-matrix-reset-btn" class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-requirements/matrix"><?= h(__t('reset')) ?></a>
         </div>
       </form>
 
@@ -263,7 +265,7 @@ $workflowRequirementMatrixReturnParam = rawurlencode($workflowRequirementMatrixR
       </div>
 
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0 requirement-matrix-table">
+        <table id="workflow-requirement-matrix-table" class="table table-sm table-hover align-middle mb-0 requirement-matrix-table">
           <thead class="table-light">
             <tr>
               <th><?= h(__t('workflow_requirement')) ?></th>

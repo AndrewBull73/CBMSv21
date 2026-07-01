@@ -41,6 +41,7 @@ $tableInstalled = !empty($tableInstalled);
 $canCreateRequirement = !empty($canCreateRequirement);
 $canEditRequirement = !empty($canEditRequirement);
 $canDeleteRequirement = !empty($canDeleteRequirement);
+$currentUserId = (int)($currentUserId ?? 0);
 
 $activeCount = 0;
 $mustCount = 0;
@@ -80,6 +81,7 @@ if ($workflowRequirementQueryString !== '') {
     $workflowRequirementReturnTo = 'index.php?' . $workflowRequirementQueryString;
 }
 $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
+$workflowRequirementExportUrl = 'index.php?' . http_build_query(array_merge($_GET, ['route' => 'workflow-requirements/export-excel']));
 ?>
 
 <style>
@@ -118,13 +120,6 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_requirement_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
@@ -144,8 +139,14 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
           </div>
         </div>
         <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <button type="button" id="workflow-requirements-print-btn" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i><?= h(__t('print')) ?>
+          </button>
+          <a id="workflow-requirements-export-excel-btn" href="<?= h($workflowRequirementExportUrl) ?>" class="btn btn-sm btn-outline-success <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <i class="bi bi-file-earmark-excel me-1"></i><?= h(__t('export_excel')) ?>
+          </a>
           <?php if ($canCreateRequirement): ?>
-            <a href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
+            <a id="workflow-requirements-create-btn" href="index.php?route=workflow-requirements/form<?= !empty($filters['workflowProjectID']) ? '&workflowProjectID=' . (int)$filters['workflowProjectID'] : '' ?>&returnTo=<?= $workflowRequirementReturnParam ?>" class="btn btn-sm btn-primary <?= !$tableInstalled ? 'disabled' : '' ?>">
               <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_requirement_create')) ?>
             </a>
           <?php endif; ?>
@@ -169,7 +170,9 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
         </div>
       </div>
 
-      <form method="get" action="index.php" class="row g-2 align-items-end mb-3">
+      <?php require __DIR__ . '/_SelectedProjectCue.php'; ?>
+
+      <form method="get" action="index.php" id="workflow-requirements-filter-form" class="row g-2 align-items-end mb-3">
         <input type="hidden" name="route" value="workflow-requirements/list">
         <div class="col-12 col-lg-3">
           <label class="form-label" for="workflowRequirementSearch"><?= h(__t('search')) ?></label>
@@ -242,15 +245,15 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
           </select>
         </div>
         <div class="col-6 col-lg-1 d-grid">
-          <button type="submit" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
+          <button type="submit" id="workflow-requirements-filter-btn" class="btn btn-sm btn-outline-primary"><?= h(__t('filter')) ?></button>
         </div>
         <div class="col-6 col-lg-1 d-grid">
-          <a class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-requirements/list"><?= h(__t('reset')) ?></a>
+          <a id="workflow-requirements-reset-btn" class="btn btn-sm btn-outline-secondary" href="index.php?route=workflow-requirements/list"><?= h(__t('reset')) ?></a>
         </div>
       </form>
 
       <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0 workflow-requirement-tree-table">
+        <table id="workflow-requirements-table" class="table table-sm table-hover align-middle mb-0 workflow-requirement-tree-table">
           <thead class="table-light">
             <tr>
               <th><?= h(__t('workflow_requirement')) ?></th>
@@ -277,6 +280,7 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                   $isDetailedRequirement = $levelCode === 'DETAILED';
                   $childRequirementCount = (int)($row['ChildRequirementCount'] ?? 0);
                   $isInactive = (int)($row['Active'] ?? 0) !== 1;
+                  $rowCanDeleteRequirement = $canDeleteRequirement || ($currentUserId > 0 && (int)($row['CreatedBy'] ?? 0) === $currentUserId);
                 ?>
                 <tr class="<?= $isDetailedRequirement ? 'workflow-requirement-detail-row' : 'workflow-requirement-parent-row' ?>">
                   <td>
@@ -372,7 +376,7 @@ $workflowRequirementReturnParam = rawurlencode($workflowRequirementReturnTo);
                               </a>
                             </li>
                           <?php endif; ?>
-                          <?php if ($canDeleteRequirement && !$isInactive): ?>
+                          <?php if ($rowCanDeleteRequirement && !$isInactive): ?>
                             <li><hr class="dropdown-divider"></li>
                             <li>
                               <form method="post"

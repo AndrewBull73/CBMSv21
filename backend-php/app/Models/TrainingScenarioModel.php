@@ -134,6 +134,7 @@ final class TrainingScenarioModel
                 'description' => (string) (($translation['Description'] ?? '') ?: ($row['Description'] ?? '')),
                 'runner_route' => (string) ($row['RunnerRoute'] ?? ''),
                 'next_scenario_id' => trim((string) ($row['NextScenarioCode'] ?? '')),
+                'sort_order' => (int) ($row['SortOrder'] ?? 0),
                 'prerequisites' => $prerequisites,
                 'steps' => $stepsByScenario[$code] ?? [],
                 'sample_defs' => $samplesByScenario[$code] ?? [],

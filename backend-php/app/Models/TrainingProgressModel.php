@@ -150,7 +150,7 @@ final class TrainingProgressModel
             UPDATE dbo.tblTrainingProgress
             SET Status = N'stopped',
                 StoppedAt = :stoppedAt,
-                LastActivityAt = :stoppedAt,
+                LastActivityAt = :lastActivityAt,
                 UpdatedBy = :updatedBy,
                 UpdatedDate = SYSUTCDATETIME()
             WHERE UserID = :uid
@@ -159,6 +159,7 @@ final class TrainingProgressModel
         ");
         $stmt->execute([
             ':stoppedAt' => $stoppedAt,
+            ':lastActivityAt' => $stoppedAt,
             ':uid' => $userId,
             ':scenario' => $scenarioCode,
             ':updatedBy' => $updatedBy > 0 ? $updatedBy : null,
@@ -192,12 +193,16 @@ final class TrainingProgressModel
         }
         if (($filters['q'] ?? '') !== '') {
             $where[] = '(
-                u.Username LIKE :qUser
-                OR u.DisplayName LIKE :qUser
-                OR u.Email LIKE :qUser
-                OR tp.ScenarioCode LIKE :qUser
+                u.Username LIKE :qUserUsername
+                OR u.DisplayName LIKE :qUserDisplayName
+                OR u.Email LIKE :qUserEmail
+                OR tp.ScenarioCode LIKE :qUserScenarioCode
             )';
-            $params[':qUser'] = '%' . trim((string) $filters['q']) . '%';
+            $qUser = '%' . trim((string) $filters['q']) . '%';
+            $params[':qUserUsername'] = $qUser;
+            $params[':qUserDisplayName'] = $qUser;
+            $params[':qUserEmail'] = $qUser;
+            $params[':qUserScenarioCode'] = $qUser;
         }
 
         $sql = "

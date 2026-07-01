@@ -27,6 +27,7 @@ final class WorkflowController extends BaseController
     protected array $acl = [
         '*' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'list' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportExcel' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'edit' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'save' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'transition' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
@@ -40,7 +41,7 @@ final class WorkflowController extends BaseController
         'upload-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'download-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'delete-attachment' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'delete' => ['auth' => true, 'permsAny' => ['WORKFLOW_OPERATIONS_VIEW', 'WORKFLOW_OPERATIONS_EDIT', 'WORKFLOW_OPERATIONS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function list(): void
@@ -62,7 +63,8 @@ final class WorkflowController extends BaseController
         $q = trim((string) ($_GET['q'] ?? ''));
         $typeID = ($_GET['typeID'] ?? '') !== '' ? (int) $_GET['typeID'] : null;
         $statusID = ($_GET['statusID'] ?? '') !== '' ? (int) $_GET['statusID'] : null;
-        $workflowProjectID = ($_GET['workflowProjectID'] ?? '') !== '' ? (int) $_GET['workflowProjectID'] : null;
+        $workflowProjectContextID = $this->workflowProjectFilterFromRequest();
+        $workflowProjectID = $workflowProjectContextID > 0 ? $workflowProjectContextID : null;
         $statusFlag = strtolower(trim((string) ($_GET['status'] ?? '')));
         if (!in_array($statusFlag, ['open', 'closed'], true)) {
             $statusFlag = '';
@@ -147,6 +149,78 @@ final class WorkflowController extends BaseController
         if (SessionHelper::has('flash.message')) {
             SessionHelper::forget('flash.message');
         }
+    }
+
+    public function exportExcel(): void
+    {
+        require __DIR__ . '/../../config/db.php';
+
+        $tasksModel = new WorkflowTaskModel($conn);
+        $userID = (int) SessionHelper::get('auth.user_id', 0);
+        $perms = is_array(SessionHelper::get('auth.perms', [])) ? SessionHelper::get('auth.perms', []) : [];
+        $canAdmin = $this->canAdminWorkflowTasks($perms);
+
+        $q = trim((string) ($_GET['q'] ?? ''));
+        $typeID = ($_GET['typeID'] ?? '') !== '' ? (int) $_GET['typeID'] : null;
+        $statusID = ($_GET['statusID'] ?? '') !== '' ? (int) $_GET['statusID'] : null;
+        $workflowProjectContextID = $this->workflowProjectFilterFromRequest();
+        $workflowProjectID = $workflowProjectContextID > 0 ? $workflowProjectContextID : null;
+        $statusFlag = strtolower(trim((string) ($_GET['status'] ?? '')));
+        if (!in_array($statusFlag, ['open', 'closed'], true)) {
+            $statusFlag = '';
+        }
+        $dueState = strtolower(trim((string) ($_GET['due_state'] ?? '')));
+        if (!in_array($dueState, ['overdue', 'today', 'soon'], true)) {
+            $dueState = '';
+        }
+        if ($dueState !== '') {
+            $statusFlag = 'open';
+        }
+        $onlyOpen = ($statusFlag === 'open');
+        $onlyClosed = ($statusFlag === 'closed');
+        $isIframe = !empty($_GET['iframe']);
+
+        $mineRequested = ($_GET['mine'] ?? '') !== '' ? (int) $_GET['mine'] === 1 : !$canAdmin || $isIframe || $onlyOpen;
+        $taskScope = strtolower(trim((string) ($_GET['task_scope'] ?? 'received')));
+        if (!in_array($taskScope, ['received', 'created'], true)) {
+            $taskScope = 'received';
+        }
+        $assignedToID = null;
+        $createdByID = null;
+        if ($mineRequested || !$canAdmin) {
+            $mineRequested = true;
+            if ($taskScope === 'created') {
+                $createdByID = $userID;
+            } else {
+                $assignedToID = $userID;
+            }
+        } elseif (($_GET['assignedToUserID'] ?? '') !== '') {
+            $assignedToID = (int) $_GET['assignedToUserID'];
+        }
+        if ($assignedToID === null && $createdByID === null && !$canAdmin) {
+            $assignedToID = $userID;
+        }
+
+        $result = $tasksModel->listFiltered($assignedToID, 1, 5000, $q, $typeID, $statusID, $onlyOpen, $createdByID, $onlyClosed, $dueState, $workflowProjectID);
+        $rows = is_array($result['items'] ?? null) ? $result['items'] : [];
+
+        $this->downloadExcel('Workflow Tasks', 'WorkflowTasks', [
+            ['label' => 'Task ID', 'key' => 'WorkflowTaskID'],
+            ['label' => __t('workflow_task_task'), 'key' => 'Title'],
+            ['label' => 'Project', 'value' => static fn(array $row): string => trim((string)($row['ProjectCode'] ?? '') . ' ' . (string)($row['ProjectName'] ?? ''))],
+            ['label' => __t('workflow_task_priority'), 'key' => 'PriorityCode'],
+            ['label' => __t('status'), 'value' => static fn(array $row): string => (string)($row['StatusName'] ?? $row['StatusCode'] ?? '')],
+            ['label' => 'Task Type', 'key' => 'TaskTypeName'],
+            ['label' => __t('workflow_task_assigned_to'), 'key' => 'AssignedToName'],
+            ['label' => __t('workflow_task_created_by'), 'key' => 'CreatedByName'],
+            ['label' => __t('workflow_task_due_date'), 'key' => 'DueDate'],
+            ['label' => 'Planned Start', 'key' => 'PlannedStartDate'],
+            ['label' => 'Planned End', 'key' => 'PlannedEndDate'],
+            ['label' => 'Percent Complete', 'key' => 'PercentComplete'],
+            ['label' => __t('workflow_task_completed'), 'key' => 'CompletedAt'],
+            ['label' => 'Related Entity', 'key' => 'RelatedEntity'],
+            ['label' => 'Related Key', 'key' => 'RelatedKey'],
+        ], $rows);
     }
 
     public function edit(): void
@@ -1224,6 +1298,22 @@ final class WorkflowController extends BaseController
     }
 
     /**
+     * @param array<string, mixed>|null $task
+     * @param array<int, string> $perms
+     */
+    private function canDeleteWorkflowTask(?array $task, array $perms, int $userId): bool
+    {
+        if (!$task || $userId <= 0) {
+            return false;
+        }
+        if ($this->canAdminWorkflowTasks($perms)) {
+            return true;
+        }
+
+        return (int)($task['CreatedByUserID'] ?? 0) === $userId;
+    }
+
+    /**
      * @param array<string, mixed> $task
      */
     private function isWorkflowTaskClosed(array $task): bool
@@ -1697,8 +1787,19 @@ final class WorkflowController extends BaseController
 
         $id = (int) ($_POST['WorkflowTaskID'] ?? 0);
         $context = $this->workflowRedirectContextFromPost();
+        $perms = is_array(SessionHelper::get('auth.perms', [])) ? SessionHelper::get('auth.perms', []) : [];
+        $currentUserId = (int)SessionHelper::get('auth.user_id', 0);
         if ($id <= 0) {
             $this->flashError(__t('invalid_task'));
+            $this->redirectToWorkflowList($context);
+        }
+        $task = $tasksModel->find($id);
+        if (!$task) {
+            $this->flashError(__t('invalid_task'));
+            $this->redirectToWorkflowList($context);
+        }
+        if (!$this->canDeleteWorkflowTask($task, $perms, $currentUserId)) {
+            $this->flashError(__t('workflow_task_permission_delete'));
             $this->redirectToWorkflowList($context);
         }
 
@@ -3124,6 +3225,8 @@ final class WorkflowController extends BaseController
             'workflow-requirements/summary',
             'workflow-requirements/matrix',
             'workflow-requirements/form',
+            'workflow-issues/list',
+            'workflow-issues/form',
         ];
         if (!in_array($route, $allowedRoutes, true)) {
             return '';

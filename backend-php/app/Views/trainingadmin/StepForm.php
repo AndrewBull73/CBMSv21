@@ -69,7 +69,7 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
 
         <div class="col-md-6">
           <label class="form-label">Scenario</label>
-          <select name="ScenarioCode" class="form-select form-select-sm" required <?= $scenarioCode !== '' ? 'readonly disabled' : '' ?>>
+          <select id="TrainingStepScenarioCode" name="ScenarioCode" class="form-select form-select-sm" required <?= $scenarioCode !== '' ? 'readonly disabled' : '' ?>>
             <option value="">Select a scenario</option>
             <?php foreach ($scenarioOptions as $option): ?>
               <?php $optionCode = (string) ($option['ScenarioCode'] ?? ''); ?>
@@ -82,29 +82,29 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
         </div>
         <div class="col-md-3">
           <label class="form-label">Step No</label>
-          <input type="number" name="StepNo" class="form-control form-control-sm" value="<?= h((string) ($record['StepNo'] ?? '')) ?>" min="1" required>
+          <input id="TrainingStepNo" type="number" name="StepNo" class="form-control form-control-sm" value="<?= h((string) ($record['StepNo'] ?? '')) ?>" min="1" required>
         </div>
         <div class="col-md-3">
           <label class="form-label">Sort Order</label>
-          <input type="number" name="SortOrder" class="form-control form-control-sm" value="<?= h((string) ($record['SortOrder'] ?? ($record['StepNo'] ?? '0'))) ?>" min="0" step="10">
+          <input id="TrainingStepSortOrder" type="number" name="SortOrder" class="form-control form-control-sm" value="<?= h((string) ($record['SortOrder'] ?? ($record['StepNo'] ?? '0'))) ?>" min="0" step="10">
         </div>
 
         <div class="col-md-6">
           <label class="form-label">Route</label>
-          <input type="text" name="Route" class="form-control form-control-sm" value="<?= h((string) ($record['Route'] ?? '')) ?>" required placeholder="users/edit">
+          <input id="TrainingStepRoute" type="text" name="Route" class="form-control form-control-sm" value="<?= h((string) ($record['Route'] ?? '')) ?>" required placeholder="users/edit">
         </div>
         <div class="col-md-6">
           <label class="form-label">Target Element ID</label>
-          <input type="text" name="TargetElementID" class="form-control form-control-sm" value="<?= h((string) ($record['TargetElementID'] ?? '')) ?>" placeholder="users-save-btn">
+          <input id="TrainingStepTargetElementID" type="text" name="TargetElementID" class="form-control form-control-sm" value="<?= h((string) ($record['TargetElementID'] ?? '')) ?>" placeholder="users-save-btn">
         </div>
 
         <div class="col-md-6">
           <label class="form-label">Step Title</label>
-          <input type="text" name="StepTitle" class="form-control form-control-sm" value="<?= h((string) ($record['StepTitle'] ?? '')) ?>" required>
+          <input id="TrainingStepTitle" type="text" name="StepTitle" class="form-control form-control-sm" value="<?= h((string) ($record['StepTitle'] ?? '')) ?>" required>
         </div>
         <div class="col-md-6">
           <label class="form-label">Completion Mode</label>
-          <select name="CompletionMode" class="form-select form-select-sm" required>
+          <select id="TrainingStepCompletionMode" name="CompletionMode" class="form-select form-select-sm" required>
             <option value="">Select completion mode</option>
             <?php foreach ($completionModes as $modeValue => $modeLabel): ?>
               <option value="<?= h($modeValue) ?>" <?= ((string) ($record['CompletionMode'] ?? '') === $modeValue) ? 'selected' : '' ?>><?= h($modeLabel) ?></option>
@@ -123,7 +123,7 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
 
         <div class="col-12">
           <label class="form-label">Instruction</label>
-          <textarea name="InstructionText" class="form-control form-control-sm" rows="4" required><?= h((string) ($record['InstructionText'] ?? '')) ?></textarea>
+          <textarea id="TrainingStepInstructionText" name="InstructionText" class="form-control form-control-sm" rows="4" required><?= h((string) ($record['InstructionText'] ?? '')) ?></textarea>
         </div>
 
         <div class="col-12">
@@ -177,7 +177,7 @@ $stepNo = (int) ($record['StepNo'] ?? 0);
 
         <div class="col-12 d-flex justify-content-between">
           <a href="index.php?route=training-admin/steps&scenario_code=<?= urlencode($scenarioCode) ?>" class="btn btn-sm btn-outline-secondary">Back</a>
-          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>Save Step</button>
+          <button id="training-step-save-btn" type="submit" class="btn btn-sm btn-primary"><i class="bi bi-save me-1"></i>Save Step</button>
         </div>
       </form>
       <?php endif; ?>

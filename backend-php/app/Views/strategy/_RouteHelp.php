@@ -15,6 +15,147 @@ $help = [
 ];
 
 $map = [
+    'workflow/list' => [
+        'title' => 'Workflow Tasks Help',
+        'purpose' => 'Use this screen to manage workflow tasks assigned to you, created by you, or visible to you through Workflow Operations permissions.',
+        'points' => [
+            'Use the task tabs and due-date filters to focus on open, closed, overdue, due today, or due soon work.',
+            'When a workflow project has already been selected elsewhere, this screen keeps that project context until you choose All Projects or another project.',
+            'Create tasks directly from this screen for general work, or create them from a project, requirement, or issue when the task should stay linked to that record.',
+            'Use Print for a quick on-screen report and Export Excel to download the currently filtered task register.',
+        ],
+        'note' => 'Task visibility depends on your workflow permissions. Non-admin users only export the tasks they are allowed to see.',
+    ],
+    'workflow/edit' => [
+        'title' => 'Workflow Task Form Help',
+        'purpose' => 'Use this form to create, update, respond to, and track a workflow task.',
+        'points' => [
+            'Use the Details and Assignment tabs for the core task information, dates, assignee, priority, and project links.',
+            'For project tasks, planned and due dates must sit inside the valid project date range shown on the form.',
+            'Use the Discussion, Files, Views, Activity, and Notifications tabs to keep supporting evidence and communication with the task.',
+            'Read-only fields are visually muted; they show generated or controlled values that cannot be edited on the current screen.',
+        ],
+        'note' => 'Tasks created from requirements or issues should remain linked to those records so progress can be reported from the requirement matrix and issue log.',
+    ],
+    'workflow-projects/list' => [
+        'title' => 'Workflow Projects Help',
+        'purpose' => 'Use this screen to create and review workflow project containers for related tasks, requirements, issues, and project users.',
+        'points' => [
+            'Open a project summary when you want the project to become the active workflow project context for related workflow screens.',
+            'Use the project filters to narrow the register by search text, status, or active flag.',
+            'Create requirements, issues, or tasks from project actions when the new item should be linked to that project.',
+            'Use Print for a quick project register report and Export Excel to download the filtered project list.',
+        ],
+        'note' => 'The selected project is remembered across Workflow Operations screens to reduce repeated project selection.',
+    ],
+    'workflow-projects/summary' => [
+        'title' => 'Project Summary Help',
+        'purpose' => 'Use this screen to review one workflow project across overview, requirements, issues, linked work, users, and schedule information.',
+        'points' => [
+            'Use the tabs to move between project overview, requirements, issues, linked work, team, and schedule details without losing the project context.',
+            'Create project tasks, requirements, and issues from this screen when they belong to the current project.',
+            'Review project issues here to understand blockers and the tasks being used to resolve them.',
+            'Use the quick links to move to Requirements, Matrix, Issues, or Tasks while keeping this project selected.',
+        ],
+        'note' => 'Opening this screen sets the remembered workflow project context for other Workflow Operations screens.',
+    ],
+    'workflow-projects/form' => [
+        'title' => 'Workflow Project Form Help',
+        'purpose' => 'Use this form to create or update project details, ownership, project users, dates, and project schedule information.',
+        'points' => [
+            'Enter clear project dates because project task start and due dates are validated against the project range.',
+            'Assign project users and roles so the project team is visible from the summary screen.',
+            'Use the Gantt and task sections to review project work by planned dates and dependencies.',
+            'Read-only fields are visually muted and indicate generated or controlled values.',
+        ],
+        'note' => 'Saving or opening an existing project sets it as the remembered workflow project context.',
+    ],
+    'workflow-requirements/list' => [
+        'title' => 'Requirements Help',
+        'purpose' => 'Use this screen to maintain high-level and detailed requirements for workflow projects.',
+        'points' => [
+            'Use the project, type, priority, status, level, and active filters to narrow the requirement register.',
+            'Create detailed requirements under a high-level requirement when you need more granular delivery or acceptance tracking.',
+            'Use row actions to open, edit, create tasks, create issues, or navigate to related project information.',
+            'Use Print for a quick register report and Export Excel to download the filtered requirements list.',
+        ],
+        'note' => 'If a project was selected on another Workflow Operations screen, the requirement filters default to that project until you clear or change it.',
+    ],
+    'workflow-requirements/summary' => [
+        'title' => 'Requirements Summary Help',
+        'purpose' => 'Use this screen to review requirement totals, gaps, status mix, priority mix, and project distribution.',
+        'points' => [
+            'Filter by project, delivery class, type, priority, status, level, and active flag before reviewing the metrics.',
+            'Use the parent coverage section to identify high-level requirements missing detailed requirements or ownership details.',
+            'Move to the Requirements Matrix when you need traceability evidence and linked-task coverage.',
+            'Use Print for the current summary view and Export Excel to download the summarized metrics.',
+        ],
+        'note' => 'This screen also follows the remembered project context from the Workflow Projects area.',
+    ],
+    'workflow-requirements/matrix' => [
+        'title' => 'Requirements Matrix Help',
+        'purpose' => 'Use this screen to check requirement traceability, linked tasks, testing evidence, training links, defects, and coverage gaps.',
+        'points' => [
+            'Use the coverage filter to focus on missing tasks, open tasks, missing testing, missing training, missing acceptance criteria, or defects.',
+            'Create tasks from requirement rows when delivery work is missing or needs follow-up.',
+            'Use the gaps column to identify the action needed before a requirement is considered fully covered.',
+            'Use Print for a quick matrix view and Export Excel to download the filtered matrix evidence.',
+        ],
+        'note' => 'The matrix is most useful when tasks, testing, training, and defect links are maintained as part of the delivery process.',
+    ],
+    'workflow-requirements/form' => [
+        'title' => 'Requirement Form Help',
+        'purpose' => 'Use this form to create or update a high-level or detailed requirement, its acceptance criteria, ownership, links, tasks, history, and files.',
+        'points' => [
+            'Select the project first; the available parent requirements and related links depend on that project.',
+            'Use Requirement Level and Parent Requirement to create detailed requirements under a high-level requirement.',
+            'Use the Tasks and Issues areas to create linked work that delivers or resolves the requirement.',
+            'Attach supporting files and keep acceptance criteria clear enough to test.',
+        ],
+        'note' => 'Read-only fields are visually muted. Generated codes and controlled status values should be changed only through the available workflow actions.',
+    ],
+    'workflow-issues/list' => [
+        'title' => 'Issues Log Help',
+        'purpose' => 'Use this screen to record, filter, review, and manage project or requirement issues.',
+        'points' => [
+            'Use the project filter to see only issues for the selected workflow project.',
+            'Link issues to requirements where possible so requirement impacts and resolution work are easier to trace.',
+            'Use linked tasks to manage the work required to resolve each issue.',
+            'Use Print for a quick issues report and Export Excel to download the filtered issues log.',
+        ],
+        'note' => 'Issue Code is generated on save and shown as read-only before it exists.',
+    ],
+    'workflow-issues/form' => [
+        'title' => 'Issue Form Help',
+        'purpose' => 'Use this form to create or update an issue, link it to a project or requirement, attach evidence, and create resolution tasks.',
+        'points' => [
+            'Select a project first; the requirement dropdown is filtered to requirements for that project.',
+            'Use severity, priority, owner, due date, and status to keep the issue actionable.',
+            'Attach relevant files when the issue needs screenshots, documents, logs, or other evidence.',
+            'Create linked tasks from the issue so resolution work can be assigned and tracked without losing the issue record.',
+        ],
+        'note' => 'Read-only fields are visually muted. Generated issue codes and controlled fields should be left to the system or workflow actions.',
+    ],
+    'workflow-user-groups/list' => [
+        'title' => 'Workflow User Groups Help',
+        'purpose' => 'Use this screen to maintain reusable recipient groups for workflow tasks.',
+        'points' => [
+            'Create groups for teams that regularly receive the same workflow tasks.',
+            'Keep group names and descriptions clear so task creators select the correct audience.',
+            'Review active groups before sending multi-recipient workflow tasks.',
+        ],
+        'note' => 'Groups expand into individual recipient tasks when used on the task form.',
+    ],
+    'workflow-user-groups/form' => [
+        'title' => 'Workflow User Group Form Help',
+        'purpose' => 'Use this form to create or edit a reusable workflow recipient group.',
+        'points' => [
+            'Add only active users who should receive tasks for this group.',
+            'Keep membership current when staff responsibilities change.',
+            'Disable a group instead of reusing it for a different purpose when the old meaning still matters historically.',
+        ],
+        'note' => 'Workflow user groups help task creators assign work consistently, but the generated tasks are still tracked per recipient.',
+    ],
     'system-settings/list' => [
         'title' => 'System Settings Help',
         'purpose' => 'Use this screen to maintain the application settings that control defaults, authentication, sessions, email, monitoring, and environment-specific behaviour.',
@@ -709,6 +850,16 @@ $map = [
         ],
         'note' => 'Ending a session signs the user out of the application and requires them to log in again.',
     ],
+    'training/dashboard' => [
+        'title' => 'Training Dashboard Help',
+        'purpose' => 'Use this dashboard to see the training and certifications assigned to you, your current progress, and the next item you should work on.',
+        'points' => [
+            'Review assigned scenarios and certifications only; catalogue items are shown elsewhere for trainers and configuration users.',
+            'Use the progress indicators to see what is not started, in progress, completed, or certified.',
+            'Launch the next assigned scenario or certification directly from the dashboard.',
+        ],
+        'note' => 'The dashboard is learner-focused. Training administrators use Training Summary, Training Operations, and Certification Results for wider oversight.',
+    ],
     'training/users' => [
         'title' => 'Create New User Training Help',
         'purpose' => 'Use this runner to launch and monitor the guided Create New User training scenario.',
@@ -741,23 +892,23 @@ $map = [
     ],
     'training/scenarios' => [
         'title' => 'Training Scenarios Help',
-        'purpose' => 'Use this catalogue to browse available training scenarios, see your current status, and launch guided exercises from one place.',
+        'purpose' => 'Use this screen to review and launch the guided scenarios assigned to your user account.',
         'points' => [
-            'Review module, audience, step count, and current progress before launching a scenario.',
+            'Review module, audience, display order, step count, and current progress before launching a scenario.',
             'Use Open Scenario to start a new exercise or Resume Scenario to continue an in-progress one.',
             'Use the summary link when you want to review persisted training outcomes rather than launch a scenario.',
         ],
-        'note' => 'This catalogue is driven by the training scenario definitions in the application and will grow as more guided exercises are added.',
+        'note' => 'This is the trainee launch view. Training Configuration users maintain the master catalogue separately.',
     ],
     'training/summary' => [
         'title' => 'Training Summary Help',
-        'purpose' => 'Use this screen to review persisted training progress and completion for the prototype scenarios that have been run by users.',
+        'purpose' => 'Use this screen to review persisted training progress and completion across assigned users and scenarios.',
         'points' => [
-            'Filter by user, status, or scenario to find specific training activity.',
+            'Filter by user, module, status, or scenario to find specific training activity.',
             'Use progress, attempt number, and completion times to understand how far a user has progressed through the scenario.',
             'Review this screen after training sessions to confirm who completed the scenario successfully.',
         ],
-        'note' => 'This summary is driven from the training progress table, so it only shows data once the training persistence script has been applied.',
+        'note' => 'This is an administration view. Learners should use Training Dashboard for their own assigned work.',
     ],
     'training-admin/scenarios' => [
         'title' => 'Training Catalogue Help',
@@ -818,6 +969,116 @@ $map = [
             'Update TRAINING_SCENARIO_MATRIX.md when the agreed training plan changes, then refresh this screen.',
         ],
         'note' => 'This screen is a planning and governance view. Scenario step content is still maintained in the Training Catalogue screens.',
+    ],
+    'training-admin/operations' => [
+        'title' => 'Training Operations Help',
+        'purpose' => 'Use this screen to create training paths, assign training to users, schedule sessions, and resolve operational training issues.',
+        'points' => [
+            'Create paths to group scenarios into a recommended module sequence.',
+            'Assign paths or individual scenarios to users so their Training Dashboard only shows relevant work.',
+            'Use sessions and evidence records to support trainer-led activities, attendance, and follow-up.',
+        ],
+        'note' => 'This is the main trainer administration workspace. It should be limited to Training Administration users.',
+    ],
+    'training-admin/session-dashboard' => [
+        'title' => 'Training Session Dashboard Help',
+        'purpose' => 'Use this screen to review one trainer-led session, attendee progress, evidence, and follow-up actions.',
+        'points' => [
+            'Review the session roster and identify attendees who still need completion or evidence.',
+            'Attach evidence where a session requires supporting files, notes, or trainer confirmation.',
+            'Use this view after a session to confirm outcomes before reporting completion.',
+        ],
+        'note' => 'Scenario completion remains user-specific even when training is delivered through a shared session.',
+    ],
+    'training-admin/validation' => [
+        'title' => 'Training Validation Help',
+        'purpose' => 'Use this screen to find training configuration issues before users encounter broken or incomplete guided scenarios.',
+        'points' => [
+            'Review missing targets, inactive routes, duplicate ordering, and other configuration warnings.',
+            'Open the scenario or step maintenance screens from each issue to correct the source record.',
+            'Run validation after adding new scenarios, translations, paths, or certification-related training content.',
+        ],
+        'note' => 'Validation helps prevent avoidable training interruptions, but it does not replace testing the guided scenario end to end.',
+    ],
+    'training-certifications/modules' => [
+        'title' => 'Certifications Help',
+        'purpose' => 'Use this screen to view the module certifications assigned or available to you and start a final module test.',
+        'points' => [
+            'Review the module, pass mark, question count, and your latest result before starting.',
+            'Start the certification when you are ready to answer the multiple choice questions.',
+            'Use the dashboard link to return to your combined training and certification status.',
+        ],
+        'note' => 'Certification attempts are recorded separately from guided scenario progress.',
+    ],
+    'training-certifications/admin' => [
+        'title' => 'Certification Catalogue Help',
+        'purpose' => 'Use this screen to maintain the list of module certifications and their pass requirements.',
+        'points' => [
+            'Create one certification per module or assessed learning outcome.',
+            'Set the pass percentage required before a user is considered certified.',
+            'Use the Questions action to maintain the multiple choice question bank for the certification.',
+        ],
+        'note' => 'This is a configuration screen. Only Training Configuration users should maintain certification definitions.',
+    ],
+    'training-certifications/form' => [
+        'title' => 'Certification Setup Help',
+        'purpose' => 'Use this form to create or update a certification definition, including title, module, description, pass percentage, and order.',
+        'points' => [
+            'Keep the certification code stable once attempts have been recorded.',
+            'Use clear module names so dashboard, results, and filters group certifications consistently.',
+            'Set an achievable but meaningful pass percentage for final module certification.',
+        ],
+        'note' => 'Question content is maintained separately on the Certification Questions screen.',
+    ],
+    'training-certifications/questions' => [
+        'title' => 'Certification Questions Help',
+        'purpose' => 'Use this screen to maintain the ordered multiple choice questions for one certification.',
+        'points' => [
+            'Review each question number, active flag, correct answer key, and explanation.',
+            'Open a question to edit wording, answer options, correct answer, and feedback.',
+            'Keep questions focused on module behaviours, governance rules, and practical use of the screens.',
+        ],
+        'note' => 'Questions are presented to the trainee during certification attempts and are scored automatically.',
+    ],
+    'training-certifications/question-form' => [
+        'title' => 'Certification Question Setup Help',
+        'purpose' => 'Use this form to define one multiple choice certification question and its answer options.',
+        'points' => [
+            'Write the question so there is one clearly best answer.',
+            'Keep option keys consistent with the correct answer key.',
+            'Use the explanation to reinforce the learning point after scoring.',
+        ],
+        'note' => 'Avoid changing the meaning of a question after users have already answered it unless you are intentionally revising the test.',
+    ],
+    'training-certifications/take' => [
+        'title' => 'Take Certification Help',
+        'purpose' => 'Use this screen to complete the multiple choice certification test for the selected module.',
+        'points' => [
+            'Answer every question before submitting the attempt.',
+            'Review the module and pass mark before you begin.',
+            'Submit the attempt when you are ready for the system to calculate your score.',
+        ],
+        'note' => 'Submitted attempts are retained for certification history and trainer review.',
+    ],
+    'training-certifications/result' => [
+        'title' => 'Certification Result Help',
+        'purpose' => 'Use this screen to review the score, pass result, and feedback for one certification attempt.',
+        'points' => [
+            'Compare your score with the required pass percentage.',
+            'Review incorrect answers and explanations where they are shown.',
+            'Return to certifications when you need to retake or continue with another module.',
+        ],
+        'note' => 'A passed attempt confirms certification for the module according to the configured pass mark.',
+    ],
+    'training-certifications/results' => [
+        'title' => 'Certification Results Help',
+        'purpose' => 'Use this administration screen to review certification attempts and outcomes across users and modules.',
+        'points' => [
+            'Filter by module, certification, user, or pass status to find the results you need.',
+            'Review attempt number, submitted date, score, pass mark, and pass result for each attempt.',
+            'Use this screen alongside Training Summary when preparing trainer reports.',
+        ],
+        'note' => 'This screen is intended for Training Administration users, not ordinary learner self-service.',
     ],
     'strategy-config/fiscal-periods' => [
         'title' => 'Fiscal Period Labels Help',
@@ -1438,6 +1699,10 @@ if (!function_exists('h')) {
         return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
     }
 }
+
+$isWorkflowOperationsRoute = preg_match('/^workflow($|\/)|^workflow-projects\//', $route) === 1
+    || preg_match('/^workflow-requirements\/|^workflow-issues\/|^workflow-user-groups\//', $route) === 1;
+$isTrainingRoute = preg_match('/^training($|\/)|^training-admin\/|^training-certifications\//', $route) === 1;
 ?>
 <div class="container-fluid mt-3">
   <div class="card shadow-sm border-0">
@@ -1446,9 +1711,31 @@ if (!function_exists('h')) {
         <div class="flex-grow-1">
           <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
             <div class="small text-uppercase text-muted fw-semibold">Helper Instructions</div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="strategyHelpToggle">
-              Hide Help
-            </button>
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+              <?php if ($isWorkflowOperationsRoute): ?>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        id="workflowModuleOverviewHelpBtn"
+                        data-module-overview-help
+                        data-help-title="Workflow Operations Overview"
+                        data-help-screen="workflow-operations/overview">
+                  <i class="bi bi-diagram-3 me-1"></i>Module Overview
+                </button>
+              <?php endif; ?>
+              <?php if ($isTrainingRoute): ?>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        id="trainingModuleOverviewHelpBtn"
+                        data-module-overview-help
+                        data-help-title="Training Overview"
+                        data-help-screen="training/overview">
+                  <i class="bi bi-mortarboard me-1"></i>Module Overview
+                </button>
+              <?php endif; ?>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="strategyHelpToggle">
+                Hide Help
+              </button>
+            </div>
           </div>
           <div id="strategyHelpBody">
             <h5 class="mb-2"><?= h((string)($help['title'] ?? 'Screen Help')) ?></h5>
@@ -1490,6 +1777,38 @@ document.addEventListener('DOMContentLoaded', function () {
         const hidden = body.style.display !== 'none';
         window.localStorage.setItem(storageKey, hidden ? '1' : '0');
         applyState(hidden);
+    });
+
+    const overviewButtons = document.querySelectorAll('[data-module-overview-help]');
+    overviewButtons.forEach(function (overviewButton) {
+        overviewButton.addEventListener('click', async function () {
+            const screen = overviewButton.getAttribute('data-help-screen') || 'workflow-operations/overview';
+            const title = overviewButton.getAttribute('data-help-title') || 'Module Overview';
+            const modalBody = document.getElementById('helpModalBody');
+            const modalTitle = document.getElementById('helpModalLabel');
+            const modalEl = document.getElementById('helpModal');
+            if (!modalBody || !modalEl || !window.bootstrap) {
+                window.location.href = 'index.php?route=help/show&screen=' + encodeURIComponent(screen);
+                return;
+            }
+
+            modalBody.innerHTML = '<div class="text-center my-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="bi bi-question-circle me-2"></i>Help - ' + title;
+            }
+
+            try {
+                const response = await fetch('index.php?route=help/show&screen=' + encodeURIComponent(screen), { credentials: 'same-origin' });
+                modalBody.innerHTML = await response.text();
+            } catch (error) {
+                modalBody.innerHTML = '<p class="text-danger">Failed to load help content.</p>';
+            }
+
+            bootstrap.Modal.getOrCreateInstance(modalEl, {
+                backdrop: 'static',
+                keyboard: true
+            }).show();
+        });
     });
 });
 </script>

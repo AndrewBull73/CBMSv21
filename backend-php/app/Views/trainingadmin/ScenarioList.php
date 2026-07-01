@@ -9,7 +9,8 @@ if (!function_exists('h')) {
 }
 
 $rows = is_array($rows ?? null) ? $rows : [];
-$filters = is_array($filters ?? null) ? $filters : ['q' => '', 'active' => '1'];
+$filters = is_array($filters ?? null) ? $filters : ['q' => '', 'module' => '', 'active' => '1'];
+$moduleOptions = is_array($moduleOptions ?? null) ? $moduleOptions : [];
 $tableInstalled = (bool) ($tableInstalled ?? false);
 ?>
 
@@ -23,9 +24,9 @@ $tableInstalled = (bool) ($tableInstalled ?? false);
       <div class="d-inline-flex gap-2">
         <a href="index.php?route=training/scenarios" class="btn btn-sm btn-outline-secondary"><i class="bi bi-play-circle me-1"></i>Launch View</a>
         <?php if ($tableInstalled): ?>
-          <a href="index.php?route=training-admin/scenario-form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Scenario</a>
+          <a id="training-catalogue-create-scenario-btn" href="index.php?route=training-admin/scenario-form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Scenario</a>
         <?php else: ?>
-          <button type="button" class="btn btn-sm btn-primary" disabled><i class="bi bi-plus-circle me-1"></i>Create Scenario</button>
+          <button id="training-catalogue-create-scenario-btn" type="button" class="btn btn-sm btn-primary" disabled><i class="bi bi-plus-circle me-1"></i>Create Scenario</button>
         <?php endif; ?>
       </div>
     </div>
@@ -44,10 +45,20 @@ $tableInstalled = (bool) ($tableInstalled ?? false);
         </div>
       <?php endif; ?>
 
-      <form method="get" action="index.php" class="row g-2 mb-3">
+      <form id="training-catalogue-filter-form" method="get" action="index.php" class="row g-2 mb-3">
         <input type="hidden" name="route" value="training-admin/scenarios">
-        <div class="col-md-6">
+        <div class="col-md-4">
           <input type="text" name="q" value="<?= h((string) ($filters['q'] ?? '')) ?>" class="form-control form-control-sm" placeholder="Search code, title, screen family, module, or audience">
+        </div>
+        <div class="col-md-3">
+          <select name="module" class="form-select form-select-sm" aria-label="Filter by module">
+            <option value="">All modules</option>
+            <?php foreach ($moduleOptions as $moduleOption): ?>
+              <option value="<?= h((string) $moduleOption) ?>" <?= ((string) ($filters['module'] ?? '') === (string) $moduleOption) ? 'selected' : '' ?>>
+                <?= h((string) $moduleOption) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
         <div class="col-md-3">
           <select name="active" class="form-select form-select-sm">
@@ -56,7 +67,7 @@ $tableInstalled = (bool) ($tableInstalled ?? false);
             <option value="0" <?= (($filters['active'] ?? '') === '0') ? 'selected' : '' ?>>Inactive</option>
           </select>
         </div>
-        <div class="col-md-3 d-flex gap-2">
+        <div class="col-md-2 d-flex gap-2">
           <button type="submit" class="btn btn-sm btn-outline-primary flex-fill">Filter</button>
           <a href="index.php?route=training-admin/scenarios" class="btn btn-sm btn-outline-secondary flex-fill">Reset</a>
         </div>
@@ -65,9 +76,10 @@ $tableInstalled = (bool) ($tableInstalled ?? false);
       <div class="small text-muted mb-3">Open a scenario to maintain its core details, steps, samples, and multilingual content. Use the action buttons to jump straight to steps or translations.</div>
 
       <div class="table-responsive">
-        <table class="table table-striped table-hover table-sm align-middle">
+        <table id="training-catalogue-table" class="table table-striped table-hover table-sm align-middle">
           <thead class="table-light">
             <tr>
+              <th class="text-end">Order</th>
               <th>Scenario</th>
               <th>Module</th>
               <th>Audience</th>
@@ -81,11 +93,14 @@ $tableInstalled = (bool) ($tableInstalled ?? false);
           </thead>
           <tbody>
             <?php if ($rows === []): ?>
-              <tr><td colspan="9" class="text-center text-muted py-3">No training scenarios found.</td></tr>
+              <tr><td colspan="10" class="text-center text-muted py-3">No training scenarios found.</td></tr>
             <?php else: ?>
               <?php foreach ($rows as $row): ?>
                 <?php $scenarioCode = (string) ($row['ScenarioCode'] ?? ''); ?>
                 <tr>
+                  <td class="text-end">
+                    <span class="badge text-bg-light border"><?= h((string) ((int) ($row['SortOrder'] ?? 0))) ?></span>
+                  </td>
                   <td>
                     <div class="fw-semibold"><?= h((string) ($row['ScenarioTitle'] ?? $scenarioCode)) ?></div>
                     <div class="small text-muted"><?= h($scenarioCode) ?></div>

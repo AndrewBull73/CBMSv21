@@ -17,6 +17,19 @@ $sessionId = (int) ($sessionId ?? ($session['TrainingSessionID'] ?? 0));
 $contextSummary = $session !== null
     ? (string) (($session['SessionTitle'] ?? '') ?: ($session['SessionCode'] ?? 'Training session'))
     : 'No session selected';
+$sessionEditUrl = 'index.php?route=training-admin/operations#training-ops-sessions';
+if ($session !== null) {
+    $sessionEditParams = ['route' => 'training-admin/operations'];
+    $pathCode = trim((string) ($session['PathCode'] ?? ''));
+    $sessionCode = trim((string) ($session['SessionCode'] ?? ''));
+    if ($pathCode !== '') {
+        $sessionEditParams['path_code'] = $pathCode;
+    }
+    if ($sessionCode !== '') {
+        $sessionEditParams['edit_session_code'] = $sessionCode;
+    }
+    $sessionEditUrl = 'index.php?' . http_build_query($sessionEditParams) . '#training-ops-sessions';
+}
 $completedCount = 0;
 $activeCount = 0;
 foreach ($participants as $participant) {
@@ -100,7 +113,7 @@ $statusBadge = static function (string $status): string {
         <div class="fw-semibold mb-1">Session Runbook</div>
         <div class="mb-2">Use this dashboard while an instructor is guiding learners through a training path or scenario.</div>
         <div class="small text-muted mb-2">Monitor each participant's latest progress, identify stalled learners, and record instructor sign-off when a learner demonstrates the required outcome.</div>
-        <div class="small">Use the Training Operations screen to add participants or adjust the session setup.</div>
+        <div class="small">Use Training Session Edit to add participants or adjust the session setup.</div>
       </div>
 
       <?php if (!$managementInstalled): ?>
@@ -116,7 +129,12 @@ $statusBadge = static function (string $status): string {
       <?php if ($session !== null): ?>
         <div class="card shadow-sm mb-4">
           <div class="card-header">
-            <h5 class="mb-0">Session Detail</h5>
+            <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+              <h5 class="mb-0">Session Detail</h5>
+              <a href="<?= h($sessionEditUrl) ?>" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-pencil-square me-1"></i>Edit Session
+              </a>
+            </div>
           </div>
           <div class="card-body">
             <div class="row g-3">
@@ -205,7 +223,12 @@ $statusBadge = static function (string $status): string {
             </table>
           </div>
           <div class="mt-3">
-            <a href="index.php?route=training-admin/operations" class="btn btn-sm btn-outline-secondary">
+            <?php if ($session !== null): ?>
+              <a href="<?= h($sessionEditUrl) ?>" class="btn btn-sm btn-outline-primary me-2">
+                <i class="bi bi-pencil-square me-1"></i>Edit Session
+              </a>
+            <?php endif; ?>
+            <a href="index.php?route=training-admin/operations#training-ops-sessions" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-arrow-left me-1"></i>Training Operations
             </a>
           </div>

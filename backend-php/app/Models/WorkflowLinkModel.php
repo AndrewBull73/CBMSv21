@@ -32,6 +32,7 @@ final class WorkflowLinkModel
         return [
             'RELATED_ITEM' => 'workflow_link_type_related_item',
             'REQUIREMENT' => 'workflow_link_type_requirement',
+            'ISSUE' => 'workflow_link_type_issue',
             'TRAINING_SCENARIO' => 'workflow_link_type_training_scenario',
             'TRAINING_ASSIGNMENT' => 'workflow_link_type_training_assignment',
             'TRAINING_SESSION' => 'workflow_link_type_training_session',
@@ -162,6 +163,35 @@ final class WorkflowLinkModel
             ");
             $stmt->bindValue(':workflowRequirementIDForTasks', $workflowRequirementID, PDO::PARAM_INT);
             $stmt->bindValue(':workflowRequirementID', $workflowRequirementID, PDO::PARAM_INT);
+            $stmt->execute();
+            $this->lastError = '';
+            return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (\Throwable $e) {
+            $this->lastError = $e->getMessage();
+            return [];
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listIssueLinks(int $workflowIssueID): array
+    {
+        if ($workflowIssueID <= 0 || !$this->supportsWorkflowLinks()) {
+            return [];
+        }
+
+        try {
+            $stmt = $this->conn->prepare($this->baseLinkSelectSql() . "
+                WHERE l.Active = 1
+                  AND l.LinkedEntity = N'WorkflowIssue'
+                  AND l.LinkedEntityID = :workflowIssueID
+                ORDER BY
+                    CASE WHEN l.WorkflowTaskID IS NULL THEN 1 ELSE 0 END,
+                    l.CreatedAt DESC,
+                    l.WorkflowLinkID DESC
+            ");
+            $stmt->bindValue(':workflowIssueID', $workflowIssueID, PDO::PARAM_INT);
             $stmt->execute();
             $this->lastError = '';
             return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];

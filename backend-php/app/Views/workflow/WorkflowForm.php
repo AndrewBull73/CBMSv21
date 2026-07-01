@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/** Expected: $task, $types, $statuses, $users, $title (optional), $flash (optional) */
+/** Expected: $task, $types, $statuses, $users, $title (optional) */
 
 require_once __DIR__ . '/../../../shared/workflow_helpers.php';
 
@@ -295,6 +295,7 @@ $isTaskOverdue = !$isTaskClosed
     && strtotime(date('Y-m-d')) > strtotime($valDueDate);
 $isTaskRecipient = $id > 0 && $currentUserId > 0 && $valAssignedToID === $currentUserId;
 $isTaskCreator = $id > 0 && $currentUserId > 0 && $valCreatedByID === $currentUserId;
+$canDeleteTask = $id > 0 && !$isIframe && ($canAdminWorkflow || $isTaskCreator);
 $isRecipientSimpleView = $id > 0 && $isTaskRecipient && !$isTaskCreator && !$canManageTaskDetails && !$canAdminWorkflow;
 if ($isRecipientSimpleView) {
     $title = __t('workflow_task_view_title');
@@ -318,8 +319,6 @@ foreach ([
     }
 }
 
-// Optional one-off flash (controller may pass it)
-$flash = $flash ?? null;
 
 if (!function_exists('wf_form_format_datetime')) {
     function wf_form_format_datetime(?string $dt): string {
@@ -679,19 +678,23 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
     background: #f8fbff;
     padding: .75rem .85rem;
   }
+  .workflow-form-shell .workflow-primary-tabs,
   .workflow-form-shell .workflow-secondary-tabs {
     border-bottom: 1px solid #dce6ef;
   }
+  .workflow-form-shell .workflow-primary-tabs .nav-link,
   .workflow-form-shell .workflow-secondary-tabs .nav-link {
     border-radius: .65rem .65rem 0 0;
     color: #536679;
     font-size: .86rem;
     padding: .55rem .75rem;
   }
+  .workflow-form-shell .workflow-primary-tabs .nav-link.active,
   .workflow-form-shell .workflow-secondary-tabs .nav-link.active {
     color: #24384d;
     font-weight: 700;
   }
+  .workflow-form-shell .workflow-primary-tab-content,
   .workflow-form-shell .workflow-secondary-tab-content {
     background: #fff;
     border: 1px solid #dce6ef;
@@ -855,7 +858,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
     <div class="d-flex gap-2 workflow-screen-actions">
       <?php if ($id > 0): ?>
         <?php if ($canSendTaskReminder && !$isTaskClosed): ?>
-          <form method="post" action="index.php?route=workflow/send-reminder" class="needs-validation d-inline workflow-reminder-form" novalidate>
+          <form id="workflow-task-reminder-form" method="post" action="index.php?route=workflow/send-reminder" class="needs-validation d-inline workflow-reminder-form" novalidate>
             <?php if (function_exists('csrf_field')): ?>
               <?= csrf_field(); ?>
             <?php endif; ?>
@@ -871,13 +874,39 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
             <?php if ($mine !== null): ?><input type="hidden" name="mine" value="<?= h((string)$mine) ?>"><?php endif; ?>
             <?php if ($mine !== null): ?><input type="hidden" name="task_scope" value="<?= h($taskScope) ?>"><?php endif; ?>
             <?php if ($assignedToUserIDFilter !== null): ?><input type="hidden" name="assignedToUserID" value="<?= h((string)$assignedToUserIDFilter) ?>"><?php endif; ?>
-            <button type="submit" class="btn btn-sm btn-outline-primary">
+            <button id="workflow-task-send-reminder-btn" type="submit" class="btn btn-sm btn-outline-primary">
               <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
               <i class="bi bi-envelope-paper me-1"></i><?= h(__t('workflow_task_send_reminder')) ?>
             </button>
           </form>
         <?php endif; ?>
-        <button type="button" class="btn btn-sm btn-outline-secondary workflow-print-btn" onclick="window.print()">
+        <?php if ($canDeleteTask): ?>
+          <form method="post"
+                action="index.php?route=workflow/delete"
+                class="d-inline"
+                data-confirm-message="<?= h(__t('workflow_task_delete_confirm')) ?>"
+                data-confirm-button="<?= h(__t('delete')) ?>"
+                data-confirm-button-class="btn-danger">
+            <?php if (function_exists('csrf_field')): ?>
+              <?= csrf_field(); ?>
+            <?php endif; ?>
+            <?= wf_form_render_context_inputs() ?>
+            <input type="hidden" name="WorkflowTaskID" value="<?= h((string)$id) ?>">
+            <input type="hidden" name="q" value="<?= h($q) ?>">
+            <input type="hidden" name="page" value="<?= h((string)$page) ?>">
+            <input type="hidden" name="pageSize" value="<?= h((string)$pageSize) ?>">
+            <?php if ($typeID !== null): ?><input type="hidden" name="typeID" value="<?= h((string)$typeID) ?>"><?php endif; ?>
+            <?php if ($statusID !== null): ?><input type="hidden" name="statusID" value="<?= h((string)$statusID) ?>"><?php endif; ?>
+            <?php if ($status !== ''): ?><input type="hidden" name="status" value="<?= h($status) ?>"><?php endif; ?>
+            <?php if ($mine !== null): ?><input type="hidden" name="mine" value="<?= h((string)$mine) ?>"><?php endif; ?>
+            <?php if ($mine !== null): ?><input type="hidden" name="task_scope" value="<?= h($taskScope) ?>"><?php endif; ?>
+            <?php if ($assignedToUserIDFilter !== null): ?><input type="hidden" name="assignedToUserID" value="<?= h((string)$assignedToUserIDFilter) ?>"><?php endif; ?>
+            <button id="workflow-task-delete-btn" type="submit" class="btn btn-sm btn-outline-danger">
+              <i class="bi bi-trash me-1"></i><?= h(__t('delete')) ?>
+            </button>
+          </form>
+        <?php endif; ?>
+        <button id="workflow-task-print-btn" type="button" class="btn btn-sm btn-outline-secondary workflow-print-btn" onclick="window.print()">
           <i class="bi bi-printer me-1"></i><?= h(__t('workflow_task_print')) ?>
         </button>
       <?php endif; ?>
@@ -888,15 +917,8 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
   </div>
 
   <div class="card-body">
-    <?php if (is_array($flash) && !empty($flash['text'])): ?>
-      <div class="alert alert-<?= h($flash['type'] ?? 'info') ?> alert-dismissible fade show mb-3" role="alert">
-        <?= $flash['text'] /* controller controls content */ ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="<?= __t('close') ?>"></button>
-      </div>
-    <?php endif; ?>
-
     <!-- Form (needs-validation for consistent Bootstrap feedback) -->
-    <form method="post" action="index.php?route=workflow/save" enctype="multipart/form-data" class="needs-validation" novalidate>
+    <form id="workflow-task-form" method="post" action="index.php?route=workflow/save" enctype="multipart/form-data" class="needs-validation" novalidate>
       <?php if (function_exists('csrf_field')): ?>
         <?= csrf_field(); ?>
       <?php elseif (function_exists('csrf_token')): ?>
@@ -973,6 +995,32 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
           </div>
         </div>
       <?php else: ?>
+      <ul class="nav nav-tabs workflow-primary-tabs flex-nowrap overflow-auto mb-0" id="WorkflowTaskEditTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="WorkflowTaskDetailsTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowTaskDetailsTab" aria-controls="WorkflowTaskDetailsTab" aria-selected="true">
+            <i class="bi bi-card-text me-1"></i><?= h(__t('workflow_task_tab_details')) ?>
+          </button>
+        </li>
+        <?php if ($isProjectTaskContext): ?>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="WorkflowTaskProjectTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowTaskProjectTab" aria-controls="WorkflowTaskProjectTab" aria-selected="false">
+              <i class="bi bi-kanban me-1"></i><?= h(__t('workflow_project_project_plan')) ?>
+            </button>
+          </li>
+        <?php endif; ?>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowTaskAssignmentTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowTaskAssignmentTab" aria-controls="WorkflowTaskAssignmentTab" aria-selected="false">
+            <i class="bi bi-person-check me-1"></i><?= h(__t('workflow_task_tab_assignment')) ?>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowTaskSettingsTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowTaskSettingsTab" aria-controls="WorkflowTaskSettingsTab" aria-selected="false">
+            <i class="bi bi-bell me-1"></i><?= h(__t('workflow_task_tab_notifications')) ?>
+          </button>
+        </li>
+      </ul>
+      <div class="tab-content workflow-primary-tab-content mb-3" id="WorkflowTaskEditTabContent">
+        <div class="tab-pane fade show active" id="WorkflowTaskDetailsTab" role="tabpanel" aria-labelledby="WorkflowTaskDetailsTabButton" tabindex="0">
       <div class="row mb-3">
         <div class="col-12 col-lg-8">
           <label class="form-label"><?= h(__t('title')) ?></label>
@@ -1026,8 +1074,11 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         </div>
       </div>
 
+        </div>
+
       <?php if ($isProjectTaskContext): ?>
-        <div class="workflow-action-panel mb-3">
+        <div class="tab-pane fade" id="WorkflowTaskProjectTab" role="tabpanel" aria-labelledby="WorkflowTaskProjectTabButton" tabindex="0">
+        <div class="workflow-action-panel mb-0">
           <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
             <div>
               <div class="fw-semibold"><?= h(__t('workflow_project_project_plan')) ?></div>
@@ -1169,8 +1220,10 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
             </div>
           <?php endif; ?>
         </div>
+        </div>
       <?php endif; ?>
 
+        <div class="tab-pane fade" id="WorkflowTaskAssignmentTab" role="tabpanel" aria-labelledby="WorkflowTaskAssignmentTabButton" tabindex="0">
       <div class="row mb-3">
         <div class="col-12 col-md-3">
           <label class="form-label"><?= h(__t('type')) ?></label>
@@ -1372,6 +1425,9 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         </div>
       <?php endif; ?>
 
+        </div>
+
+        <div class="tab-pane fade" id="WorkflowTaskSettingsTab" role="tabpanel" aria-labelledby="WorkflowTaskSettingsTabButton" tabindex="0">
       <div class="workflow-action-panel mb-3">
         <div class="fw-semibold mb-2"><?= h(__t('workflow_task_notifications')) ?></div>
         <div class="row g-2">
@@ -1620,6 +1676,9 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         </div>
       <?php endif; ?>
 
+        </div>
+      </div>
+
       <!-- Bottom bar (consistent muted line + small buttons) -->
       <div class="d-flex justify-content-between align-items-center workflow-form-footer">
         <p class="text-muted small mb-0">
@@ -1630,7 +1689,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
             <i class="bi bi-arrow-left me-1"></i><?= __t('back') ?>
           </a>
           <?php if ($canManageTaskDetails): ?>
-            <button type="submit" class="btn btn-sm btn-primary">
+            <button id="workflow-task-save-btn" type="submit" class="btn btn-sm btn-primary">
               <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
               <i class="bi bi-save me-1"></i><?= __t('save') ?>
             </button>
@@ -1656,7 +1715,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
                 </div>
               </div>
               <?php if ($canTransitionTask): ?>
-                <form method="post" action="index.php?route=workflow/transition" class="needs-validation" novalidate>
+                <form id="workflow-task-transition-form" method="post" action="index.php?route=workflow/transition" class="needs-validation" novalidate>
                   <?php if (function_exists('csrf_field')): ?>
                     <?= csrf_field(); ?>
                   <?php endif; ?>
@@ -1715,7 +1774,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
               </div>
             </div>
             <?php if ($canRespondTask): ?>
-              <form method="post" action="index.php?route=workflow/respond" class="needs-validation" novalidate>
+              <form id="workflow-task-response-form" method="post" action="index.php?route=workflow/respond" class="needs-validation" novalidate>
                 <?php if (function_exists('csrf_field')): ?>
                   <?= csrf_field(); ?>
                 <?php endif; ?>
@@ -1732,7 +1791,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
                 <?php if ($mine !== null): ?><input type="hidden" name="task_scope" value="<?= h($taskScope) ?>"><?php endif; ?>
                 <?php if ($assignedToUserIDFilter !== null): ?><input type="hidden" name="assignedToUserID" value="<?= h((string)$assignedToUserIDFilter) ?>"><?php endif; ?>
                 <textarea name="RecipientResponse" class="form-control mb-2" rows="5" required><?= h($valRecipientResponse) ?></textarea>
-                <button type="submit" class="btn btn-sm btn-primary">
+                <button id="workflow-task-response-save-btn" type="submit" class="btn btn-sm btn-primary">
                   <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                   <i class="bi bi-chat-left-text me-1"></i><?= h(__t('workflow_task_save_response')) ?>
                 </button>
@@ -1761,7 +1820,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
               <div class="border rounded bg-white p-2 small mb-2"><?= nl2br(h((string)$task['LastForwardReason'])) ?></div>
             <?php endif; ?>
             <?php if ($canForwardTask): ?>
-              <form method="post" action="index.php?route=workflow/forward" class="needs-validation" novalidate>
+              <form id="workflow-task-forward-form" method="post" action="index.php?route=workflow/forward" class="needs-validation" novalidate>
                 <?php if (function_exists('csrf_field')): ?>
                   <?= csrf_field(); ?>
                 <?php endif; ?>
@@ -1929,7 +1988,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
               </div>
             <?php else: ?>
               <?php if ($canAddTaskComment): ?>
-                <form method="post" action="index.php?route=workflow/save-comment" class="needs-validation mb-3" novalidate>
+                <form id="workflow-task-comment-form" method="post" action="index.php?route=workflow/save-comment" class="needs-validation mb-3" novalidate>
                   <?php if (function_exists('csrf_field')): ?>
                     <?= csrf_field(); ?>
                   <?php endif; ?>
@@ -2048,7 +2107,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
               </div>
             <?php else: ?>
               <?php if ($canUploadTaskAttachment): ?>
-                <form method="post"
+                <form id="workflow-task-attachment-upload-form" method="post"
                       action="index.php?route=workflow/upload-attachment"
                       enctype="multipart/form-data"
                       class="needs-validation mb-3"
@@ -2080,7 +2139,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
                       <div class="invalid-feedback"><?= h(__t('workflow_task_choose_file')) ?></div>
                     </div>
                     <div class="col-12 col-lg-auto">
-                      <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                      <button id="workflow-task-attachment-upload-btn" type="submit" class="btn btn-sm btn-outline-primary w-100">
                         <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                         <i class="bi bi-paperclip me-1"></i><?= h(__t('workflow_task_upload')) ?>
                       </button>
@@ -2198,7 +2257,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
                   </div>
                 <?php else: ?>
                   <?php if ($canManageTaskDetails): ?>
-                    <form method="post" action="index.php?route=workflow/save-link" class="needs-validation mb-3" novalidate>
+                    <form id="workflow-task-link-form" method="post" action="index.php?route=workflow/save-link" class="needs-validation mb-3" novalidate>
                       <?php if (function_exists('csrf_field')): ?>
                         <?= csrf_field(); ?>
                       <?php endif; ?>
@@ -2246,7 +2305,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
                           <input type="text" class="form-control" id="WorkflowLinkedUrl" name="LinkedUrl" maxlength="1000">
                         </div>
                         <div class="col-12 col-lg-2">
-                          <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                          <button id="workflow-task-link-add-btn" type="submit" class="btn btn-sm btn-outline-primary w-100">
                             <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                             <i class="bi bi-link-45deg me-1"></i><?= h(__t('workflow_link_add')) ?>
                           </button>
@@ -2570,6 +2629,22 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
   };
   setupWorkflowRichTextEditors();
 
+  const showFirstInvalidWorkflowTab = form => {
+    const invalidField = form.querySelector(':invalid, .is-invalid');
+    if (!invalidField) {
+      return;
+    }
+    const pane = invalidField.closest('.tab-pane');
+    if (!pane || pane.classList.contains('active')) {
+      return;
+    }
+    const paneSelectorId = window.CSS && CSS.escape ? CSS.escape(pane.id) : pane.id;
+    const trigger = document.querySelector('[data-bs-toggle="tab"][data-bs-target="#' + paneSelectorId + '"]');
+    if (trigger && window.bootstrap && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(trigger).show();
+    }
+  };
+
   const projectSelect = document.getElementById('WorkflowProjectID');
   const taskTypeSelect = document.getElementById('TaskTypeID');
   const projectTaskTypeHelp = document.querySelector('[data-project-task-type-help]');
@@ -2675,6 +2750,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         e.preventDefault();
         e.stopPropagation();
         form.classList.add('was-validated');
+        showFirstInvalidWorkflowTab(form);
         return;
       }
 
@@ -2709,6 +2785,7 @@ $notificationHistory = wf_form_notification_history($task, $taskActivity);
         e.preventDefault();
         e.stopPropagation();
         form.classList.add('was-validated');
+        showFirstInvalidWorkflowTab(form);
         return;
       }
 

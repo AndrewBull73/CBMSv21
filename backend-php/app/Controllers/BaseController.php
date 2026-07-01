@@ -1563,6 +1563,10 @@ abstract class BaseController
             'WORKFLOW_REQUIREMENTS_CREATE' => 'Workflow Requirements create access',
             'WORKFLOW_REQUIREMENTS_EDIT' => 'Workflow Requirements edit access',
             'WORKFLOW_REQUIREMENTS_DELETE' => 'Workflow Requirements delete access',
+            'WORKFLOW_ISSUES_VIEW' => 'Workflow Issues view access',
+            'WORKFLOW_ISSUES_CREATE' => 'Workflow Issues create access',
+            'WORKFLOW_ISSUES_EDIT' => 'Workflow Issues edit access',
+            'WORKFLOW_ISSUES_DELETE' => 'Workflow Issues delete access',
             'METRICS_VIEW' => 'Metrics view access',
             'DATAOBJECTCODES_VIEW' => 'Data Object Codes view access',
             'DATAOBJECTCODES_EDIT' => 'Data Object Codes edit access',
@@ -1596,6 +1600,111 @@ abstract class BaseController
             $this->logUserFacingSystemError($keyOrText, $text);
         }
         session_write_close();
+    }
+
+    protected function rememberWorkflowProjectContext(int $workflowProjectID): void
+    {
+        if ($workflowProjectID > 0) {
+            SessionHelper::set('workflow.selected_project_id', $workflowProjectID);
+        }
+    }
+
+    protected function clearWorkflowProjectContext(): void
+    {
+        SessionHelper::forget('workflow.selected_project_id');
+    }
+
+    protected function rememberedWorkflowProjectID(): int
+    {
+        return max(0, (int)SessionHelper::get('workflow.selected_project_id', 0));
+    }
+
+    protected function workflowProjectFilterFromRequest(string $key = 'workflowProjectID'): int
+    {
+        if (array_key_exists($key, $_GET)) {
+            $value = trim((string)$_GET[$key]);
+            if ($value === '') {
+                $this->clearWorkflowProjectContext();
+                return 0;
+            }
+
+            $workflowProjectID = max(0, (int)$value);
+            if ($workflowProjectID <= 0) {
+                $this->clearWorkflowProjectContext();
+                return 0;
+            }
+
+            $this->rememberWorkflowProjectContext($workflowProjectID);
+            return $workflowProjectID;
+        }
+
+        return $this->rememberedWorkflowProjectID();
+    }
+
+    protected function downloadExcel(string $worksheetTitle, string $filenamePrefix, array $columns, array $rows): void
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle($this->excelWorksheetTitle($worksheetTitle));
+
+        foreach (array_values($columns) as $index => $column) {
+            $columnNumber = $index + 1;
+            $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnNumber) . '1';
+            $sheet->setCellValueExplicit($cell, (string)($column['label'] ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
+
+        $rowNumber = 2;
+        foreach ($rows as $row) {
+            foreach (array_values($columns) as $index => $column) {
+                $columnNumber = $index + 1;
+                $value = '';
+                if (isset($column['value']) && is_callable($column['value'])) {
+                    $value = (string)$column['value']($row);
+                } elseif (isset($column['key'])) {
+                    $value = (string)($row[(string)$column['key']] ?? '');
+                }
+                $cell = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnNumber) . (string)$rowNumber;
+                $sheet->setCellValueExplicit($cell, $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            }
+            $rowNumber++;
+        }
+
+        $lastColumn = max(1, count($columns));
+        $lastColumnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($lastColumn);
+        $sheet->getStyle('A1:' . $lastColumnLetter . '1')->getFont()->setBold(true);
+        $sheet->freezePane('A2');
+        for ($columnNumber = 1; $columnNumber <= $lastColumn; $columnNumber++) {
+            $sheet->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($columnNumber))->setAutoSize(true);
+        }
+
+        $filename = $this->excelFilename($filenamePrefix);
+        if (ob_get_length()) {
+            @ob_end_clean();
+        }
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: max-age=0');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save('php://output');
+        exit;
+    }
+
+    private function excelWorksheetTitle(string $title): string
+    {
+        $title = trim(preg_replace('/[\[\]\:\*\?\/\\\\]+/', ' ', $title) ?? '');
+        if ($title === '') {
+            $title = 'Export';
+        }
+        return substr($title, 0, 31);
+    }
+
+    private function excelFilename(string $prefix): string
+    {
+        $prefix = trim(preg_replace('/[^A-Za-z0-9_-]+/', '_', $prefix) ?? '', '_');
+        if ($prefix === '') {
+            $prefix = 'Export';
+        }
+        return $prefix . '_' . date('Ymd_His') . '.xlsx';
     }
 
     protected function logUserFacingSystemError(string $source, string $message): void

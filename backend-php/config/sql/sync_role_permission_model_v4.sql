@@ -72,6 +72,10 @@ INSERT INTO #Permissions (PermissionCode, [Description]) VALUES
 (N'WORKFLOW_REQUIREMENTS_CREATE', N'Create workflow requirements'),
 (N'WORKFLOW_REQUIREMENTS_EDIT', N'Edit workflow requirements'),
 (N'WORKFLOW_REQUIREMENTS_DELETE', N'Delete or archive workflow requirements'),
+(N'WORKFLOW_ISSUES_VIEW', N'View workflow issues'),
+(N'WORKFLOW_ISSUES_CREATE', N'Create workflow issues'),
+(N'WORKFLOW_ISSUES_EDIT', N'Edit workflow issues'),
+(N'WORKFLOW_ISSUES_DELETE', N'Delete or archive workflow issues'),
 (N'METRICS_VIEW', N'View metrics and monitoring screens'),
 (N'DATAOBJECTCODES_VIEW', N'View data object codes, types, hierarchy, and workflow status'),
 (N'DATAOBJECTCODES_EDIT', N'Edit data object codes, types, hierarchy, and workflow status'),
@@ -209,6 +213,10 @@ INSERT INTO #RolePerm (RoleName, PermissionCode) VALUES
 (N'System Administrator', N'WORKFLOW_REQUIREMENTS_CREATE'),
 (N'System Administrator', N'WORKFLOW_REQUIREMENTS_EDIT'),
 (N'System Administrator', N'WORKFLOW_REQUIREMENTS_DELETE'),
+(N'System Administrator', N'WORKFLOW_ISSUES_VIEW'),
+(N'System Administrator', N'WORKFLOW_ISSUES_CREATE'),
+(N'System Administrator', N'WORKFLOW_ISSUES_EDIT'),
+(N'System Administrator', N'WORKFLOW_ISSUES_DELETE'),
 (N'System Administrator', N'METRICS_VIEW'),
 
 (N'Security Administrator', N'USERS_VIEW'),
@@ -352,6 +360,7 @@ INSERT INTO #RolePerm (RoleName, PermissionCode) VALUES
 (N'Workflow Operations User', N'WORKFLOW_OPERATIONS_VIEW'),
 (N'Workflow Operations User', N'WORKFLOW_PROJECTS_VIEW'),
 (N'Workflow Operations User', N'WORKFLOW_REQUIREMENTS_VIEW'),
+(N'Workflow Operations User', N'WORKFLOW_ISSUES_VIEW'),
 
 (N'Workflow Operations Editor', N'WORKFLOW_OPERATIONS_VIEW'),
 (N'Workflow Operations Editor', N'WORKFLOW_OPERATIONS_EDIT'),
@@ -361,6 +370,9 @@ INSERT INTO #RolePerm (RoleName, PermissionCode) VALUES
 (N'Workflow Operations Editor', N'WORKFLOW_REQUIREMENTS_VIEW'),
 (N'Workflow Operations Editor', N'WORKFLOW_REQUIREMENTS_CREATE'),
 (N'Workflow Operations Editor', N'WORKFLOW_REQUIREMENTS_EDIT'),
+(N'Workflow Operations Editor', N'WORKFLOW_ISSUES_VIEW'),
+(N'Workflow Operations Editor', N'WORKFLOW_ISSUES_CREATE'),
+(N'Workflow Operations Editor', N'WORKFLOW_ISSUES_EDIT'),
 
 (N'Workflow Operations Administrator', N'WORKFLOW_OPERATIONS_VIEW'),
 (N'Workflow Operations Administrator', N'WORKFLOW_OPERATIONS_EDIT'),
@@ -373,6 +385,10 @@ INSERT INTO #RolePerm (RoleName, PermissionCode) VALUES
 (N'Workflow Operations Administrator', N'WORKFLOW_REQUIREMENTS_CREATE'),
 (N'Workflow Operations Administrator', N'WORKFLOW_REQUIREMENTS_EDIT'),
 (N'Workflow Operations Administrator', N'WORKFLOW_REQUIREMENTS_DELETE'),
+(N'Workflow Operations Administrator', N'WORKFLOW_ISSUES_VIEW'),
+(N'Workflow Operations Administrator', N'WORKFLOW_ISSUES_CREATE'),
+(N'Workflow Operations Administrator', N'WORKFLOW_ISSUES_EDIT'),
+(N'Workflow Operations Administrator', N'WORKFLOW_ISSUES_DELETE'),
 
 (N'Reporting User', N'STRATEGY_REPORT_VIEW'),
 

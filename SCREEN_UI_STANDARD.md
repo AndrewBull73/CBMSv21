@@ -264,6 +264,61 @@ Reset or refresh:
 
 - `btn btn-outline-secondary btn-sm`
 
+## Tabbed Content Standard
+
+Use tabs when a screen has several dense content groups that users do not need to compare all at once, such as overview, issues, linked work, schedule, and task detail.
+
+Tabbed content rules:
+
+- keep the main page header, current context, and key summary metrics outside the tabs
+- use `nav nav-tabs flex-nowrap overflow-auto mb-3` for the tab list when labels may wrap on smaller screens
+- use Bootstrap `data-bs-toggle="tab"` with matching `aria-controls`, `aria-labelledby`, and `role` attributes
+- make the first tab the default overview tab unless a workflow has a stronger primary task
+- use compact badges inside tab labels only for actionable counts, such as open issues or open tasks
+- do not put tabs inside cards nested within other cards
+
+Example:
+
+```php
+<ul class="nav nav-tabs flex-nowrap overflow-auto mb-3" id="ExampleTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="ExampleOverviewTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#ExampleOverviewTab" aria-controls="ExampleOverviewTab" aria-selected="true">
+      <?= h(__t('workflow_project_tab_overview')) ?>
+    </button>
+  </li>
+</ul>
+<div class="tab-content" id="ExampleTabContent">
+  <div class="tab-pane fade show active" id="ExampleOverviewTab" role="tabpanel" aria-labelledby="ExampleOverviewTabButton" tabindex="0">
+    ...
+  </div>
+</div>
+```
+
+## Read-Only Field Standard
+
+Use the shared read-only convention for any field that appears in a form but cannot be edited, including generated codes, derived values, locked workflow fields, and permission-limited values.
+
+Read-only fields must:
+
+- keep the native `readonly` attribute when the value should remain selectable/copyable
+- use `cbms-readonly-control` on the control
+- show the localized `read_only` badge in the label using `cbms-readonly-badge`
+- avoid one-off grey styles in individual screens
+
+Example:
+
+```php
+<div class="col-12 col-lg-4 cbms-readonly-field">
+  <label class="form-label" for="IssueCode">
+    <?= h(__t('workflow_issue_code')) ?>
+    <span class="cbms-readonly-badge"><?= h(__t('read_only')) ?></span>
+  </label>
+  <input type="text" class="form-control cbms-readonly-control" id="IssueCode" value="<?= h($issueCode) ?>" readonly aria-readonly="true">
+</div>
+```
+
+Use disabled controls only when the control is unavailable and should not be submitted or copied. Use read-only controls when users may need to inspect or copy the value but must not edit it.
+
 ## Table Standard
 
 Standard inquiry/admin tables use:

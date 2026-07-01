@@ -9,8 +9,9 @@ if (!function_exists('h')) {
 }
 
 $rows = is_array($rows ?? null) ? $rows : [];
-$filters = is_array($filters ?? null) ? $filters : ['q' => '', 'status' => '', 'scenario_code' => ''];
+$filters = is_array($filters ?? null) ? $filters : ['q' => '', 'module' => '', 'status' => '', 'scenario_code' => ''];
 $scenarioOptions = is_array($scenarioOptions ?? null) ? $scenarioOptions : [];
+$moduleOptions = is_array($moduleOptions ?? null) ? $moduleOptions : [];
 $setupRequired = (bool) ($setupRequired ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
 $canManageTraining = (bool) ($canManageTraining ?? false);
@@ -58,8 +59,18 @@ require_once __DIR__ . '/../../../shared/csrf.php';
 
       <form method="get" action="index.php" class="row g-2 mb-3">
         <input type="hidden" name="route" value="training/summary">
-        <div class="col-md-4">
+        <div class="col-md-3">
           <input type="text" name="q" value="<?= h((string) ($filters['q'] ?? '')) ?>" class="form-control form-control-sm" placeholder="Search user, email, or scenario">
+        </div>
+        <div class="col-md-3">
+          <select name="module" class="form-select form-select-sm">
+            <option value="">All modules</option>
+            <?php foreach ($moduleOptions as $moduleValue => $moduleLabel): ?>
+              <option value="<?= h((string) $moduleValue) ?>" <?= ((string) ($filters['module'] ?? '') === (string) $moduleValue) ? 'selected' : '' ?>>
+                <?= h((string) $moduleLabel) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
         <div class="col-md-3">
           <select name="scenario_code" class="form-select form-select-sm">
@@ -81,9 +92,11 @@ require_once __DIR__ . '/../../../shared/csrf.php';
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="col-md-3 d-flex gap-2">
+        <div class="col-md-1 d-flex gap-2">
           <button type="submit" class="btn btn-sm btn-outline-primary flex-fill">Filter</button>
-          <a href="index.php?route=training/summary" class="btn btn-sm btn-outline-secondary flex-fill">Reset</a>
+        </div>
+        <div class="col-md-12">
+          <a href="index.php?route=training/summary" class="btn btn-sm btn-outline-secondary">Reset</a>
         </div>
       </form>
 
@@ -96,6 +109,7 @@ require_once __DIR__ . '/../../../shared/csrf.php';
             <input type="hidden" name="_csrf" value="<?= h(csrf_token()) ?>">
             <input type="hidden" name="reset_action" value="all">
             <input type="hidden" name="return_q" value="<?= h((string) ($filters['q'] ?? '')) ?>">
+            <input type="hidden" name="return_module" value="<?= h((string) ($filters['module'] ?? '')) ?>">
             <input type="hidden" name="return_status" value="<?= h((string) ($filters['status'] ?? '')) ?>">
             <input type="hidden" name="return_scenario_code" value="<?= h((string) ($filters['scenario_code'] ?? '')) ?>">
             <button type="submit" class="btn btn-sm btn-outline-danger">
@@ -168,6 +182,7 @@ require_once __DIR__ . '/../../../shared/csrf.php';
                         <input type="hidden" name="target_user_id" value="<?= h((string) ($row['UserID'] ?? '0')) ?>">
                         <input type="hidden" name="target_scenario_code" value="<?= h($scenarioCode) ?>">
                         <input type="hidden" name="return_q" value="<?= h((string) ($filters['q'] ?? '')) ?>">
+                        <input type="hidden" name="return_module" value="<?= h((string) ($filters['module'] ?? '')) ?>">
                         <input type="hidden" name="return_status" value="<?= h((string) ($filters['status'] ?? '')) ?>">
                         <input type="hidden" name="return_scenario_code" value="<?= h((string) ($filters['scenario_code'] ?? '')) ?>">
                         <button type="submit" class="btn btn-sm btn-outline-danger"><?= __t('reset') ?></button>

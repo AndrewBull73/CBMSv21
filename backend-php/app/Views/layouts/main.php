@@ -141,11 +141,33 @@ $pageTitle = $pageTitleKey !== ''
         .strategy-ui .form-select {
             font-size: .875rem;
         }
+        .strategy-ui .form-control[readonly],
+        .strategy-ui .form-control.cbms-readonly-control,
+        .strategy-ui .form-select.cbms-readonly-control {
+            background-color: #f1f3f5;
+            color: #495057;
+            border-color: #ced4da;
+            cursor: not-allowed;
+        }
         .strategy-ui .form-label {
             font-size: .84rem;
             font-weight: 600;
             color: #415161;
             margin-bottom: .4rem;
+        }
+        .strategy-ui .cbms-readonly-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: .5rem;
+            padding: .1rem .4rem;
+            border: 1px solid #ced4da;
+            border-radius: .35rem;
+            background: #f8f9fa;
+            color: #6c757d;
+            font-size: .72rem;
+            font-weight: 600;
+            line-height: 1.2;
+            vertical-align: middle;
         }
         .strategy-ui .form-text {
             font-size: .76rem;
@@ -584,6 +606,11 @@ $pageTitle = $pageTitleKey !== ''
             'segment-values/',
             'dataobjectcodes/',
             'dataobjectworkflow/',
+            'workflow/',
+            'workflow-projects/',
+            'workflow-requirements/',
+            'workflow-issues/',
+            'workflow-user-groups/',
             'workflow-engine/',
             'workflow-task-types/',
             'workflow-task-statuses/',

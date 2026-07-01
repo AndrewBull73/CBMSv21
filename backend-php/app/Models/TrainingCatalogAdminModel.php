@@ -49,6 +49,12 @@ final class TrainingCatalogAdminModel
             $params[':active'] = (int) $active;
         }
 
+        $module = trim((string) ($filters['module'] ?? ''));
+        if ($module !== '') {
+            $where[] = 's.ModuleName = :module';
+            $params[':module'] = $module;
+        }
+
         $whereSql = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
         $sql = "
@@ -89,6 +95,21 @@ final class TrainingCatalogAdminModel
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function listModuleOptions(): array
+    {
+        $sql = "
+            SELECT DISTINCT ModuleName
+            FROM dbo.tblTrainingScenarios
+            WHERE NULLIF(LTRIM(RTRIM(ISNULL(ModuleName, ''))), '') IS NOT NULL
+            ORDER BY ModuleName
+        ";
+        $stmt = $this->pdo->query($sql);
+        return array_map(
+            static fn (array $row): string => (string) ($row['ModuleName'] ?? ''),
+            $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []
+        );
     }
 
     public function listScenarioOptions(bool $activeOnly = false): array
@@ -536,7 +557,7 @@ final class TrainingCatalogAdminModel
                             UpdatedDate = SYSDATETIME()
                     WHEN NOT MATCHED THEN
                         INSERT (ScenarioCode, LanguageCode, ScenarioTitle, ModuleName, Audience, Description, PrerequisitesJson, CreatedBy, UpdatedBy)
-                        VALUES (:code, :language, :title, :module_name, :audience, :description, :prerequisites_json, :updated_by, :updated_by);
+                        VALUES (:code, :language, :title, :module_name, :audience, :description, :prerequisites_json, :created_by, :updated_by);
                 ");
                 $stmt->execute([
                     ':code' => $scenarioCode,
@@ -546,6 +567,7 @@ final class TrainingCatalogAdminModel
                     ':audience' => $this->nullIfEmpty($audience),
                     ':description' => $this->nullIfEmpty($description),
                     ':prerequisites_json' => $this->encodeJsonArray($prerequisites),
+                    ':created_by' => $updatedBy > 0 ? $updatedBy : null,
                     ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
                 ]);
             } else {
@@ -597,7 +619,7 @@ final class TrainingCatalogAdminModel
                             UpdatedDate = SYSDATETIME()
                     WHEN NOT MATCHED THEN
                         INSERT (ScenarioCode, StepNo, LanguageCode, StepTitle, InstructionText, CreatedBy, UpdatedBy)
-                        VALUES (:code, :step_no, :language, :title, :instruction_text, :updated_by, :updated_by);
+                        VALUES (:code, :step_no, :language, :title, :instruction_text, :created_by, :updated_by);
                 ");
                 $stmt->execute([
                     ':code' => $scenarioCode,
@@ -605,6 +627,7 @@ final class TrainingCatalogAdminModel
                     ':step_no' => $stepNo,
                     ':title' => $this->nullIfEmpty($title),
                     ':instruction_text' => $this->nullIfEmpty($instruction),
+                    ':created_by' => $updatedBy > 0 ? $updatedBy : null,
                     ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
                 ]);
             }
@@ -643,13 +666,14 @@ final class TrainingCatalogAdminModel
                             UpdatedDate = SYSDATETIME()
                     WHEN NOT MATCHED THEN
                         INSERT (ScenarioCode, SampleKey, LanguageCode, SampleValueTemplate, CreatedBy, UpdatedBy)
-                        VALUES (:code, :sample_key, :language, :sample_value, :updated_by, :updated_by);
+                        VALUES (:code, :sample_key, :language, :sample_value, :created_by, :updated_by);
                 ");
                 $stmt->execute([
                     ':code' => $scenarioCode,
                     ':language' => $languageCode,
                     ':sample_key' => $sampleKey,
                     ':sample_value' => $sampleValue,
+                    ':created_by' => $updatedBy > 0 ? $updatedBy : null,
                     ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
                 ]);
             }
@@ -742,13 +766,14 @@ final class TrainingCatalogAdminModel
                         UpdatedDate = SYSDATETIME()
                 WHEN NOT MATCHED THEN
                     INSERT (ScenarioCode, SampleKey, SampleValueTemplate, ActiveFlag, SortOrder, CreatedBy, UpdatedBy)
-                    VALUES (:code, :sample_key, :sample_value, 1, :sort_order, :updated_by, :updated_by);
+                    VALUES (:code, :sample_key, :sample_value, 1, :sort_order, :created_by, :updated_by);
             ");
             $stmt->execute([
                 ':code' => $scenarioCode,
                 ':sample_key' => $sampleKey,
                 ':sample_value' => (string) ($sample['SampleValueTemplate'] ?? ''),
                 ':sort_order' => ($index + 1) * 10,
+                ':created_by' => $updatedBy > 0 ? $updatedBy : null,
                 ':updated_by' => $updatedBy > 0 ? $updatedBy : null,
             ]);
         }

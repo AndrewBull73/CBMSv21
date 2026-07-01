@@ -250,6 +250,26 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
     font-weight: 700;
     margin-bottom: .85rem;
   }
+  .project-edit-tabs {
+    border-bottom: 1px solid #dce6ef;
+  }
+  .project-edit-tabs .nav-link {
+    border-radius: .65rem .65rem 0 0;
+    color: #536679;
+    font-size: .86rem;
+    padding: .55rem .75rem;
+  }
+  .project-edit-tabs .nav-link.active {
+    color: #24384d;
+    font-weight: 700;
+  }
+  .project-edit-tab-content {
+    background: #fff;
+    border: 1px solid #dce6ef;
+    border-top: 0;
+    border-radius: 0 0 .65rem .65rem;
+    padding: 1rem;
+  }
   .project-edit-team-list {
     max-height: 18rem;
   }
@@ -300,20 +320,13 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <?php if (!$tableInstalled): ?>
         <div class="alert alert-warning border-0 shadow-sm">
           <?= h(__t('workflow_project_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
         </div>
       <?php endif; ?>
 
-      <form method="post" action="index.php?route=workflow-projects/save" class="needs-validation" novalidate>
+      <form id="workflow-project-form" method="post" action="index.php?route=workflow-projects/save" class="needs-validation" novalidate>
         <?= csrf_field() ?>
         <input type="hidden" name="WorkflowProjectID" value="<?= $projectId ?>">
         <input type="hidden" name="returnTo" value="<?= h($returnTo) ?>">
@@ -324,12 +337,12 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
           </a>
           <div class="project-edit-actions">
             <?php if ($projectId > 0): ?>
-              <a href="index.php?route=workflow-projects/summary&id=<?= $projectId ?>" class="btn btn-outline-info">
+              <a id="workflow-project-summary-btn" href="index.php?route=workflow-projects/summary&id=<?= $projectId ?>" class="btn btn-outline-info">
                 <i class="bi bi-speedometer2 me-1"></i><?= h(__t('workflow_project_summary')) ?>
               </a>
             <?php endif; ?>
             <?php if ($canSaveProject): ?>
-              <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
+              <button id="workflow-project-save-btn" type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
                 <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
                 <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
               </button>
@@ -337,8 +350,30 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
           </div>
         </div>
 
-        <div class="row g-4 align-items-start">
-          <div class="col-12 col-xl-7">
+        <ul class="nav nav-tabs project-edit-tabs flex-nowrap overflow-auto mb-0" id="WorkflowProjectEditTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="WorkflowProjectDetailsTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectDetailsTab" aria-controls="WorkflowProjectDetailsTab" aria-selected="true">
+              <i class="bi bi-card-text me-1"></i><?= h(__t('details')) ?>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="WorkflowProjectTeamTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectTeamTab" aria-controls="WorkflowProjectTeamTab" aria-selected="false">
+              <i class="bi bi-people me-1"></i><?= h(__t('workflow_project_users')) ?>
+            </button>
+          </li>
+          <?php if ($projectId > 0): ?>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="WorkflowProjectScheduleTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectScheduleTab" aria-controls="WorkflowProjectScheduleTab" aria-selected="false">
+                <i class="bi bi-bar-chart-steps me-1"></i><?= h(__t('workflow_project_tasks')) ?>
+              </button>
+            </li>
+          <?php endif; ?>
+        </ul>
+
+        <div class="tab-content project-edit-tab-content" id="WorkflowProjectEditTabContent">
+          <div class="tab-pane fade show active" id="WorkflowProjectDetailsTab" role="tabpanel" aria-labelledby="WorkflowProjectDetailsTabButton" tabindex="0">
+            <div class="row g-4 align-items-start">
+              <div class="col-12 col-xl-8">
             <section class="project-edit-section">
               <div class="project-edit-section-title"><?= h(__t('workflow_project_project_plan')) ?></div>
               <div class="row g-3">
@@ -413,9 +448,13 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
               <label class="visually-hidden" for="Description"><?= h(__t('description')) ?></label>
               <textarea class="form-control" id="Description" name="Description" rows="5" <?= $projectFieldsDisabled ? 'disabled' : '' ?>><?= h((string)($record['Description'] ?? '')) ?></textarea>
             </section>
+              </div>
+            </div>
           </div>
 
-          <div class="col-12 col-xl-5">
+          <div class="tab-pane fade" id="WorkflowProjectTeamTab" role="tabpanel" aria-labelledby="WorkflowProjectTeamTabButton" tabindex="0">
+            <div class="row g-4 align-items-start">
+              <div class="col-12 col-xl-7">
             <section class="project-edit-section">
               <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
                 <div>
@@ -491,7 +530,124 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
                 </div>
               </div>
             </section>
+              </div>
+            </div>
           </div>
+
+          <?php if ($projectId > 0): ?>
+            <div class="tab-pane fade" id="WorkflowProjectScheduleTab" role="tabpanel" aria-labelledby="WorkflowProjectScheduleTabButton" tabindex="0">
+              <section id="workflow-project-gantt" class="project-edit-section project-edit-task-section pt-0">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+                  <div>
+                    <h2 class="project-edit-section-title mb-1"><?= h(__t('workflow_project_tasks')) ?></h2>
+                    <div class="text-muted small"><?= h(__t('workflow_project_gantt_help')) ?></div>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <?php if ($canCreateWorkflowTask): ?>
+                      <a id="workflow-project-add-task-btn" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+                      </a>
+                    <?php endif; ?>
+                    <a id="workflow-project-view-tasks-btn" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_view_tasks')) ?>
+                    </a>
+                  </div>
+                </div>
+
+                <?php if ($ganttRows === []): ?>
+                  <div class="alert alert-light border mb-0">
+                    <?= h(__t('workflow_project_no_scheduled_tasks')) ?>
+                  </div>
+                <?php else: ?>
+                  <div class="workflow-gantt">
+                    <div class="workflow-gantt-header">
+                      <div><?= h(__t('workflow_project_tasks')) ?></div>
+                      <div>
+                        <div class="workflow-gantt-scale">
+                          <span><?= h($timelineStart ? $timelineStart->format('Y-m-d') : '') ?></span>
+                          <span><?= h(__t('workflow_project_timeline')) ?></span>
+                          <span><?= h($timelineEnd ? $timelineEnd->format('Y-m-d') : '') ?></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <?php foreach ($ganttRows as $ganttRow): ?>
+                      <?php
+                        $taskRow = (array)$ganttRow['task'];
+                        $taskId = (int)($taskRow['WorkflowTaskID'] ?? 0);
+                        $taskTitle = trim((string)($taskRow['Title'] ?? ''));
+                        if ($taskTitle === '') {
+                            $taskTitle = __t('workflow_task_number', ['id' => $taskId]);
+                        }
+                        $barStartDate = $ganttRow['start'];
+                        $barEndDate = $ganttRow['end'];
+                        $offsetDays = $timelineStart ? max(0, wf_project_days_between($timelineStart, $barStartDate)) : 0;
+                        $durationDays = max(1, wf_project_days_between($barStartDate, $barEndDate) + 1);
+                        $left = max(0.0, min(100.0, ($offsetDays / $timelineDays) * 100));
+                        $availableWidth = max(0.5, 100.0 - $left);
+                        $width = min($availableWidth, max(1.8, ($durationDays / $timelineDays) * 100));
+                        $percent = (int)round((float)$ganttRow['percent']);
+                        $isComplete = !empty($ganttRow['closed']) || $percent >= 100;
+                        $assignee = trim((string)($taskRow['AssignedToName'] ?? ''));
+                        $hasParent = (int)($taskRow['ParentWorkflowTaskID'] ?? 0) > 0;
+                      ?>
+                      <div class="workflow-gantt-row">
+                        <div class="workflow-gantt-task <?= $hasParent ? 'ps-4' : '' ?>">
+                          <div class="workflow-gantt-task-title">
+                            <?php if ($hasParent): ?><i class="bi bi-arrow-return-right text-muted me-1"></i><?php endif; ?>
+                            <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
+                              <?= h($taskTitle) ?>
+                            </a>
+                          </div>
+                          <div class="text-muted small">
+                            #<?= $taskId ?>
+                            <?php if ($assignee !== ''): ?> &middot; <?= h($assignee) ?><?php endif; ?>
+                            &middot; <?= h($barStartDate->format('Y-m-d')) ?> - <?= h($barEndDate->format('Y-m-d')) ?>
+                          </div>
+                        </div>
+                        <div>
+                          <div class="workflow-gantt-track">
+                            <?php if ($todayOffsetPercent !== null): ?>
+                              <span class="workflow-gantt-today"
+                                    style="left: <?= h(number_format($todayOffsetPercent, 4, '.', '')) ?>%;"
+                                    title="<?= h(__t('workflow_project_today')) ?>"></span>
+                            <?php endif; ?>
+                            <div class="workflow-gantt-bar <?= $isComplete ? 'is-complete' : '' ?>"
+                                 style="left: <?= h(number_format($left, 4, '.', '')) ?>%; width: <?= h(number_format($width, 4, '.', '')) ?>%;"
+                                 title="<?= h($taskTitle . ' (' . $barStartDate->format('Y-m-d') . ' - ' . $barEndDate->format('Y-m-d') . ')') ?>">
+                              <span class="workflow-gantt-progress" style="width: <?= h((string)$percent) ?>%;"></span>
+                              <span class="workflow-gantt-bar-label"><?= h($percent) ?>%</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+
+                <?php if ($unscheduledTasks !== []): ?>
+                  <div class="mt-3">
+                    <div class="fw-semibold small mb-2"><?= h(__t('workflow_project_unscheduled_tasks')) ?></div>
+                    <div class="d-flex flex-wrap gap-2">
+                      <?php foreach ($unscheduledTasks as $taskRow): ?>
+                        <?php
+                          $taskId = (int)($taskRow['WorkflowTaskID'] ?? 0);
+                          $taskTitle = trim((string)($taskRow['Title'] ?? ''));
+                          if ($taskTitle === '') {
+                              $taskTitle = __t('workflow_task_number', ['id' => $taskId]);
+                          }
+                        ?>
+                        <a class="badge text-bg-light border text-decoration-none"
+                           href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
+                          <?= h($taskTitle) ?>
+                        </a>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
+              </section>
+            </div>
+          <?php endif; ?>
         </div>
 
         <div class="project-edit-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -499,7 +655,7 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
             <i class="bi bi-arrow-left me-1"></i><?= h(__t('back')) ?>
           </a>
           <?php if ($canSaveProject): ?>
-            <button type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
+            <button id="workflow-project-save-footer-btn" type="submit" class="btn btn-primary" <?= !$tableInstalled ? 'disabled' : '' ?>>
               <span class="spinner-border spinner-border-sm me-1 d-none" role="status" aria-hidden="true"></span>
               <i class="bi bi-save me-1"></i><?= h(__t('workflow_project_save')) ?>
             </button>
@@ -507,118 +663,22 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
         </div>
       </form>
 
-      <?php if ($projectId > 0): ?>
-        <section id="workflow-project-gantt" class="project-edit-section project-edit-task-section mt-4">
-          <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
-            <div>
-              <h2 class="project-edit-section-title mb-1"><?= h(__t('workflow_project_tasks')) ?></h2>
-              <div class="text-muted small"><?= h(__t('workflow_project_gantt_help')) ?></div>
-            </div>
-            <div class="d-flex gap-2">
-              <?php if ($canCreateWorkflowTask): ?>
-                <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>" class="btn btn-sm btn-outline-success">
-                  <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
-                </a>
-              <?php endif; ?>
-              <a href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_view_tasks')) ?>
-              </a>
-            </div>
-          </div>
-
-          <?php if ($ganttRows === []): ?>
-            <div class="alert alert-light border mb-0">
-              <?= h(__t('workflow_project_no_scheduled_tasks')) ?>
-            </div>
-          <?php else: ?>
-            <div class="workflow-gantt">
-              <div class="workflow-gantt-header">
-                <div><?= h(__t('workflow_project_tasks')) ?></div>
-                <div>
-                  <div class="workflow-gantt-scale">
-                    <span><?= h($timelineStart ? $timelineStart->format('Y-m-d') : '') ?></span>
-                    <span><?= h(__t('workflow_project_timeline')) ?></span>
-                    <span><?= h($timelineEnd ? $timelineEnd->format('Y-m-d') : '') ?></span>
-                  </div>
-                </div>
-              </div>
-
-              <?php foreach ($ganttRows as $ganttRow): ?>
-                <?php
-                  $taskRow = (array)$ganttRow['task'];
-                  $taskId = (int)($taskRow['WorkflowTaskID'] ?? 0);
-                  $taskTitle = trim((string)($taskRow['Title'] ?? ''));
-                  if ($taskTitle === '') {
-                      $taskTitle = __t('workflow_task_number', ['id' => $taskId]);
-                  }
-                  $barStartDate = $ganttRow['start'];
-                  $barEndDate = $ganttRow['end'];
-                  $offsetDays = $timelineStart ? max(0, wf_project_days_between($timelineStart, $barStartDate)) : 0;
-                  $durationDays = max(1, wf_project_days_between($barStartDate, $barEndDate) + 1);
-                  $left = max(0.0, min(100.0, ($offsetDays / $timelineDays) * 100));
-                  $availableWidth = max(0.5, 100.0 - $left);
-                  $width = min($availableWidth, max(1.8, ($durationDays / $timelineDays) * 100));
-                  $percent = (int)round((float)$ganttRow['percent']);
-                  $isComplete = !empty($ganttRow['closed']) || $percent >= 100;
-                  $assignee = trim((string)($taskRow['AssignedToName'] ?? ''));
-                  $hasParent = (int)($taskRow['ParentWorkflowTaskID'] ?? 0) > 0;
-                ?>
-                <div class="workflow-gantt-row">
-                  <div class="workflow-gantt-task <?= $hasParent ? 'ps-4' : '' ?>">
-                    <div class="workflow-gantt-task-title">
-                      <?php if ($hasParent): ?><i class="bi bi-arrow-return-right text-muted me-1"></i><?php endif; ?>
-                      <a href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
-                        <?= h($taskTitle) ?>
-                      </a>
-                    </div>
-                    <div class="text-muted small">
-                      #<?= $taskId ?>
-                      <?php if ($assignee !== ''): ?> &middot; <?= h($assignee) ?><?php endif; ?>
-                      &middot; <?= h($barStartDate->format('Y-m-d')) ?> - <?= h($barEndDate->format('Y-m-d')) ?>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="workflow-gantt-track">
-                      <?php if ($todayOffsetPercent !== null): ?>
-                        <span class="workflow-gantt-today"
-                              style="left: <?= h(number_format($todayOffsetPercent, 4, '.', '')) ?>%;"
-                              title="<?= h(__t('workflow_project_today')) ?>"></span>
-                      <?php endif; ?>
-                      <div class="workflow-gantt-bar <?= $isComplete ? 'is-complete' : '' ?>"
-                           style="left: <?= h(number_format($left, 4, '.', '')) ?>%; width: <?= h(number_format($width, 4, '.', '')) ?>%;"
-                           title="<?= h($taskTitle . ' (' . $barStartDate->format('Y-m-d') . ' - ' . $barEndDate->format('Y-m-d') . ')') ?>">
-                        <span class="workflow-gantt-progress" style="width: <?= h((string)$percent) ?>%;"></span>
-                        <span class="workflow-gantt-bar-label"><?= h($percent) ?>%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              <?php endforeach; ?>
-            </div>
-          <?php endif; ?>
-
-          <?php if ($unscheduledTasks !== []): ?>
-            <div class="mt-3">
-              <div class="fw-semibold small mb-2"><?= h(__t('workflow_project_unscheduled_tasks')) ?></div>
-              <div class="d-flex flex-wrap gap-2">
-                <?php foreach ($unscheduledTasks as $taskRow): ?>
-                  <?php
-                    $taskId = (int)($taskRow['WorkflowTaskID'] ?? 0);
-                    $taskTitle = trim((string)($taskRow['Title'] ?? ''));
-                    if ($taskTitle === '') {
-                        $taskTitle = __t('workflow_task_number', ['id' => $taskId]);
-                    }
-                  ?>
-                  <a class="badge text-bg-light border text-decoration-none"
-                     href="index.php?route=workflow/edit&id=<?= $taskId ?>&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectTaskReturnParam ?>">
-                    #<?= $taskId ?> <?= h($taskTitle) ?>
-                  </a>
-                <?php endforeach; ?>
-              </div>
-            </div>
-          <?php endif; ?>
-        </section>
+      <?php if ($canDeleteProject && $projectId > 0 && (int)($record['Active'] ?? 0) === 1): ?>
+        <form method="post"
+              action="index.php?route=workflow-projects/delete"
+              class="mt-2 text-end"
+              data-confirm-message="<?= h(__t('workflow_project_delete_confirm')) ?>"
+              data-confirm-button="<?= h(__t('delete')) ?>"
+              data-confirm-button-class="btn-danger">
+          <?= csrf_field() ?>
+          <input type="hidden" name="WorkflowProjectID" value="<?= $projectId ?>">
+          <input type="hidden" name="returnTo" value="<?= h($backUrl) ?>">
+          <button id="workflow-project-delete-btn" type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-trash me-1"></i><?= h(__t('delete')) ?>
+          </button>
+        </form>
       <?php endif; ?>
+
     </div>
   </div>
 </div>
@@ -632,6 +692,15 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
   const projectUserEmpty = document.querySelector('[data-project-user-empty]');
   const projectUserCount = document.querySelector('[data-project-user-selected-count]');
   const projectUserClear = document.querySelector('[data-project-user-clear]');
+  const showProjectTab = tabButtonId => {
+    const trigger = document.getElementById(tabButtonId);
+    if (trigger && window.bootstrap && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(trigger).show();
+    }
+  };
+  if (window.location.hash === '#workflow-project-gantt') {
+    showProjectTab('WorkflowProjectScheduleTabButton');
+  }
   const syncProjectUserRow = row => {
     const input = row.querySelector('[data-project-user-checkbox]');
     const role = row.querySelector('[data-project-user-role]');
@@ -685,12 +754,27 @@ if ($timelineStart && $timelineEnd && $today >= $timelineStart && $today <= $tim
   updateProjectUserCount();
   filterProjectUsers();
 
+  const showFirstInvalidProjectTab = form => {
+    const invalidField = form.querySelector(':invalid, .is-invalid');
+    if (!invalidField) {
+      return;
+    }
+    const pane = invalidField.closest('.tab-pane');
+    if (!pane || pane.classList.contains('active')) {
+      return;
+    }
+    const paneSelectorId = window.CSS && CSS.escape ? CSS.escape(pane.id) : pane.id;
+    const trigger = document.querySelector('[data-bs-toggle="tab"][data-bs-target="#' + paneSelectorId + '"]');
+    showProjectTab(trigger ? trigger.id : '');
+  };
+
   Array.from(forms).forEach(form => {
     form.addEventListener('submit', event => {
       if (!form.checkValidity()) {
         event.preventDefault();
         event.stopPropagation();
         form.classList.add('was-validated');
+        showFirstInvalidProjectTab(form);
         return;
       }
       const submitter = event.submitter || form.querySelector('button[type="submit"]');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\AuditModel;
+use App\Models\TrainingCertificationModel;
 use App\Models\TrainingManagementModel;
 use App\Models\TrainingProgressModel;
 use App\Models\UserModel;
@@ -17,17 +18,18 @@ final class TrainingController extends BaseController
 {
     protected array $acl = [
         '*' => ['auth' => true],
-        'users' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'users-edit' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'usersEdit' => ['auth' => true, 'permsAny' => ['USERS_EDIT', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'scenarios' => ['auth' => true],
-        'runner' => ['auth' => true],
-        'summary' => ['auth' => true, 'permsAny' => ['USERS_VIEW', 'USERS_ADMIN']],
-        'state' => ['auth' => true],
-        'manage' => ['auth' => true, 'permsAny' => ['USERS_ADMIN']],
-        'saveNote' => ['auth' => true],
-        'reset' => ['auth' => true, 'permsAny' => ['USERS_ADMIN']],
-        'stuck' => ['auth' => true],
+        'users' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'users-edit' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'usersEdit' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'dashboard' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'scenarios' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'runner' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'summary' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'state' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'manage' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveNote' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
+        'reset' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'stuck' => ['auth' => true, 'permsAny' => ['TRAINING_USER', 'TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function __construct()
@@ -41,9 +43,19 @@ final class TrainingController extends BaseController
         $allScenarios = array_values(array_filter(TrainingScenarioCatalog::all()));
         $userScenarioStates = [];
         $setupRequired = false;
+        $moduleFilterSessionKey = 'training.scenarios.module_filter';
+        $clearFilters = isset($_GET['reset_filters']);
+        if ($clearFilters) {
+            SessionHelper::forget($moduleFilterSessionKey);
+        }
+
+        $requestedModuleFilter = array_key_exists('module', $_GET)
+            ? trim((string) ($_GET['module'] ?? ''))
+            : trim((string) SessionHelper::get($moduleFilterSessionKey, ''));
+
         $filters = [
             'q' => trim((string) ($_GET['q'] ?? '')),
-            'module' => trim((string) ($_GET['module'] ?? '')),
+            'module' => $requestedModuleFilter,
             'status' => trim((string) ($_GET['status'] ?? '')),
         ];
 
@@ -60,8 +72,9 @@ final class TrainingController extends BaseController
         if ($managementModel instanceof TrainingManagementModel && $managementModel->supportsManagementTables() && $userId > 0) {
             foreach ($managementModel->listUserAssignments($userId) as $assignment) {
                 $assignedScenarioCode = trim((string) ($assignment['EffectiveScenarioCode'] ?? ''));
-                if ($assignedScenarioCode !== '' && !isset($userAssignmentsByScenario[$assignedScenarioCode])) {
-                    $userAssignmentsByScenario[$assignedScenarioCode] = $assignment;
+                if ($assignedScenarioCode !== '') {
+                    $userAssignmentsByScenario[$assignedScenarioCode] ??= [];
+                    $userAssignmentsByScenario[$assignedScenarioCode][] = $assignment;
                 }
             }
         }
@@ -74,6 +87,17 @@ final class TrainingController extends BaseController
             }
         }
         ksort($moduleOptions, SORT_NATURAL | SORT_FLAG_CASE);
+
+        if ($filters['module'] !== '' && !isset($moduleOptions[$filters['module']])) {
+            $filters['module'] = '';
+            SessionHelper::forget($moduleFilterSessionKey);
+        } elseif (array_key_exists('module', $_GET)) {
+            if ($filters['module'] === '') {
+                SessionHelper::forget($moduleFilterSessionKey);
+            } else {
+                SessionHelper::set($moduleFilterSessionKey, $filters['module']);
+            }
+        }
 
         $scenarios = array_values(array_filter($allScenarios, function (array $scenario) use ($filters, $userScenarioStates): bool {
             $scenarioId = trim((string) ($scenario['id'] ?? ''));
@@ -116,6 +140,12 @@ final class TrainingController extends BaseController
                 return $moduleCompare;
             }
 
+            $leftOrder = (int) ($left['sort_order'] ?? 0);
+            $rightOrder = (int) ($right['sort_order'] ?? 0);
+            if ($leftOrder !== $rightOrder) {
+                return $leftOrder <=> $rightOrder;
+            }
+
             $leftTitle = trim((string) ($left['title'] ?? $left['id'] ?? ''));
             $rightTitle = trim((string) ($right['title'] ?? $right['id'] ?? ''));
             return strcasecmp($leftTitle, $rightTitle);
@@ -132,6 +162,177 @@ final class TrainingController extends BaseController
             'createTableScript' => 'backend-php/config/sql/create_tblTrainingProgress.sql',
             'trainingGuide' => $this->buildTrainingGuideForRoute('training/scenarios'),
             'trainingEnabled' => training_features_enabled($this->db),
+        ]);
+    }
+
+    public function dashboard(): void
+    {
+        $this->ensureTrainingEnabled();
+
+        $userId = (int) SessionHelper::get('auth.user_id', 0);
+        $allScenarios = array_values(array_filter(TrainingScenarioCatalog::all()));
+        usort($allScenarios, static function (array $left, array $right): int {
+            $leftModule = trim((string) ($left['module'] ?? ''));
+            $rightModule = trim((string) ($right['module'] ?? ''));
+            $moduleCompare = strcasecmp($leftModule, $rightModule);
+            if ($moduleCompare !== 0) {
+                return $moduleCompare;
+            }
+
+            $leftOrder = (int) ($left['sort_order'] ?? 0);
+            $rightOrder = (int) ($right['sort_order'] ?? 0);
+            if ($leftOrder !== $rightOrder) {
+                return $leftOrder <=> $rightOrder;
+            }
+
+            return strcasecmp(
+                trim((string) ($left['title'] ?? $left['id'] ?? '')),
+                trim((string) ($right['title'] ?? $right['id'] ?? ''))
+            );
+        });
+
+        $trainingSetupRequired = false;
+        $userScenarioStates = [];
+        $userAssignmentsByScenario = [];
+        $progressModel = $this->trainingProgressModel();
+        if ($progressModel instanceof TrainingProgressModel && $progressModel->supportsTrainingProgress() && $userId > 0) {
+            $userScenarioStates = $progressModel->listUserStates($userId);
+        } else {
+            $trainingSetupRequired = true;
+        }
+
+        $managementModel = $this->trainingManagementModel();
+        if ($managementModel instanceof TrainingManagementModel && $managementModel->supportsManagementTables() && $userId > 0) {
+            foreach ($managementModel->listUserAssignments($userId) as $assignment) {
+                $assignedScenarioCode = trim((string) ($assignment['EffectiveScenarioCode'] ?? ''));
+                if ($assignedScenarioCode !== '') {
+                    $userAssignmentsByScenario[$assignedScenarioCode] ??= [];
+                    $userAssignmentsByScenario[$assignedScenarioCode][] = $assignment;
+                }
+            }
+        }
+
+        $certificationSetupRequired = false;
+        $certifications = [];
+        $certificationModel = $this->trainingCertificationModel();
+        if ($certificationModel instanceof TrainingCertificationModel && $certificationModel->supportsCertificationTables()) {
+            $certifications = $certificationModel->listCertifications(['active' => '1'], $userId);
+        } else {
+            $certificationSetupRequired = true;
+        }
+
+        $modules = [];
+        foreach ($allScenarios as $scenario) {
+            $scenarioId = trim((string) ($scenario['id'] ?? ''));
+            $scenarioAssignments = $scenarioId !== '' ? array_values($userAssignmentsByScenario[$scenarioId] ?? []) : [];
+            if ($scenarioAssignments === []) {
+                continue;
+            }
+
+            $moduleName = trim((string) ($scenario['module'] ?? ''));
+            if ($moduleName === '') {
+                $moduleName = 'Uncategorized';
+            }
+
+            if (!isset($modules[$moduleName])) {
+                $modules[$moduleName] = $this->emptyDashboardModule($moduleName);
+            }
+
+            $state = $scenarioId !== '' ? ($userScenarioStates[$scenarioId] ?? null) : null;
+            $status = strtolower(trim((string) ($state['Status'] ?? 'not_started'))) ?: 'not_started';
+            $hasCompletedProgress = $status === 'completed';
+            if (!in_array($status, ['active', 'completed', 'stopped'], true)) {
+                $status = 'not_started';
+            }
+
+            foreach ($scenarioAssignments as $assignment) {
+                if (!is_array($assignment)) {
+                    continue;
+                }
+                $assignmentStatus = strtolower(trim((string) ($assignment['Status'] ?? '')));
+                $assignmentMode = (string) (($assignment['AssignmentMode'] ?? '') ?: 'Self-paced');
+                $isInstructorLed = strcasecmp($assignmentMode, 'Instructor-led') === 0;
+                if ($assignmentStatus === 'completed') {
+                    $rowStatus = 'completed';
+                } elseif ($isInstructorLed) {
+                    $rowStatus = in_array($assignmentStatus, ['active', 'in_progress', 'stopped'], true) ? $assignmentStatus : 'not_started';
+                } else {
+                    $rowStatus = $hasCompletedProgress ? 'not_started' : $status;
+                }
+                $assignmentId = (int) ($assignment['TrainingAssignmentID'] ?? 0);
+                $startUrl = $scenarioId !== '' ? TrainingScenarioCatalog::startRoute($scenarioId) : 'index.php?route=training/scenarios';
+                if ($scenarioId !== '') {
+                    $startUrl .= '&assignment_mode=' . rawurlencode($isInstructorLed ? 'instructor_led' : 'self_paced');
+                    if ($assignmentId !== 0) {
+                        $startUrl .= '&assignment_id=' . rawurlencode((string) $assignmentId);
+                    }
+                }
+                $modules[$moduleName]['scenarios'][] = [
+                    'scenario' => $scenario,
+                    'state' => $state,
+                    'status' => $rowStatus,
+                    'assignment' => $assignment,
+                    'startUrl' => $startUrl,
+                ];
+                $modules[$moduleName]['trainingCounts']['total']++;
+                $modules[$moduleName]['trainingCounts'][$rowStatus]++;
+                $modules[$moduleName]['trainingCounts']['assigned']++;
+                if ($rowStatus === 'completed') {
+                    $modules[$moduleName]['trainingCounts']['assigned_completed']++;
+                }
+            }
+        }
+
+        foreach ($certifications as $certification) {
+            $moduleName = trim((string) ($certification['ModuleName'] ?? ''));
+            if ($moduleName === '') {
+                $moduleName = 'Uncategorized';
+            }
+
+            if (!isset($modules[$moduleName])) {
+                continue;
+            }
+
+            $modules[$moduleName]['certifications'][] = $certification;
+            $modules[$moduleName]['certificationCounts']['total']++;
+            $latestStatus = strtolower((string) ($certification['LatestStatus'] ?? ''));
+            $latestPassed = (int) ($certification['LatestPassedFlag'] ?? 0) === 1;
+            if ($latestStatus === 'submitted' && $latestPassed) {
+                $modules[$moduleName]['certificationCounts']['certified']++;
+            } elseif ($latestStatus === 'submitted') {
+                $modules[$moduleName]['certificationCounts']['not_certified']++;
+            } else {
+                $modules[$moduleName]['certificationCounts']['not_attempted']++;
+            }
+        }
+
+        foreach ($modules as &$module) {
+            if (!is_array($module['scenarios'] ?? null)) {
+                continue;
+            }
+            usort($module['scenarios'], static function (array $left, array $right): int {
+                $leftModeLabel = (string) (($left['assignment']['AssignmentMode'] ?? 'Self-paced'));
+                $rightModeLabel = (string) (($right['assignment']['AssignmentMode'] ?? 'Self-paced'));
+                $leftMode = strcasecmp($leftModeLabel, 'Instructor-led') === 0 ? 1 : 0;
+                $rightMode = strcasecmp($rightModeLabel, 'Instructor-led') === 0 ? 1 : 0;
+                if ($leftMode !== $rightMode) {
+                    return $leftMode <=> $rightMode;
+                }
+                return ((int) ($left['assignment']['TrainingAssignmentID'] ?? 0)) <=> ((int) ($right['assignment']['TrainingAssignmentID'] ?? 0));
+            });
+        }
+        unset($module);
+
+        uasort($modules, static fn(array $left, array $right): int => strcasecmp((string) $left['module'], (string) $right['module']));
+
+        $this->render('training/TrainingDashboard', [
+            'title' => 'Training Dashboard',
+            'modules' => $modules,
+            'trainingSetupRequired' => $trainingSetupRequired,
+            'certificationSetupRequired' => $certificationSetupRequired,
+            'canManageTraining' => $this->canManageTraining(),
+            'trainingProgressScript' => 'backend-php/config/sql/create_tblTrainingProgress.sql',
+            'certificationScript' => 'backend-php/config/sql/create_training_certification_features.sql',
         ]);
     }
 
@@ -163,6 +364,7 @@ final class TrainingController extends BaseController
         $this->ensureTrainingEnabled();
         $filters = [
             'q' => trim((string) ($_GET['q'] ?? '')),
+            'module' => trim((string) ($_GET['module'] ?? '')),
             'status' => trim((string) ($_GET['status'] ?? '')),
             'scenario_code' => trim((string) ($_GET['scenario_code'] ?? '')),
         ];
@@ -170,12 +372,30 @@ final class TrainingController extends BaseController
         $rows = [];
         $setupRequired = false;
         $scenarioOptions = [];
+        $moduleOptions = [];
+        $scenarioModules = [];
 
         $model = $this->trainingProgressModel();
         if ($model instanceof TrainingProgressModel && $model->supportsTrainingProgress()) {
-            $rows = $model->listSummaries($filters);
             foreach (TrainingScenarioCatalog::all() as $scenarioId => $scenario) {
                 $scenarioOptions[$scenarioId] = (string) ($scenario['title'] ?? $scenarioId);
+                $moduleName = trim((string) ($scenario['module'] ?? ''));
+                $scenarioModules[$scenarioId] = $moduleName;
+                if ($moduleName !== '') {
+                    $moduleOptions[$moduleName] = $moduleName;
+                }
+            }
+            ksort($moduleOptions, SORT_NATURAL | SORT_FLAG_CASE);
+            if ($filters['module'] !== '' && !isset($moduleOptions[$filters['module']])) {
+                $filters['module'] = '';
+            }
+
+            $rows = $model->listSummaries($filters);
+            if ($filters['module'] !== '') {
+                $rows = array_values(array_filter($rows, function (array $row) use ($filters, $scenarioModules): bool {
+                    $scenarioCode = trim((string) ($row['ScenarioCode'] ?? ''));
+                    return strcasecmp((string) ($scenarioModules[$scenarioCode] ?? ''), $filters['module']) === 0;
+                }));
             }
         } else {
             $setupRequired = true;
@@ -187,6 +407,7 @@ final class TrainingController extends BaseController
             'filters' => $filters,
             'setupRequired' => $setupRequired,
             'scenarioOptions' => $scenarioOptions,
+            'moduleOptions' => $moduleOptions,
             'createTableScript' => 'backend-php/config/sql/create_tblTrainingProgress.sql',
             'canManageTraining' => $this->canManageTraining(),
         ]);
@@ -260,7 +481,9 @@ final class TrainingController extends BaseController
         $scenarioId = $this->resolveScenarioId((string) ($_GET['scenario_id'] ?? ''));
         $scenario = TrainingScenarioCatalog::get($scenarioId);
         $state = $this->getTrainingState($scenarioId);
+        $scenario = $this->withStepCheckpoints($scenario);
         $currentStep = $state !== null ? TrainingScenarioCatalog::getStep($state) : null;
+        $currentStep = is_array($currentStep) ? $this->withStepCheckpoint($scenarioId, $currentStep) : null;
 
         $this->json([
             'ok' => true,
@@ -282,6 +505,9 @@ final class TrainingController extends BaseController
 
         $scenarioId = trim((string) ($_POST['scenario_id'] ?? ''));
         $startMode = strtolower(trim((string) ($_POST['start_mode'] ?? 'beginning')));
+        $assignmentMode = strtolower(trim((string) ($_POST['assignment_mode'] ?? 'self_paced')));
+        $assignmentMode = $assignmentMode === 'instructor_led' ? 'instructor_led' : 'self_paced';
+        $assignmentId = (int) ($_POST['assignment_id'] ?? 0);
         if ($startMode !== 'current') {
             $this->clearScenarioNotes($scenarioId);
         }
@@ -293,6 +519,8 @@ final class TrainingController extends BaseController
             header('Location: index.php?route=training/scenarios');
             exit;
         }
+        $state['assignment_mode'] = $assignmentMode;
+        $state['assignment_id'] = $assignmentId;
 
         SessionHelper::set('training.active', $state);
         SessionHelper::set('training.requested_scenario_id', $scenarioId);
@@ -322,7 +550,7 @@ final class TrainingController extends BaseController
 
         $return = trim((string) ($_POST['return'] ?? 'index.php?route=training/scenarios'));
         if (is_array($state) && (string) ($state['status'] ?? '') === 'completed') {
-            $return = 'index.php?route=training/scenarios';
+            $return = 'index.php?route=training/dashboard';
         }
         header('Location: ' . $return);
         exit;
@@ -348,6 +576,15 @@ final class TrainingController extends BaseController
             return;
         }
 
+        $scenarioId = (string) ($state['scenario_id'] ?? '');
+        $currentStep = TrainingScenarioCatalog::getStep($state);
+        $currentStep = is_array($currentStep) ? $this->withStepCheckpoint($scenarioId, $currentStep) : [];
+        $checkpointError = $this->validateCheckpointAnswer($currentStep, trim((string) ($_POST['checkpoint_answer'] ?? '')));
+        if ($checkpointError !== null) {
+            $this->json(['ok' => false, 'message' => $checkpointError], 422);
+            return;
+        }
+
         $advancedState = TrainingScenarioCatalog::advanceState($state, $stepNumber);
         if ($advancedState === null) {
             $this->json(['ok' => false, 'message' => 'Step could not be advanced.'], 409);
@@ -361,11 +598,22 @@ final class TrainingController extends BaseController
             $managementModel = $this->trainingManagementModel();
             if ($managementModel instanceof TrainingManagementModel) {
                 $userId = (int) SessionHelper::get('auth.user_id', 0);
-                $managementModel->markAssignmentsCompleted($userId, (string) ($advancedState['scenario_id'] ?? ''), $userId);
+                $assignmentMode = strtolower(trim((string) ($advancedState['assignment_mode'] ?? 'self_paced')));
+                if ($assignmentMode !== 'instructor_led') {
+                    $assignmentId = (int) ($advancedState['assignment_id'] ?? 0);
+                    if ($assignmentId > 0) {
+                        $managementModel->markAssignmentCompleted($assignmentId, $userId, $userId);
+                    } else {
+                        $managementModel->markAssignmentsCompleted($userId, (string) ($advancedState['scenario_id'] ?? ''), $userId);
+                    }
+                }
             }
         }
 
         $nextStep = ($advancedState['status'] ?? '') === 'completed' ? null : TrainingScenarioCatalog::getStep($advancedState);
+        $nextStep = is_array($nextStep)
+            ? $this->withStepCheckpoint((string) ($advancedState['scenario_id'] ?? ''), $nextStep)
+            : null;
         $this->json([
             'ok' => true,
             'completed' => ($advancedState['status'] ?? '') === 'completed',
@@ -599,6 +847,40 @@ final class TrainingController extends BaseController
         return new TrainingManagementModel($this->db);
     }
 
+    private function trainingCertificationModel(): ?TrainingCertificationModel
+    {
+        if (!$this->db instanceof \PDO) {
+            return null;
+        }
+
+        return new TrainingCertificationModel($this->db);
+    }
+
+    private function emptyDashboardModule(string $moduleName): array
+    {
+        return [
+            'module' => $moduleName,
+            'scenarios' => [],
+            'certifications' => [],
+            'trainingCounts' => [
+                'total' => 0,
+                'not_started' => 0,
+                'active' => 0,
+                'in_progress' => 0,
+                'stopped' => 0,
+                'completed' => 0,
+                'assigned' => 0,
+                'assigned_completed' => 0,
+            ],
+            'certificationCounts' => [
+                'total' => 0,
+                'certified' => 0,
+                'not_certified' => 0,
+                'not_attempted' => 0,
+            ],
+        ];
+    }
+
     private function renderScenarioRunner(string $scenarioId): void
     {
         $this->ensureTrainingEnabled();
@@ -609,8 +891,10 @@ final class TrainingController extends BaseController
             exit;
         }
 
+        $scenario = $this->withStepCheckpoints($scenario);
         $state = $this->getTrainingState($scenarioId);
         $currentStep = $state !== null ? TrainingScenarioCatalog::getStep($state) : null;
+        $currentStep = is_array($currentStep) ? $this->withStepCheckpoint($scenarioId, $currentStep) : null;
         $scenarioNotes = $this->loadScenarioNotes($scenarioId);
         $currentStepNumber = (int) ($state['current_step'] ?? 0);
         $currentStepNote = trim((string) ($scenarioNotes[$currentStepNumber] ?? ''));
@@ -653,7 +937,9 @@ final class TrainingController extends BaseController
             return null;
         }
 
+        $scenario = $this->withStepCheckpoints($scenario);
         $step = TrainingScenarioCatalog::getStep($state);
+        $step = is_array($step) ? $this->withStepCheckpoint($scenarioId, $step) : $step;
         $isCompleted = (string) ($state['status'] ?? '') === 'completed';
         if (!$isCompleted) {
             $stepRoute = trim((string) ($step['route'] ?? ''));
@@ -677,6 +963,176 @@ final class TrainingController extends BaseController
             'stopUrl' => 'index.php?route=training/stop',
             'csrf' => csrf_token(),
         ];
+    }
+
+    private function withStepCheckpoints(array $scenario): array
+    {
+        $scenarioId = trim((string) ($scenario['id'] ?? ''));
+        if ($scenarioId === '') {
+            return $scenario;
+        }
+
+        $steps = array_values(is_array($scenario['steps'] ?? null) ? $scenario['steps'] : []);
+        foreach ($steps as $index => $step) {
+            if (!is_array($step)) {
+                continue;
+            }
+            $steps[$index] = $this->withStepCheckpoint($scenarioId, $step);
+        }
+        $scenario['steps'] = $steps;
+
+        return $scenario;
+    }
+
+    private function withStepCheckpoint(string $scenarioId, array $step): array
+    {
+        $stepNo = (int) ($step['number'] ?? 0);
+        if ($scenarioId === '' || $stepNo <= 0 || isset($step['checkpoint'])) {
+            return $step;
+        }
+
+        $model = $this->trainingManagementModel();
+        if (!$model instanceof TrainingManagementModel || !$model->supportsStepSupportTables()) {
+            return $this->withDefaultStepCheckpoint($scenarioId, $step);
+        }
+
+        $support = $model->getStepSupport($scenarioId, $stepNo);
+        $checkpoint = is_array($support['checkpoint'] ?? null) ? $support['checkpoint'] : [];
+        $question = trim((string) ($checkpoint['QuestionText'] ?? ''));
+        if ($question === '' || (int) ($checkpoint['ActiveFlag'] ?? 0) !== 1) {
+            return $this->withDefaultStepCheckpoint($scenarioId, $step);
+        }
+
+        $expectedAnswer = trim((string) ($checkpoint['ExpectedAnswer'] ?? ''));
+        $parsedExpectedAnswer = $this->parseCheckpointExpectedAnswer($expectedAnswer);
+        if ($parsedExpectedAnswer === [] && $scenarioId === 'workflow_ops_overview' && $stepNo === 4) {
+            return $this->withDefaultStepCheckpoint($scenarioId, $step);
+        }
+
+        $step['checkpoint'] = [
+            'question' => $question,
+            'expected_answer' => $expectedAnswer,
+            'required' => (int) ($checkpoint['RequiredFlag'] ?? 0) === 1,
+        ];
+        if ($parsedExpectedAnswer !== []) {
+            $step['checkpoint'] = array_merge($step['checkpoint'], $parsedExpectedAnswer);
+        }
+
+        return $step;
+    }
+
+    private function withDefaultStepCheckpoint(string $scenarioId, array $step): array
+    {
+        $stepNo = (int) ($step['number'] ?? 0);
+        if ($scenarioId !== 'workflow_ops_overview' || $stepNo !== 4) {
+            return $step;
+        }
+
+        $existingCheckpoint = is_array($step['checkpoint'] ?? null) ? $step['checkpoint'] : [];
+        $existingOptions = is_array($existingCheckpoint['options'] ?? null) ? $existingCheckpoint['options'] : [];
+        if (($existingCheckpoint['type'] ?? '') === 'multiple_choice' && $existingOptions !== []) {
+            return $step;
+        }
+
+        $step['checkpoint'] = [
+            'question' => 'Which answer best explains why keeping Workflow Operations inside CBMS improves project governance?',
+            'expected_answer' => '{"type":"multiple_choice","correct":"B","options":[{"key":"A","label":"It replaces the need for project ownership and review meetings."},{"key":"B","label":"It links projects, requirements, tasks, issues, evidence, and ownership in one governed record set."},{"key":"C","label":"It only changes the page layout so the screens are easier to read."},{"key":"D","label":"It prevents any changes after a project has been created."}],"explanation":"Integrated workflow records improve governance by giving visibility and control across project scope, ownership, tasks, issues, evidence, quality, and lifecycle support."}',
+            'required' => true,
+            'type' => 'multiple_choice',
+            'correct' => 'B',
+            'options' => [
+                [
+                    'key' => 'A',
+                    'label' => 'It replaces the need for project ownership and review meetings.',
+                ],
+                [
+                    'key' => 'B',
+                    'label' => 'It links projects, requirements, tasks, issues, evidence, and ownership in one governed record set.',
+                ],
+                [
+                    'key' => 'C',
+                    'label' => 'It only changes the page layout so the screens are easier to read.',
+                ],
+                [
+                    'key' => 'D',
+                    'label' => 'It prevents any changes after a project has been created.',
+                ],
+            ],
+            'explanation' => 'Integrated workflow records improve governance by giving visibility and control across project scope, ownership, tasks, issues, evidence, quality, and lifecycle support.',
+        ];
+
+        return $step;
+    }
+
+    private function parseCheckpointExpectedAnswer(string $expectedAnswer): array
+    {
+        $expectedAnswer = trim($expectedAnswer);
+        if ($expectedAnswer === '' || !str_starts_with($expectedAnswer, '{')) {
+            return [];
+        }
+
+        $payload = json_decode($expectedAnswer, true);
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $type = strtolower(trim((string) ($payload['type'] ?? '')));
+        if ($type !== 'multiple_choice') {
+            return [];
+        }
+
+        $correct = trim((string) ($payload['correct'] ?? ''));
+        $options = [];
+        foreach (array_values(is_array($payload['options'] ?? null) ? $payload['options'] : []) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $key = trim((string) ($option['key'] ?? ''));
+            $label = trim((string) ($option['label'] ?? $option['text'] ?? ''));
+            if ($key === '' || $label === '') {
+                continue;
+            }
+            $options[] = [
+                'key' => $key,
+                'label' => $label,
+            ];
+        }
+
+        if ($correct === '' || $options === []) {
+            return [];
+        }
+
+        return [
+            'type' => 'multiple_choice',
+            'correct' => $correct,
+            'options' => $options,
+            'explanation' => trim((string) ($payload['explanation'] ?? '')),
+        ];
+    }
+
+    private function validateCheckpointAnswer(array $step, string $answer): ?string
+    {
+        $checkpoint = is_array($step['checkpoint'] ?? null) ? $step['checkpoint'] : [];
+        if ($checkpoint !== [] && (string) ($checkpoint['type'] ?? '') !== 'multiple_choice') {
+            $parsedExpectedAnswer = $this->parseCheckpointExpectedAnswer((string) ($checkpoint['expected_answer'] ?? ''));
+            if ($parsedExpectedAnswer !== []) {
+                $checkpoint = array_merge($checkpoint, $parsedExpectedAnswer);
+            }
+        }
+        if ($checkpoint === [] || (string) ($checkpoint['type'] ?? '') !== 'multiple_choice') {
+            return null;
+        }
+
+        if ($answer === '') {
+            return !empty($checkpoint['required']) ? 'Select an answer before continuing.' : null;
+        }
+
+        $correct = trim((string) ($checkpoint['correct'] ?? ''));
+        if ($correct !== '' && $answer !== $correct) {
+            return 'That answer is not quite right. Review the choices and try again.';
+        }
+
+        return null;
     }
 
     private function resolveScenarioId(string $scenarioId): string
@@ -726,7 +1182,7 @@ final class TrainingController extends BaseController
             if (str_contains($label, 'Training features')) {
                 $ok = training_features_enabled($this->db);
             } elseif (str_contains($label, 'Users administration')) {
-                $ok = $this->hasAnyPermission(['USERS_EDIT', 'USERS_ADMIN']);
+                $ok = $this->hasAnyPermission(['USERS_EDIT', 'USERS_ADMIN', 'TRAINING_ADMIN', 'TRAINING_CONFIG']);
             } elseif (str_contains($label, 'target user record')) {
                 $ok = $this->targetUserExists();
             }
@@ -740,6 +1196,9 @@ final class TrainingController extends BaseController
         $perms = SessionHelper::get('auth.perms', []);
         if (!is_array($perms)) {
             return false;
+        }
+        if (in_array('ADMIN_ALL', $perms, true) || in_array('SYSADMIN', $perms, true)) {
+            return true;
         }
         foreach ($required as $perm) {
             if (in_array($perm, $perms, true)) {
@@ -860,18 +1319,27 @@ final class TrainingController extends BaseController
     private function canManageTraining(): bool
     {
         $perms = SessionHelper::get('auth.perms', []);
-        return is_array($perms) && in_array('USERS_ADMIN', $perms, true);
+        return is_array($perms) && (
+            in_array('TRAINING_ADMIN', $perms, true)
+            || in_array('TRAINING_CONFIG', $perms, true)
+            || in_array('ADMIN_ALL', $perms, true)
+            || in_array('SYSADMIN', $perms, true)
+        );
     }
 
     private function buildSummaryReturnUrl(): string
     {
         $q = trim((string) ($_POST['return_q'] ?? $_GET['q'] ?? ''));
+        $module = trim((string) ($_POST['return_module'] ?? $_GET['module'] ?? ''));
         $status = trim((string) ($_POST['return_status'] ?? $_GET['status'] ?? ''));
         $scenarioCode = trim((string) ($_POST['return_scenario_code'] ?? $_GET['scenario_code'] ?? ''));
 
         $params = ['route' => 'training/summary'];
         if ($q !== '') {
             $params['q'] = $q;
+        }
+        if ($module !== '') {
+            $params['module'] = $module;
         }
         if ($status !== '') {
             $params['status'] = $status;

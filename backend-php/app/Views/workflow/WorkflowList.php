@@ -257,6 +257,8 @@ function wf_render_context_inputs(): string
     }
     return $html;
 }
+
+$workflowTaskExportUrl = 'index.php?' . http_build_query(array_merge($_GET, ['route' => 'workflow/export-excel']));
 ?>
 
 <?php if ($isIframe): ?>
@@ -438,40 +440,41 @@ function wf_render_context_inputs(): string
         <small class="text-muted ms-2"><?= h(__t('closed_only')) ?></small>
       <?php endif; ?>
     </div>
-    <?php if ($canEditWorkflow): ?>
-      <?php
-      $createQs = ['route' => 'workflow/edit', 'mine' => $mine ? 1 : 0];
-      if ($mine && $taskScope !== 'all') {
-          $createQs['task_scope'] = $taskScope;
-      }
-      if ($dueState !== '') {
-          $createQs['due_state'] = $dueState;
-      }
-      if ($workflowProjectID !== null) {
-          $createQs['workflowProjectID'] = $workflowProjectID;
-      }
-      if ($assignedToUserID !== null) {
-          $createQs['assignedToUserID'] = $assignedToUserID;
-      }
-      if ($isIframe) {
-          $createQs['iframe'] = '1';
-      }
-      $createUrl = wf_build_query($createQs);
-      ?>
-      <a href="<?= h($createUrl) ?>" class="btn btn-sm btn-primary">
-        <i class="bi bi-plus-circle me-1"></i><?= h(__t('create_task')) ?>
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+      <button type="button" id="workflow-tasks-print-btn" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i><?= h(__t('print')) ?>
+      </button>
+      <a id="workflow-tasks-export-excel-btn" href="<?= h($workflowTaskExportUrl) ?>" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-excel me-1"></i><?= h(__t('export_excel')) ?>
       </a>
-    <?php endif; ?>
+      <?php if ($canEditWorkflow): ?>
+        <?php
+        $createQs = ['route' => 'workflow/edit', 'mine' => $mine ? 1 : 0];
+        if ($mine && $taskScope !== 'all') {
+            $createQs['task_scope'] = $taskScope;
+        }
+        if ($dueState !== '') {
+            $createQs['due_state'] = $dueState;
+        }
+        if ($workflowProjectID !== null) {
+            $createQs['workflowProjectID'] = $workflowProjectID;
+        }
+        if ($assignedToUserID !== null) {
+            $createQs['assignedToUserID'] = $assignedToUserID;
+        }
+        if ($isIframe) {
+            $createQs['iframe'] = '1';
+        }
+        $createUrl = wf_build_query($createQs);
+        ?>
+        <a id="workflow-tasks-create-btn" href="<?= h($createUrl) ?>" class="btn btn-sm btn-primary">
+          <i class="bi bi-plus-circle me-1"></i><?= h(__t('create_task')) ?>
+        </a>
+      <?php endif; ?>
+    </div>
   </div>
 
   <div class="card-body">
-    <?php if (!empty($flash) && is_array($flash) && !empty($flash['text'])): ?>
-      <div class="alert alert-<?= h($flash['type'] ?? 'info') ?> alert-dismissible fade show mb-3" role="alert">
-        <?= $flash['text'] ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="<?= __t('close') ?>"></button>
-      </div>
-    <?php endif; ?>
-
     <?php if ($isRecipientListView): ?>
       <div class="workflow-recipient-list-summary d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
         <div>
@@ -605,6 +608,8 @@ function wf_render_context_inputs(): string
       </a>
     </div>
 
+    <?php require __DIR__ . '/_SelectedProjectCue.php'; ?>
+
     <?php if ($mine): ?>
       <?php
       $taskTabBase = [
@@ -682,7 +687,7 @@ function wf_render_context_inputs(): string
         $filterBase['iframe'] = '1';
     }
     ?>
-    <form method="get" action="index.php" class="row g-2 align-items-end mb-3">
+    <form method="get" action="index.php" id="workflow-tasks-filter-form" class="row g-2 align-items-end mb-3">
       <?php foreach ($filterBase as $k => $v): ?>
         <input type="hidden" name="<?= h($k) ?>" value="<?= h($v) ?>">
       <?php endforeach; ?>
@@ -768,17 +773,17 @@ function wf_render_context_inputs(): string
       }
       ?>
       <div class="col-md-12 d-flex gap-2">
-        <button type="submit" class="btn btn-primary btn-sm">
+        <button type="submit" id="workflow-tasks-filter-btn" class="btn btn-primary btn-sm">
           <i class="bi bi-search me-1"></i><?= __t('filter') ?>
         </button>
-        <a href="<?= h(wf_build_query($resetQs)) ?>" class="btn btn-outline-secondary btn-sm">
+        <a id="workflow-tasks-reset-btn" href="<?= h(wf_build_query($resetQs)) ?>" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-arrow-repeat me-1"></i><?= __t('reset') ?>
         </a>
       </div>
     </form>
 
     <div class="table-responsive">
-      <table class="table table-striped table-hover align-middle mb-0">
+      <table id="workflow-tasks-table" class="table table-striped table-hover align-middle mb-0">
         <thead class="table-light">
           <?php if ($isRecipientListView): ?>
             <tr>
@@ -811,6 +816,7 @@ function wf_render_context_inputs(): string
             $creatorId = (int) ($t['CreatedByUserID'] ?? 0);
             $assigneeId = (int) ($t['AssignedToUserID'] ?? 0);
             $rowCanManage = $canAdminWorkflow || ($canEditWorkflow && $creatorId === $currentUserId);
+            $rowCanDelete = $canAdminWorkflow || ($creatorId > 0 && $creatorId === $currentUserId);
             $rowCanTransition = $canAdminWorkflow
                 || (($canViewWorkflow || $canEditWorkflow) && ($assigneeId === $currentUserId || $creatorId === $currentUserId));
             $rowCanAccess = $rowCanManage || $rowCanTransition;
@@ -1002,7 +1008,7 @@ function wf_render_context_inputs(): string
                       </button>
                     </form>
                   <?php endif; ?>
-                  <?php if ($canAdminWorkflow && !$isIframe): ?>
+                  <?php if ($rowCanDelete && !$isIframe): ?>
                     <form method="post"
                           action="index.php?route=workflow/delete"
                           class="d-inline"

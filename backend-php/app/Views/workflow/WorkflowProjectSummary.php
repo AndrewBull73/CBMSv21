@@ -65,14 +65,20 @@ $projectUsers = is_array($projectUsers ?? null) ? $projectUsers : [];
 $projectTasks = is_array($projectTasks ?? null) ? $projectTasks : [];
 $projectLinks = is_array($projectLinks ?? null) ? $projectLinks : [];
 $projectRequirements = is_array($projectRequirements ?? null) ? $projectRequirements : [];
+$projectIssues = is_array($projectIssues ?? null) ? $projectIssues : [];
 $projectLinkSummary = is_array($projectLinkSummary ?? null) ? $projectLinkSummary : [];
 $workflowLinkTypeOptions = is_array($workflowLinkTypeOptions ?? null) ? $workflowLinkTypeOptions : [];
 $requirementStatusOptions = is_array($requirementStatusOptions ?? null) ? $requirementStatusOptions : [];
 $requirementPriorityOptions = is_array($requirementPriorityOptions ?? null) ? $requirementPriorityOptions : [];
+$issueStatusOptions = is_array($issueStatusOptions ?? null) ? $issueStatusOptions : [];
+$issueSeverityOptions = is_array($issueSeverityOptions ?? null) ? $issueSeverityOptions : [];
 $workflowLinksInstalled = !empty($workflowLinksInstalled);
+$workflowIssuesInstalled = !empty($workflowIssuesInstalled);
 $canEditProject = !empty($canEditProject);
 $canDeleteProject = !empty($canDeleteProject);
 $canCreateRequirement = !empty($canCreateRequirement);
+$canCreateIssue = !empty($canCreateIssue);
+$canEditIssue = !empty($canEditIssue);
 $canCreateWorkflowTask = !empty($canCreateWorkflowTask);
 $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
 $roleOptions = is_array($roleOptions ?? null) && $roleOptions !== []
@@ -118,8 +124,19 @@ $requirementLabel = static function (array $options, ?string $code): string {
     $key = (string)($options[$code] ?? '');
     return $key !== '' ? __t($key) : ($code !== '' ? ucwords(strtolower(str_replace('_', ' ', $code))) : '-');
 };
+$issueLabel = static function (array $options, ?string $code): string {
+    $code = strtoupper(trim((string)$code));
+    $key = (string)($options[$code] ?? '');
+    return $key !== '' ? __t($key) : ($code !== '' ? ucwords(strtolower(str_replace('_', ' ', $code))) : '-');
+};
 $projectNonRequirementLinks = array_values(array_filter($projectLinks, static function (array $link): bool {
     return strtoupper(trim((string)($link['LinkTypeCode'] ?? ''))) !== 'REQUIREMENT';
+}));
+$openProjectIssues = array_values(array_filter($projectIssues, static function (array $issue): bool {
+    return !in_array(strtoupper(trim((string)($issue['IssueStatusCode'] ?? ''))), ['RESOLVED', 'CLOSED', 'DEFERRED'], true);
+}));
+$criticalOpenProjectIssues = array_values(array_filter($openProjectIssues, static function (array $issue): bool {
+    return strtoupper(trim((string)($issue['SeverityCode'] ?? ''))) === 'CRITICAL';
 }));
 
 $totalTasks = count($projectTasks);
@@ -369,13 +386,6 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
   <div class="card shadow-sm">
     <?php require __DIR__ . '/../shared/_ScreenCardHeader.php'; ?>
     <div class="card-body">
-      <?php if (is_array($flash ?? null) && !empty($flash['text'])): ?>
-        <div class="alert alert-<?= h((string)($flash['type'] ?? 'info')) ?> alert-dismissible fade show">
-          <?= $flash['text'] ?>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-      <?php endif; ?>
-
       <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
         <div>
           <h1 class="h4 mb-1"><?= h($projectName !== '' ? $projectName : __t('workflow_project_project')) ?></h1>
@@ -385,16 +395,16 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
           </div>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <a href="<?= h($backUrl) ?>" class="btn btn-sm btn-outline-secondary">
+          <a id="workflow-project-summary-back-btn" href="<?= h($backUrl) ?>" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i><?= h(__t('back')) ?>
           </a>
           <?php if ($canEditProject): ?>
-            <a href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-primary">
+            <a id="workflow-project-summary-edit-btn" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-primary">
               <i class="bi bi-pencil-square me-1"></i><?= h(__t('workflow_project_edit')) ?>
             </a>
           <?php endif; ?>
           <?php if ($canCreateWorkflowTask): ?>
-            <a href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-success">
+            <a id="workflow-project-summary-add-task-btn" href="index.php?route=workflow/edit&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-success">
               <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
             </a>
           <?php endif; ?>
@@ -405,25 +415,32 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="workflowProjectSummaryActions">
               <?php if ($canCreateRequirement): ?>
                 <li>
-                  <a class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
+                  <a id="workflow-project-summary-add-requirement-btn" class="dropdown-item" href="index.php?route=workflow-requirements/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
                     <i class="bi bi-journal-plus me-2"></i><?= h(__t('workflow_requirement_create')) ?>
                   </a>
                 </li>
               <?php endif; ?>
+              <?php if ($canCreateIssue): ?>
+                <li>
+                  <a id="workflow-project-summary-add-issue-menu-btn" class="dropdown-item" href="index.php?route=workflow-issues/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
+                    <i class="bi bi-exclamation-triangle me-2"></i><?= h(__t('workflow_issue_create')) ?>
+                  </a>
+                </li>
+              <?php endif; ?>
               <li>
-                <a class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
+                <a id="workflow-project-summary-view-tasks-menu-btn" class="dropdown-item" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>">
                   <i class="bi bi-list-task me-2"></i><?= h(__t('workflow_project_view_tasks')) ?>
                 </a>
               </li>
               <li>
-                <a class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>#workflow-project-gantt">
+                <a id="workflow-project-summary-gantt-menu-btn" class="dropdown-item" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>#workflow-project-gantt">
                   <i class="bi bi-bar-chart-steps me-2"></i><?= h(__t('workflow_project_gantt_chart')) ?>
                 </a>
               </li>
               <?php if ($canDeleteProject && (int)($record['Active'] ?? 0) === 1): ?>
                 <li><hr class="dropdown-divider"></li>
                 <li>
-                  <form method="post"
+                  <form id="workflow-project-summary-delete-form" method="post"
                         action="index.php?route=workflow-projects/delete"
                         class="m-0"
                         data-confirm-message="<?= h(__t('workflow_project_delete_confirm')) ?>"
@@ -432,7 +449,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
                     <?= csrf_field() ?>
                     <input type="hidden" name="WorkflowProjectID" value="<?= $projectId ?>">
                     <input type="hidden" name="returnTo" value="index.php?route=workflow-projects/list">
-                    <button type="submit" class="dropdown-item text-danger">
+                    <button id="workflow-project-summary-delete-btn" type="submit" class="dropdown-item text-danger">
                       <i class="bi bi-trash me-2"></i><?= h(__t('delete')) ?>
                     </button>
                   </form>
@@ -509,7 +526,43 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
         </div>
       </div>
 
-      <div class="row g-3 mb-4">
+      <ul class="nav nav-tabs flex-nowrap overflow-auto mb-3" id="WorkflowProjectSummaryTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="WorkflowProjectOverviewTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectOverviewTab" aria-controls="WorkflowProjectOverviewTab" aria-selected="true">
+            <i class="bi bi-speedometer2 me-1"></i><?= h(__t('workflow_project_tab_overview')) ?>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowProjectIssuesTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectIssuesTab" aria-controls="WorkflowProjectIssuesTab" aria-selected="false">
+            <i class="bi bi-exclamation-triangle me-1"></i><?= h(__t('workflow_project_issues')) ?>
+            <?php if ($workflowIssuesInstalled && $openProjectIssues !== []): ?>
+              <span class="badge text-bg-light border ms-1"><?= count($openProjectIssues) ?></span>
+            <?php endif; ?>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowProjectLinkedWorkTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectLinkedWorkTab" aria-controls="WorkflowProjectLinkedWorkTab" aria-selected="false">
+            <i class="bi bi-link-45deg me-1"></i><?= h(__t('workflow_project_linked_work')) ?>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowProjectScheduleTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectScheduleTab" aria-controls="WorkflowProjectScheduleTab" aria-selected="false">
+            <i class="bi bi-bar-chart-steps me-1"></i><?= h(__t('workflow_project_tab_schedule')) ?>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="WorkflowProjectTasksTabButton" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#WorkflowProjectTasksTab" aria-controls="WorkflowProjectTasksTab" aria-selected="false">
+            <i class="bi bi-list-task me-1"></i><?= h(__t('workflow_project_tasks')) ?>
+            <?php if ($openTasks > 0): ?>
+              <span class="badge text-bg-light border ms-1"><?= $openTasks ?></span>
+            <?php endif; ?>
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="WorkflowProjectSummaryTabContent">
+        <div class="tab-pane fade show active" id="WorkflowProjectOverviewTab" role="tabpanel" aria-labelledby="WorkflowProjectOverviewTabButton" tabindex="0">
+          <div class="row g-3 mb-4">
         <div class="col-12 col-lg-4">
           <h2 class="h6"><?= h(__t('workflow_project_health')) ?></h2>
           <div class="list-group list-group-flush border rounded">
@@ -544,6 +597,115 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
         </div>
       </div>
 
+        </div>
+
+        <div class="tab-pane fade" id="WorkflowProjectIssuesTab" role="tabpanel" aria-labelledby="WorkflowProjectIssuesTabButton" tabindex="0">
+      <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+          <div>
+            <h2 class="h6 mb-0"><?= h(__t('workflow_project_issues')) ?></h2>
+            <div class="text-muted small"><?= h(__t('workflow_project_issues_help')) ?></div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <?php if ($workflowIssuesInstalled): ?>
+              <span class="badge text-bg-light border">
+                <?= count($openProjectIssues) ?> <?= h(__t('workflow_project_open_issues')) ?>
+              </span>
+              <?php if ($criticalOpenProjectIssues !== []): ?>
+                <span class="badge text-bg-danger">
+                  <?= count($criticalOpenProjectIssues) ?> <?= h($issueLabel($issueSeverityOptions, 'CRITICAL')) ?>
+                </span>
+              <?php endif; ?>
+            <?php endif; ?>
+            <a id="workflow-project-summary-view-issues-btn" href="index.php?route=workflow-issues/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-list-ul me-1"></i><?= h(__t('workflow_project_view_issues')) ?>
+            </a>
+            <?php if ($canCreateIssue): ?>
+              <a id="workflow-project-summary-add-issue-btn" href="index.php?route=workflow-issues/form&workflowProjectID=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-exclamation-triangle me-1"></i><?= h(__t('workflow_issue_create')) ?>
+              </a>
+            <?php endif; ?>
+          </div>
+        </div>
+
+        <?php if (!$workflowIssuesInstalled): ?>
+          <div class="alert alert-warning py-2">
+            <?= h(__t('workflow_issue_tables_missing', ['script' => 'backend-php/config/sql/create_workflow_projects.sql'])) ?>
+          </div>
+        <?php elseif ($projectIssues === []): ?>
+          <div class="text-muted small border rounded p-3"><?= h(__t('workflow_project_no_issues')) ?></div>
+        <?php else: ?>
+          <div class="table-responsive border rounded">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th><?= h(__t('workflow_issue')) ?></th>
+                  <th><?= h(__t('workflow_requirement')) ?></th>
+                  <th><?= h(__t('workflow_issue_severity')) ?></th>
+                  <th><?= h(__t('status')) ?></th>
+                  <th><?= h(__t('workflow_issue_owner')) ?></th>
+                  <th><?= h(__t('workflow_issue_due_date')) ?></th>
+                  <th class="text-end"><?= h(__t('workflow_project_tasks')) ?></th>
+                  <th class="text-end"><?= h(__t('actions')) ?></th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($projectIssues as $issue): ?>
+                  <?php
+                    $issueId = (int)($issue['WorkflowIssueID'] ?? 0);
+                    $issueTitle = trim((string)($issue['IssueTitle'] ?? ''));
+                    $issueCode = trim((string)($issue['IssueCode'] ?? ''));
+                    $issueStatus = strtoupper(trim((string)($issue['IssueStatusCode'] ?? '')));
+                    $issueSeverity = strtoupper(trim((string)($issue['SeverityCode'] ?? '')));
+                    $issueUrl = 'index.php?route=workflow-issues/form&id=' . $issueId . '&returnTo=' . $workflowProjectSummaryReturnParam;
+                  ?>
+                  <tr>
+                    <td>
+                      <a class="fw-semibold" href="<?= h($issueUrl) ?>">
+                        <?= h($issueTitle !== '' ? $issueTitle : __t('workflow_issue')) ?>
+                      </a>
+                      <?php if ($issueCode !== ''): ?>
+                        <div class="text-muted small"><?= h($issueCode) ?></div>
+                      <?php endif; ?>
+                    </td>
+                    <td>
+                      <?php if (!empty($issue['WorkflowRequirementID'])): ?>
+                        <a href="index.php?route=workflow-requirements/form&id=<?= (int)$issue['WorkflowRequirementID'] ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>">
+                          <?= h((string)($issue['RequirementCode'] ?? $issue['RequirementTitle'] ?? __t('workflow_requirement'))) ?>
+                        </a>
+                      <?php else: ?>
+                        <span class="text-muted">-</span>
+                      <?php endif; ?>
+                    </td>
+                    <td><span class="badge text-bg-warning"><?= h($issueLabel($issueSeverityOptions, $issueSeverity)) ?></span></td>
+                    <td><span class="badge text-bg-primary"><?= h($issueLabel($issueStatusOptions, $issueStatus)) ?></span></td>
+                    <td><?= h((string)($issue['OwnerName'] ?? '')) ?></td>
+                    <td><?= h((string)($issue['DueDate'] ?? '')) ?></td>
+                    <td class="text-end">
+                      <?= (int)($issue['TaskCount'] ?? 0) ?>
+                      <span class="text-muted small">(<?= (int)($issue['OpenTaskCount'] ?? 0) ?> <?= h(__t('workflow_task_open')) ?>)</span>
+                    </td>
+                    <td class="text-end text-nowrap">
+                      <?php if ($canCreateWorkflowTask): ?>
+                        <a class="btn btn-sm btn-outline-success" href="<?= h($issueUrl) ?>#issue-task-create">
+                          <i class="bi bi-plus-lg me-1"></i><?= h(__t('workflow_project_task')) ?>
+                        </a>
+                      <?php endif; ?>
+                      <a class="btn btn-sm btn-outline-primary" href="<?= h($issueUrl) ?>">
+                        <?= h(__t($canEditIssue ? 'edit' : 'open')) ?>
+                      </a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
+
+        </div>
+
+        <div class="tab-pane fade" id="WorkflowProjectLinkedWorkTab" role="tabpanel" aria-labelledby="WorkflowProjectLinkedWorkTabButton" tabindex="0">
       <div class="mb-4">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
           <div>
@@ -700,6 +862,9 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
         <?php endif; ?>
       </div>
 
+        </div>
+
+        <div class="tab-pane fade" id="WorkflowProjectScheduleTab" role="tabpanel" aria-labelledby="WorkflowProjectScheduleTabButton" tabindex="0">
       <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
           <div>
@@ -710,7 +875,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
               <?= h($timelineEnd ? $timelineEnd->format('Y-m-d') : '-') ?>
             </div>
           </div>
-          <a href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>#workflow-project-gantt" class="btn btn-sm btn-outline-secondary">
+          <a id="workflow-project-summary-gantt-btn" href="index.php?route=workflow-projects/form&id=<?= $projectId ?>&returnTo=<?= $workflowProjectSummaryReturnParam ?>#workflow-project-gantt" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-bar-chart-steps me-1"></i><?= h(__t('workflow_project_gantt_chart')) ?>
           </a>
         </div>
@@ -767,6 +932,9 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
         <?php endif; ?>
       </div>
 
+        </div>
+
+        <div class="tab-pane fade" id="WorkflowProjectTasksTab" role="tabpanel" aria-labelledby="WorkflowProjectTasksTabButton" tabindex="0">
       <div class="row g-3 mb-4">
         <div class="col-12 col-lg-6">
           <h2 class="h6"><?= h(__t('workflow_project_overdue_tasks')) ?></h2>
@@ -810,7 +978,7 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
 
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
         <h2 class="h6 mb-0"><?= h(__t('workflow_project_task_overview')) ?></h2>
-        <a href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
+        <a id="workflow-project-summary-view-tasks-btn" href="index.php?route=workflow/list&workflowProjectID=<?= $projectId ?>" class="btn btn-sm btn-outline-secondary">
           <?= h(__t('workflow_project_view_tasks')) ?>
         </a>
       </div>
@@ -851,6 +1019,8 @@ $workflowProjectSummaryReturnParam = rawurlencode($workflowProjectSummaryReturnT
             <?php endif; ?>
           </tbody>
         </table>
+      </div>
+        </div>
       </div>
     </div>
   </div>
