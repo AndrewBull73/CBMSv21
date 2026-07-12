@@ -237,7 +237,6 @@ return [
             'transaction-type-segment-config/',
             'scenario-admin/',
             'report-admin/',
-            'integration-admin/',
             'strategy-config/',
             'strategy-publish/',
         ],
@@ -249,7 +248,21 @@ return [
             ['code' => 'BAWE', 'label' => 'Workflow Engine', 'route' => 'workflow-engine/list'],
             ['code' => 'FCTS', 'label' => 'Segment Rules', 'route' => 'transaction-type-segment-config/list'],
             ['code' => 'SFSM', 'label' => 'Strategy Mapping', 'route' => 'strategy-config/segment-mapping'],
-            ['code' => 'CFIS', 'label' => 'Integrations', 'route' => 'integration-admin/systems', 'requiresAdmin' => true],
+        ],
+    ],
+    [
+        'code' => 'IN',
+        'title' => 'Integrations',
+        'patterns' => [
+            'integration-admin/',
+        ],
+        'links' => [
+            ['code' => 'INDD', 'label' => 'Integration Dashboard', 'route' => 'integration-admin/dashboard', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'INSY', 'label' => 'Systems', 'route' => 'integration-admin/systems', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'INIF', 'label' => 'Interfaces', 'route' => 'integration-admin/interfaces', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'INCW', 'label' => 'Code Crosswalks', 'route' => 'integration-admin/crosswalks', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'INAR', 'label' => 'Actuals Review', 'route' => 'integration-admin/actuals-review', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'INRH', 'label' => 'Run History', 'route' => 'integration-admin/runs', 'perms' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         ],
     ],
     [
@@ -325,9 +338,12 @@ return [
             'screen-tests-admin/',
         ],
         'links' => [
-            ['code' => 'TSSC', 'label' => __t('screen_tests_title'), 'route' => 'screen-tests/scenarios', 'requiresTesting' => true],
-            ['code' => 'TSSR', 'label' => __t('screen_tests_results_title'), 'route' => 'screen-tests/summary', 'requiresTesting' => true],
-            ['code' => 'CFTS', 'label' => 'Test Catalogue', 'route' => 'screen-tests-admin/scenarios', 'requiresTesting' => true, 'requiresAdmin' => true],
+            ['code' => 'TSMY', 'label' => 'My Test Scripts', 'route' => 'screen-tests/my-scripts', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'TSSC', 'label' => 'All Test Scripts', 'route' => 'screen-tests/scenarios', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'TSSR', 'label' => __t('screen_tests_results_title'), 'route' => 'screen-tests/summary', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'TSSU', 'label' => 'Testing Summary', 'route' => 'screen-tests-admin/summary', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'TSSA', 'label' => 'Assign Test Scripts', 'route' => 'screen-tests-admin/assignments', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+            ['code' => 'CFTS', 'label' => 'Test Catalogue', 'route' => 'screen-tests-admin/scenarios', 'requiresTesting' => true, 'perms' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         ],
     ],
 ];

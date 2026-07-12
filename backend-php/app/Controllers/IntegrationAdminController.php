@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\IntegrationAdminModel;
+use App\Services\Integrations\MockFmisApiService;
 use App\Shared\SessionHelper;
 
 require_once __DIR__ . '/../../shared/csrf.php';
@@ -11,7 +12,28 @@ require_once __DIR__ . '/../../shared/csrf.php';
 final class IntegrationAdminController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['INTEGRATION_VIEW', 'INTEGRATION_ADMIN', 'INTEGRATION_RUN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveSystem' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-system' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveInterface' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-interface' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'crosswalks' => ['auth' => true, 'permsAny' => ['INTEGRATION_VIEW', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveCrosswalk' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-crosswalk' => ['auth' => true, 'permsAny' => ['INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'runTestExport' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'run-test-export' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'dispatchTestExport' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'dispatch-test-export' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'actualsReview' => ['auth' => true, 'permsAny' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'actuals-review' => ['auth' => true, 'permsAny' => ['INTEGRATION_VIEW', 'INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'validateActualsImport' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'validate-actuals-import' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'rejectActualsImport' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'reject-actuals-import' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'checkActualsPostability' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'check-actuals-postability' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'checkActualsPostabilityBatch' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'check-actuals-postability-batch' => ['auth' => true, 'permsAny' => ['INTEGRATION_RUN', 'INTEGRATION_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     private IntegrationAdminModel $model;
@@ -24,6 +46,22 @@ final class IntegrationAdminController extends BaseController
         require_once __DIR__ . '/../Models/IntegrationAdminModel.php';
 
         $this->model = new IntegrationAdminModel($conn);
+    }
+
+    public function dashboard(): void
+    {
+        $foundationInstalled = $this->model->supportsIntegrationFoundation();
+        $recentRuns = $foundationInstalled ? $this->model->listRuns([]) : [];
+        $recentRuns = array_slice($recentRuns, 0, 10);
+
+        $this->render('integrations/Dashboard', [
+            'title' => 'Integration Dashboard',
+            'foundationInstalled' => $foundationInstalled,
+            'installScriptPath' => $this->installScriptPath(),
+            'summary' => $foundationInstalled ? $this->model->dashboardSummary() : [],
+            'readinessSummary' => $foundationInstalled ? $this->model->listInterfaceReadinessSummary() : [],
+            'recentRuns' => $recentRuns,
+        ]);
     }
 
     public function systems(): void
@@ -218,6 +256,73 @@ final class IntegrationAdminController extends BaseController
         }
     }
 
+    public function crosswalks(): void
+    {
+        $filters = [
+            'q' => trim((string) ($_GET['q'] ?? '')),
+            'system_id' => trim((string) ($_GET['system_id'] ?? '')),
+            'interface_id' => trim((string) ($_GET['interface_id'] ?? '')),
+            'mapping_type' => trim((string) ($_GET['mapping_type'] ?? '')),
+            'active' => trim((string) ($_GET['active'] ?? '1')),
+        ];
+
+        $foundationInstalled = $this->model->supportsIntegrationFoundation();
+        $mappingInstalled = $foundationInstalled && $this->model->supportsIntegrationMappings();
+
+        $this->render('integrations/Crosswalks', [
+            'title' => 'Integration Code Crosswalks',
+            'foundationInstalled' => $foundationInstalled,
+            'mappingInstalled' => $mappingInstalled,
+            'installScriptPath' => 'backend-php/config/sql/create_integration_mapping_crosswalks.sql',
+            'filters' => $filters,
+            'rows' => $mappingInstalled ? $this->model->listCodeCrosswalks($filters) : [],
+            'systemOptions' => $foundationInstalled ? $this->model->listSystemOptions(false) : [],
+            'interfaceOptions' => $foundationInstalled ? $this->model->listInterfaceOptions(false) : [],
+            'mappingTypeOptions' => $this->crosswalkMappingTypeOptions(),
+        ]);
+    }
+
+    public function saveCrosswalk(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/crosswalks');
+            return;
+        }
+
+        $data = [
+            'IntegrationCodeCrosswalkID' => (int) ($_POST['IntegrationCodeCrosswalkID'] ?? 0),
+            'IntegrationSystemID' => (int) ($_POST['IntegrationSystemID'] ?? 0),
+            'IntegrationInterfaceID' => trim((string) ($_POST['IntegrationInterfaceID'] ?? '')),
+            'MappingTypeCode' => trim((string) ($_POST['MappingTypeCode'] ?? '')),
+            'ExternalCode' => trim((string) ($_POST['ExternalCode'] ?? '')),
+            'ExternalDescription' => trim((string) ($_POST['ExternalDescription'] ?? '')),
+            'CbmsCode' => trim((string) ($_POST['CbmsCode'] ?? '')),
+            'CbmsDescription' => trim((string) ($_POST['CbmsDescription'] ?? '')),
+            'FiscalYearID' => trim((string) ($_POST['FiscalYearID'] ?? '')),
+            'VersionID' => trim((string) ($_POST['VersionID'] ?? '')),
+            'EffectiveFrom' => trim((string) ($_POST['EffectiveFrom'] ?? '')),
+            'EffectiveTo' => trim((string) ($_POST['EffectiveTo'] ?? '')),
+            'ActiveFlag' => isset($_POST['ActiveFlag']) ? 1 : 0,
+            'Notes' => trim((string) ($_POST['Notes'] ?? '')),
+        ];
+
+        try {
+            $this->validateCrosswalkPayload($data);
+            $this->model->saveCodeCrosswalk($data, (int) SessionHelper::get('auth.user_id', 0));
+            $this->flashSuccess('Integration code crosswalk saved.');
+        } catch (\Throwable $e) {
+            $this->flashError('Integration code crosswalk save failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=integration-admin/crosswalks');
+    }
+
     public function runs(): void
     {
         $filters = [
@@ -241,6 +346,150 @@ final class IntegrationAdminController extends BaseController
         ]);
     }
 
+    public function actualsReview(): void
+    {
+        $filters = [
+            'run_id' => trim((string) ($_GET['run_id'] ?? '')),
+            'status' => trim((string) ($_GET['status'] ?? '')),
+            'fiscal_year' => trim((string) ($_GET['fiscal_year'] ?? '')),
+            'version' => trim((string) ($_GET['version'] ?? '')),
+            'period' => trim((string) ($_GET['period'] ?? '')),
+            'scope' => trim((string) ($_GET['scope'] ?? '')),
+            'q' => trim((string) ($_GET['q'] ?? '')),
+        ];
+
+        $foundationInstalled = $this->model->supportsIntegrationFoundation();
+        $stagingInstalled = $foundationInstalled && $this->model->supportsActualsImportStaging();
+
+        $this->render('integrations/ActualsReview', [
+            'title' => 'Actuals Import Review',
+            'foundationInstalled' => $foundationInstalled,
+            'stagingInstalled' => $stagingInstalled,
+            'installScriptPath' => 'backend-php/config/sql/create_integration_actuals_import_staging.sql',
+            'filters' => $filters,
+            'rows' => $stagingInstalled ? $this->model->listActualsImportStaging($filters) : [],
+            'summary' => $stagingInstalled ? $this->model->actualsImportStagingSummary() : [],
+            'statusOptions' => $this->actualsStagingStatusOptions(),
+        ]);
+    }
+
+    public function validateActualsImport(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/actuals-review');
+            return;
+        }
+
+        try {
+            $result = $this->model->validateActualsImportStagingRow(
+                (int) ($_POST['id'] ?? 0),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            if (($result['status'] ?? '') === 'validated') {
+                $this->flashSuccess('Actuals import row validated.');
+            } else {
+                $this->flashError('Actuals import row rejected: ' . (string) ($result['message'] ?? 'Validation failed.'));
+            }
+        } catch (\Throwable $e) {
+            $this->flashError('Actuals import validation failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $this->actualsReviewReturnUrl());
+    }
+
+    public function rejectActualsImport(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/actuals-review');
+            return;
+        }
+
+        try {
+            $this->model->rejectActualsImportStagingRow(
+                (int) ($_POST['id'] ?? 0),
+                trim((string) ($_POST['message'] ?? '')),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            $this->flashSuccess('Actuals import row rejected.');
+        } catch (\Throwable $e) {
+            $this->flashError('Actuals import rejection failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $this->actualsReviewReturnUrl());
+    }
+
+    public function checkActualsPostability(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/actuals-review');
+            return;
+        }
+
+        try {
+            $result = $this->model->checkActualsImportPostabilityRow(
+                (int) ($_POST['id'] ?? 0),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            if (($result['code'] ?? '') === 'ready_to_post') {
+                $this->flashSuccess('Actuals import row is ready to post once a posting target is configured.');
+            } else {
+                $this->flashError('Actuals import row is not ready to post: ' . (string) ($result['message'] ?? 'Postability check failed.'));
+            }
+        } catch (\Throwable $e) {
+            $this->flashError('Actuals postability check failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $this->actualsReviewReturnUrl());
+    }
+
+    public function checkActualsPostabilityBatch(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/actuals-review');
+            return;
+        }
+
+        try {
+            $result = $this->model->checkActualsImportPostabilityForFilters(
+                $this->actualsReviewFiltersFromPost(),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            $this->flashSuccess(
+                'Postability checked: ' . (int) ($result['checked'] ?? 0)
+                . ' row(s), ' . (int) ($result['ready'] ?? 0)
+                . ' ready, ' . (int) ($result['blocked'] ?? 0) . ' blocked.'
+            );
+        } catch (\Throwable $e) {
+            $this->flashError('Batch postability check failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $this->actualsReviewReturnUrl());
+    }
+
     public function runDetail(): void
     {
         $runId = (int) ($_GET['id'] ?? 0);
@@ -261,6 +510,7 @@ final class IntegrationAdminController extends BaseController
             'responsePayload' => $responsePayload,
             'requestPayloadPretty' => $requestPayload !== [] ? $this->jsonEncode($requestPayload, true) : '',
             'responsePayloadPretty' => $responsePayload !== [] ? $this->jsonEncode($responsePayload, true) : '',
+            'actualsStagingRows' => $this->model->listActualsImportStagingForRun($runId),
         ]);
     }
 
@@ -303,6 +553,7 @@ final class IntegrationAdminController extends BaseController
             'mappingConfig' => $mappingConfig,
             'formData' => $defaults,
             'previewResult' => null,
+            'dispatchResult' => null,
             'recentRuns' => $this->model->listRecentRunsForInterface($interfaceId, 10),
             'outputProfileOptions' => $this->availableOutputProfiles($interface, $mappingConfig),
         ]);
@@ -352,7 +603,7 @@ final class IntegrationAdminController extends BaseController
                 'FiscalYearID' => $formData['FiscalYearID'] !== '' ? (int) $formData['FiscalYearID'] : null,
                 'VersionID' => $formData['VersionID'] !== '' ? (int) $formData['VersionID'] : null,
                 'DataObjectCode' => $formData['DataObjectCode'] !== '' ? $formData['DataObjectCode'] : null,
-                'SummaryText' => 'Manual test export preview started.',
+                'SummaryText' => 'Manual test export preview started. No external dispatch will be performed.',
                 'RequestPayloadJson' => $this->jsonEncode([
                     'mode' => 'manual_test_export_preview',
                     'context' => $preview['context'],
@@ -392,7 +643,7 @@ final class IntegrationAdminController extends BaseController
                     'RecordsReceived' => 0,
                     'RecordsProcessed' => 0,
                     'RecordsFailed' => 1,
-                    'SummaryText' => 'Manual test export preview failed.',
+                    'SummaryText' => 'Manual test export preview failed before any external dispatch.',
                     'ErrorText' => $e->getMessage(),
                     'ResponsePayloadJson' => $this->jsonEncode([
                         'mode' => 'manual_test_export_preview',
@@ -422,6 +673,163 @@ final class IntegrationAdminController extends BaseController
             'mappingConfig' => $mappingConfig,
             'formData' => $formData,
             'previewResult' => $previewResult,
+            'dispatchResult' => null,
+            'recentRuns' => $this->model->listRecentRunsForInterface($interfaceId, 10),
+            'outputProfileOptions' => $this->availableOutputProfiles($interface, $mappingConfig),
+        ]);
+    }
+
+    public function dispatchTestExport(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo __t('method_not_allowed');
+            return;
+        }
+        if (!csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            $this->flashError(__t('security_check_failed'));
+            header('Location: index.php?route=integration-admin/interfaces');
+            return;
+        }
+
+        $interfaceId = (int) ($_POST['IntegrationInterfaceID'] ?? 0);
+        $interface = $this->model->getInterfaceDefinition($interfaceId);
+        if ($interface === null) {
+            $this->flashError('Integration interface not found.');
+            header('Location: index.php?route=integration-admin/interfaces');
+            return;
+        }
+
+        require_once __DIR__ . '/../Services/Integrations/MockFmisApiService.php';
+
+        $mappingConfig = $this->decodeMappingConfig((string) ($interface['MappingConfigJson'] ?? ''));
+        $formData = [
+            'FiscalYearID' => trim((string) ($_POST['FiscalYearID'] ?? '')),
+            'VersionID' => trim((string) ($_POST['VersionID'] ?? '')),
+            'DataObjectCode' => trim((string) ($_POST['DataObjectCode'] ?? '')),
+            'PreviewLimit' => trim((string) ($_POST['PreviewLimit'] ?? '')),
+            'OutputProfileCode' => trim((string) ($_POST['OutputProfileCode'] ?? '')),
+        ];
+
+        $previewResult = null;
+        $dispatchResult = null;
+        $runId = 0;
+
+        try {
+            $preview = $this->prepareTestExportPreview($interface, $mappingConfig, $formData, true);
+            $payload = $preview['payload'];
+            $isActualsInterface = $this->isActualsInterface($interface);
+            $dispatchTarget = $isActualsInterface ? 'mock-fmis/actuals-import' : 'mock-fmis/budget-export';
+            $runId = $this->model->startRun([
+                'IntegrationInterfaceID' => $interfaceId,
+                'RunStatusCode' => 'running',
+                'TriggerSourceCode' => 'mock_api_dispatch',
+                'TriggeredByUserID' => (int) SessionHelper::get('auth.user_id', 0),
+                'FiscalYearID' => $formData['FiscalYearID'] !== '' ? (int) $formData['FiscalYearID'] : null,
+                'VersionID' => $formData['VersionID'] !== '' ? (int) $formData['VersionID'] : null,
+                'DataObjectCode' => $formData['DataObjectCode'] !== '' ? $formData['DataObjectCode'] : null,
+                'SummaryText' => 'Dispatch to local Mock FMIS API started.',
+                'RequestPayloadJson' => $this->jsonEncode([
+                    'dispatch_target' => $dispatchTarget,
+                    'transport' => 'local_controller',
+                    'payload' => $payload,
+                ]),
+            ]);
+
+            $mockApi = new MockFmisApiService();
+            $mockResponse = $isActualsInterface
+                ? $mockApi->acceptActualsImport($payload)
+                : $mockApi->acceptBudgetExport($payload);
+            $status = ($mockResponse['ok'] ?? false) ? 'success' : (($mockResponse['partial'] ?? false) ? 'warning' : 'failed');
+            $stagedCount = 0;
+            if ($isActualsInterface && in_array($status, ['success', 'warning'], true)) {
+                $stagedCount = $this->model->stageActualsImportRows(
+                    $runId,
+                    is_array($mockResponse['accepted_records'] ?? null) ? $mockResponse['accepted_records'] : [],
+                    (string) ($mockResponse['correlation_id'] ?? ''),
+                    (int) SessionHelper::get('auth.user_id', 0)
+                );
+            }
+            $summary = 'Mock FMIS API ' . (string) ($mockResponse['status'] ?? 'response')
+                . ': accepted ' . (int) ($mockResponse['accepted_count'] ?? 0)
+                . ' of ' . (int) ($mockResponse['record_count'] ?? 0)
+                . ' record(s).';
+            if ($stagedCount > 0) {
+                $summary .= ' Staged ' . $stagedCount . ' actuals import row(s).';
+            }
+
+            $this->model->completeRun($runId, [
+                'RunStatusCode' => $status,
+                'RecordsReceived' => (int) ($mockResponse['record_count'] ?? 0),
+                'RecordsProcessed' => (int) ($mockResponse['accepted_count'] ?? 0),
+                'RecordsCreated' => $stagedCount > 0 ? $stagedCount : null,
+                'RecordsSkipped' => 0,
+                'RecordsFailed' => (int) ($mockResponse['failed_count'] ?? 0),
+                'SummaryText' => $summary,
+                'ErrorText' => $status === 'failed' ? $this->jsonEncode(['messages' => $mockResponse['messages'] ?? []]) : null,
+                'ResponsePayloadJson' => $this->jsonEncode($mockResponse),
+            ]);
+
+            $previewResult = [
+                'run_id' => $runId,
+                'status' => $status,
+                'summary' => $preview['summary'],
+                'preview_limit' => $preview['preview_limit'],
+                'source_row_count' => $preview['source_row_count'],
+                'mapped_record_count' => $preview['mapped_record_count'],
+                'truncated' => $preview['truncated'],
+                'resolved_scope_codes' => $preview['resolved_scope_codes'],
+                'selected_profile' => $preview['selected_profile'],
+                'payload_json' => $this->jsonEncode($payload, true),
+                'source_rows' => array_slice($preview['source_rows'], 0, 25),
+                'mapped_records' => array_slice($preview['mapped_records'], 0, 25),
+            ];
+            $dispatchResult = [
+                'run_id' => $runId,
+                'status' => $status,
+                'summary' => $summary,
+                'response_json' => $this->jsonEncode($mockResponse, true),
+                'correlation_id' => (string) ($mockResponse['correlation_id'] ?? ''),
+                'accepted_count' => (int) ($mockResponse['accepted_count'] ?? 0),
+                'failed_count' => (int) ($mockResponse['failed_count'] ?? 0),
+                'record_count' => (int) ($mockResponse['record_count'] ?? 0),
+            ];
+        } catch (\Throwable $e) {
+            if ($runId > 0) {
+                $this->model->completeRun($runId, [
+                    'RunStatusCode' => 'failed',
+                    'RecordsReceived' => 0,
+                    'RecordsProcessed' => 0,
+                    'RecordsFailed' => 1,
+                    'SummaryText' => 'Dispatch to local Mock FMIS API failed.',
+                    'ErrorText' => $e->getMessage(),
+                    'ResponsePayloadJson' => $this->jsonEncode([
+                        'mock' => true,
+                        'ok' => false,
+                        'error' => $e->getMessage(),
+                    ]),
+                ]);
+            }
+
+            $dispatchResult = [
+                'run_id' => $runId,
+                'status' => 'failed',
+                'summary' => $e->getMessage(),
+                'response_json' => '',
+                'correlation_id' => '',
+                'accepted_count' => 0,
+                'failed_count' => 1,
+                'record_count' => 0,
+            ];
+        }
+
+        $this->render('integrations/TestExport', [
+            'title' => 'Test Export Runner',
+            'interface' => $interface,
+            'mappingConfig' => $mappingConfig,
+            'formData' => $formData,
+            'previewResult' => $previewResult,
+            'dispatchResult' => $dispatchResult,
             'recentRuns' => $this->model->listRecentRunsForInterface($interfaceId, 10),
             'outputProfileOptions' => $this->availableOutputProfiles($interface, $mappingConfig),
         ]);
@@ -585,6 +993,13 @@ final class IntegrationAdminController extends BaseController
         }
     }
 
+    private function isActualsInterface(array $interface): bool
+    {
+        $code = strtoupper((string) ($interface['InterfaceCode'] ?? ''));
+        $entity = strtoupper((string) ($interface['EntityCode'] ?? ''));
+        return str_contains($code, 'ACTUAL') || str_contains($entity, 'ACTUAL');
+    }
+
     private function validateInterfacePayload(array $data): void
     {
         if ($data['InterfaceCode'] === '') {
@@ -647,6 +1062,35 @@ final class IntegrationAdminController extends BaseController
         }
     }
 
+    private function validateCrosswalkPayload(array $data): void
+    {
+        if ((int) ($data['IntegrationSystemID'] ?? 0) <= 0) {
+            throw new \RuntimeException('Integration system is required.');
+        }
+        $mappingType = trim((string) ($data['MappingTypeCode'] ?? ''));
+        if ($mappingType === '' || !array_key_exists($mappingType, $this->crosswalkMappingTypeOptions())) {
+            throw new \RuntimeException('Mapping type is invalid.');
+        }
+        if (trim((string) ($data['ExternalCode'] ?? '')) === '') {
+            throw new \RuntimeException('External code is required.');
+        }
+        if (trim((string) ($data['CbmsCode'] ?? '')) === '') {
+            throw new \RuntimeException('CBMS code is required.');
+        }
+        foreach (['FiscalYearID', 'VersionID'] as $field) {
+            $value = trim((string) ($data[$field] ?? ''));
+            if ($value !== '' && !ctype_digit($value)) {
+                throw new \RuntimeException($field . ' must be a whole number.');
+            }
+        }
+        foreach (['EffectiveFrom', 'EffectiveTo'] as $field) {
+            $value = trim((string) ($data[$field] ?? ''));
+            if ($value !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                throw new \RuntimeException($field . ' must be a date in YYYY-MM-DD format.');
+            }
+        }
+    }
+
     private function assertValidJson(string $json, string $label): void
     {
         json_decode($json, true);
@@ -689,6 +1133,22 @@ final class IntegrationAdminController extends BaseController
             'inbound' => 'Inbound Import',
             'outbound' => 'Outbound Export',
             'bidirectional' => 'Bidirectional',
+        ];
+    }
+
+    private function crosswalkMappingTypeOptions(): array
+    {
+        return [
+            'data_object' => 'Data Object / Scope',
+            'program' => 'Program',
+            'economic' => 'Economic',
+            'fund' => 'Fund',
+            'department' => 'Department',
+            'supplier' => 'Supplier',
+            'employee' => 'Employee',
+            'currency' => 'Currency',
+            'period' => 'Period',
+            'custom' => 'Custom',
         ];
     }
 
@@ -735,6 +1195,49 @@ final class IntegrationAdminController extends BaseController
             'warning' => 'Warning',
             'failed' => 'Failed',
             'cancelled' => 'Cancelled',
+        ];
+    }
+
+    private function actualsStagingStatusOptions(): array
+    {
+        return [
+            '' => 'All statuses',
+            'staged' => 'Staged',
+            'validated' => 'Validated',
+            'rejected' => 'Rejected',
+            'posted' => 'Posted',
+        ];
+    }
+
+    private function actualsReviewReturnUrl(): string
+    {
+        $query = [
+            'route' => 'integration-admin/actuals-review',
+            'run_id' => trim((string) ($_POST['return_run_id'] ?? '')),
+            'status' => trim((string) ($_POST['return_status'] ?? '')),
+            'fiscal_year' => trim((string) ($_POST['return_fiscal_year'] ?? '')),
+            'version' => trim((string) ($_POST['return_version'] ?? '')),
+            'period' => trim((string) ($_POST['return_period'] ?? '')),
+            'scope' => trim((string) ($_POST['return_scope'] ?? '')),
+            'q' => trim((string) ($_POST['return_q'] ?? '')),
+        ];
+
+        return 'index.php?' . http_build_query(array_filter(
+            $query,
+            static fn (string $value): bool => $value !== ''
+        ));
+    }
+
+    private function actualsReviewFiltersFromPost(): array
+    {
+        return [
+            'run_id' => trim((string) ($_POST['return_run_id'] ?? '')),
+            'status' => trim((string) ($_POST['return_status'] ?? '')),
+            'fiscal_year' => trim((string) ($_POST['return_fiscal_year'] ?? '')),
+            'version' => trim((string) ($_POST['return_version'] ?? '')),
+            'period' => trim((string) ($_POST['return_period'] ?? '')),
+            'scope' => trim((string) ($_POST['return_scope'] ?? '')),
+            'q' => trim((string) ($_POST['return_q'] ?? '')),
         ];
     }
 
@@ -841,8 +1344,8 @@ final class IntegrationAdminController extends BaseController
         $truncated = !$fullExport && count($sourceRows) >= $previewLimit;
         $status = $mappedRecords === [] ? 'warning' : ($truncated ? 'warning' : 'success');
         $summary = $mappedRecords === []
-            ? 'Preview returned no source rows for the selected context. No external endpoint call was made.'
-            : (($fullExport ? 'Full export built ' : 'Preview built ') . count($mappedRecords) . ' export record(s). No external endpoint call was made.')
+            ? 'Preview returned no source rows for the selected context. Mock run only: no external endpoint call was made.'
+            : (($fullExport ? 'Full export built ' : 'Preview built ') . count($mappedRecords) . ' export record(s). Mock run only: no external endpoint call was made.')
                 . ($truncated ? ' The preview reached the configured row limit.' : '');
         if ($resolvedScopeCodes !== [] && count($resolvedScopeCodes) > 1) {
             $summary .= ' Parent scope expansion matched ' . count($resolvedScopeCodes) . ' scope code(s).';

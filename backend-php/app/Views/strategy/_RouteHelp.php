@@ -910,6 +910,86 @@ $map = [
         ],
         'note' => 'This is an administration view. Learners should use Training Dashboard for their own assigned work.',
     ],
+    'screen-tests/my-scripts' => [
+        'title' => 'My Test Scripts Help',
+        'purpose' => 'Use this screen as your assigned testing work queue, grouped by module and showing the latest status for each script.',
+        'points' => [
+            'Use Start, Resume, or Retest to open the runner for the assigned script.',
+            'Check assignment due dates and latest result badges before starting work.',
+            'Use View Results when you need to review prior attempts, evidence, or defect references.',
+        ],
+        'note' => 'If an expected script is missing, ask a Testing Scripts administrator to confirm your assignment.',
+    ],
+    'screen-tests/scenarios' => [
+        'title' => 'All Test Scripts Help',
+        'purpose' => 'Use this screen to browse the full test-script catalogue or switch back to scripts assigned to you.',
+        'points' => [
+            'Filter by module, latest result, or search text to find scripts quickly.',
+            'Use Assigned to Me for normal tester work and All Scripts for catalogue review or ad hoc testing.',
+            'Open View Results before retesting if you need the prior outcome or evidence.',
+        ],
+        'note' => 'Unassigned runs can create run history, but only matching active assignments count toward assignment completion.',
+    ],
+    'screen-tests/runner' => [
+        'title' => 'Test Script Runner Help',
+        'purpose' => 'Use this screen to follow one script, open the target screen, attach evidence, and save the result.',
+        'points' => [
+            'Review prerequisites, test data, steps, and expected results before starting.',
+            'Use screenshot capture or file upload when a result needs supporting evidence.',
+            'Save Passed, Failed, or Blocked with clear outcome notes and a defect reference where needed.',
+        ],
+        'note' => 'Saving a result updates the matching assignment and returns the tester to My Test Scripts.',
+    ],
+    'screen-tests/summary' => [
+        'title' => 'Test Results Help',
+        'purpose' => 'Use this screen to review assignment progress and saved test-run history.',
+        'points' => [
+            'Filter by script, module, result, verification status, or search text.',
+            'Use Assignment Progress to see current assigned work and latest result by user/script.',
+            'Use Run History to inspect prior attempts, evidence, context, notes, and defect references.',
+        ],
+        'note' => 'Run history is retained when assignments are reset for retesting.',
+    ],
+    'screen-tests-admin/summary' => [
+        'title' => 'Testing Summary Help',
+        'purpose' => 'Use this coordinator dashboard to monitor assigned testing progress by module, tester, and script.',
+        'points' => [
+            'Review total, not-started, in-progress, completed, and overdue assignment counts.',
+            'Use progress by module and progress by tester to identify gaps before sign-off.',
+            'Use Reset when a tester needs to rerun a completed or in-progress assignment.',
+        ],
+        'note' => 'Resetting an assignment keeps prior run history and evidence intact.',
+    ],
+    'screen-tests-admin/assignments' => [
+        'title' => 'Assign Test Scripts Help',
+        'purpose' => 'Use this screen to assign specific scripts or whole module groups to users and workflow user groups.',
+        'points' => [
+            'Select individual users, workflow user groups, or both.',
+            'Assign a module group, specific scripts, or a combination of both.',
+            'Use due date and notes to communicate timing and testing instructions.',
+        ],
+        'note' => 'Duplicate open assignments are skipped automatically.',
+    ],
+    'screen-tests-admin/scenarios' => [
+        'title' => 'Test Script Catalogue Help',
+        'purpose' => 'Use this screen to review and maintain the master list of test scripts.',
+        'points' => [
+            'Filter by module or search text to locate catalogue entries.',
+            'Create or edit custom scripts and maintain wording, steps, expected results, and reset guidance.',
+            'Keep script codes stable because assignments and result history depend on them.',
+        ],
+        'note' => 'Use shared module names so testing coverage aligns with training, menus, and permissions.',
+    ],
+    'screen-tests-admin/scenario-form' => [
+        'title' => 'Test Script Form Help',
+        'purpose' => 'Use this form to create or update one test script definition.',
+        'points' => [
+            'Maintain stable script metadata such as scenario ID, module, screen family, and target route.',
+            'Write clear prerequisites, test data, ordered steps, and expected visible/data outcomes.',
+            'Document verification queries and reset guidance where they are useful for coordinators.',
+        ],
+        'note' => 'Avoid sensitive credentials or destructive SQL in tester-facing script content.',
+    ],
     'training-admin/scenarios' => [
         'title' => 'Training Catalogue Help',
         'purpose' => 'Use this screen to maintain the master list of guided training scenarios that drive the training overlay and runner.',

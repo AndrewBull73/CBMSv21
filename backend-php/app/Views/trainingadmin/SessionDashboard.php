@@ -44,6 +44,14 @@ foreach ($participants as $participant) {
 $screenHeader = [
     'title' => 'Training Session Dashboard',
     'icon' => 'bi-speedometer2',
+    'actions' => [
+        [
+            'label' => 'Session Summary',
+            'url' => 'index.php?route=training-admin/session-summary',
+            'class' => 'btn btn-sm btn-outline-secondary',
+            'icon' => 'bi-calendar2-week',
+        ],
+    ],
 ];
 
 $statusBadge = static function (string $status): string {

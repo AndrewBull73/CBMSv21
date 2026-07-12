@@ -18,7 +18,9 @@ GO
     It does not delete scenarios, paths, certifications, questions, users, or roles.
 */
 
-DECLARE @UserID INT = NULL;
+
+
+DECLARE @UserID INT = 2;
 DECLARE @Username NVARCHAR(100) = N'InitConfig';
 
 IF OBJECT_ID(N'dbo.tblUsers', N'U') IS NULL

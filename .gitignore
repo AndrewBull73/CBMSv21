@@ -42,6 +42,15 @@ desktop.ini
 # Local caches
 /.vs/
 /.codex/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+intelligence-engine/.venv/
 
 # Local database files
 /database/

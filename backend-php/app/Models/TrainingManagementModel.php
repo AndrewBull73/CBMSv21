@@ -572,6 +572,263 @@ final class TrainingManagementModel
         ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
+    public function listSessionSummary(array $filters = []): array
+    {
+        if (!$this->supportsManagementTables()) {
+            return [];
+        }
+
+        $hasEvidenceTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingEvidence', N'U')")->fetchColumn() ?: 0) > 0;
+        $hasProgressTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingProgress', N'U')")->fetchColumn() ?: 0) > 0;
+        $activeParticipantCountSql = $hasProgressTable
+            ? "(
+                    SELECT COUNT(DISTINCT su.UserID)
+                    FROM dbo.tblTrainingSessionUsers su
+                    INNER JOIN dbo.tblTrainingProgress tp
+                        ON tp.UserID = su.UserID
+                    WHERE su.TrainingSessionID = s.TrainingSessionID
+                      AND tp.Status IN (N'active', N'in_progress')
+                      AND (
+                            (s.ScenarioCode IS NOT NULL AND tp.ScenarioCode = s.ScenarioCode)
+                            OR (
+                                s.ScenarioCode IS NULL
+                                AND s.PathCode IS NOT NULL
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM dbo.tblTrainingPathScenarios ps
+                                    WHERE ps.PathCode = s.PathCode
+                                      AND ps.ScenarioCode = tp.ScenarioCode
+                                )
+                            )
+                      )
+                )"
+            : "CAST(0 AS INT)";
+        $evidenceCountSql = $hasEvidenceTable
+            ? "(
+                    SELECT COUNT(*)
+                    FROM dbo.tblTrainingEvidence e
+                    WHERE e.TrainingSessionID = s.TrainingSessionID
+                )"
+            : "CAST(0 AS INT)";
+        $lastEvidenceAtSql = $hasEvidenceTable
+            ? "(
+                    SELECT MAX(e.EvidenceAt)
+                    FROM dbo.tblTrainingEvidence e
+                    WHERE e.TrainingSessionID = s.TrainingSessionID
+                )"
+            : "CAST(NULL AS DATETIME2(0))";
+
+        $where = [];
+        $params = [];
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '') {
+            $where[] = 's.Status = :status';
+            $params[':status'] = $status;
+        }
+        $pathCode = trim((string) ($filters['path_code'] ?? ''));
+        if ($pathCode !== '') {
+            $where[] = 's.PathCode = :path_code';
+            $params[':path_code'] = $pathCode;
+        }
+        $search = trim((string) ($filters['q'] ?? ''));
+        if ($search !== '') {
+            $where[] = "(
+                s.SessionCode LIKE :q_session_code
+                OR s.SessionTitle LIKE :q_session_title
+                OR p.PathTitle LIKE :q_path_title
+                OR sc.ScenarioTitle LIKE :q_scenario_title
+                OR i.Username LIKE :q_instructor_username
+                OR i.DisplayName LIKE :q_instructor_display
+            )";
+            $likeSearch = '%' . $search . '%';
+            $params[':q_session_code'] = $likeSearch;
+            $params[':q_session_title'] = $likeSearch;
+            $params[':q_path_title'] = $likeSearch;
+            $params[':q_scenario_title'] = $likeSearch;
+            $params[':q_instructor_username'] = $likeSearch;
+            $params[':q_instructor_display'] = $likeSearch;
+        }
+
+        $whereSql = $where === [] ? '1=1' : implode(' AND ', $where);
+
+        return $this->prepareFetchAll("
+            SELECT
+                s.TrainingSessionID,
+                s.SessionCode,
+                s.SessionTitle,
+                s.InstructorUserID,
+                s.PathCode,
+                s.ScenarioCode,
+                s.ScheduledAt,
+                s.Status,
+                s.Notes,
+                InstructorName = COALESCE(NULLIF(i.DisplayName, N''), i.Username),
+                p.PathTitle,
+                sc.ScenarioTitle,
+                PathScenarioCount = (
+                    SELECT COUNT(*)
+                    FROM dbo.tblTrainingPathScenarios ps
+                    WHERE ps.PathCode = s.PathCode
+                ),
+                ParticipantCount = (
+                    SELECT COUNT(*)
+                    FROM dbo.tblTrainingSessionUsers su
+                    WHERE su.TrainingSessionID = s.TrainingSessionID
+                ),
+                CompletedParticipantCount = (
+                    SELECT COUNT(*)
+                    FROM dbo.tblTrainingSessionUsers su
+                    WHERE su.TrainingSessionID = s.TrainingSessionID
+                      AND su.Status = N'completed'
+                ),
+                ActiveParticipantCount = {$activeParticipantCountSql},
+                EvidenceCount = {$evidenceCountSql},
+                LastEvidenceAt = {$lastEvidenceAtSql}
+            FROM dbo.tblTrainingSessions s
+            LEFT JOIN dbo.tblUsers i ON i.UserID = s.InstructorUserID
+            LEFT JOIN dbo.tblTrainingPaths p ON p.PathCode = s.PathCode
+            LEFT JOIN dbo.tblTrainingScenarios sc ON sc.ScenarioCode = s.ScenarioCode
+            WHERE {$whereSql}
+            ORDER BY ISNULL(s.ScheduledAt, SYSUTCDATETIME()) DESC, s.TrainingSessionID DESC
+        ", $params);
+    }
+
+    public function listSessionSummaryParticipants(array $filters = []): array
+    {
+        if (!$this->supportsManagementTables()) {
+            return [];
+        }
+
+        $hasEvidenceTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingEvidence', N'U')")->fetchColumn() ?: 0) > 0;
+        $hasProgressTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingProgress', N'U')")->fetchColumn() ?: 0) > 0;
+        $progressColumnsSql = $hasProgressTable
+            ? "
+                ProgressScenarioCode = tp.ScenarioCode,
+                ProgressStatus = tp.Status,
+                CurrentStep = tp.CurrentStep,
+                TotalSteps = tp.TotalSteps,
+                AttemptNo = tp.AttemptNo,
+                LastActivityAt = tp.LastActivityAt,
+                CompletedScenarioCount = CASE
+                    WHEN s.PathCode IS NULL THEN CASE WHEN tp.Status = N'completed' THEN 1 ELSE 0 END
+                    ELSE (
+                        SELECT COUNT(*)
+                        FROM dbo.tblTrainingProgress done
+                        INNER JOIN dbo.tblTrainingPathScenarios ps
+                            ON ps.ScenarioCode = done.ScenarioCode
+                        WHERE done.UserID = su.UserID
+                          AND ps.PathCode = s.PathCode
+                          AND done.Status = N'completed'
+                    )
+                END"
+            : "
+                ProgressScenarioCode = CAST(NULL AS NVARCHAR(100)),
+                ProgressStatus = CAST(NULL AS NVARCHAR(50)),
+                CurrentStep = CAST(NULL AS INT),
+                TotalSteps = CAST(NULL AS INT),
+                AttemptNo = CAST(NULL AS INT),
+                LastActivityAt = CAST(NULL AS DATETIME2(0)),
+                CompletedScenarioCount = CAST(0 AS INT)";
+        $progressApplySql = $hasProgressTable
+            ? "
+            OUTER APPLY (
+                SELECT TOP 1 p.*
+                FROM dbo.tblTrainingProgress p
+                WHERE p.UserID = su.UserID
+                  AND (
+                        (s.ScenarioCode IS NOT NULL AND p.ScenarioCode = s.ScenarioCode)
+                        OR (
+                            s.ScenarioCode IS NULL
+                            AND s.PathCode IS NOT NULL
+                            AND EXISTS (
+                                SELECT 1
+                                FROM dbo.tblTrainingPathScenarios ps
+                                WHERE ps.PathCode = s.PathCode
+                                  AND ps.ScenarioCode = p.ScenarioCode
+                            )
+                        )
+                  )
+                ORDER BY p.LastActivityAt DESC
+            ) tp"
+            : "";
+        $evidenceCountSql = $hasEvidenceTable
+            ? "(
+                    SELECT COUNT(*)
+                    FROM dbo.tblTrainingEvidence e
+                    WHERE e.TrainingSessionID = s.TrainingSessionID
+                      AND e.UserID = su.UserID
+                )"
+            : "CAST(0 AS INT)";
+
+        $where = [];
+        $params = [];
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '') {
+            $where[] = 's.Status = :status';
+            $params[':status'] = $status;
+        }
+        $pathCode = trim((string) ($filters['path_code'] ?? ''));
+        if ($pathCode !== '') {
+            $where[] = 's.PathCode = :path_code';
+            $params[':path_code'] = $pathCode;
+        }
+        $search = trim((string) ($filters['q'] ?? ''));
+        if ($search !== '') {
+            $where[] = "(
+                s.SessionCode LIKE :q_session_code
+                OR s.SessionTitle LIKE :q_session_title
+                OR p.PathTitle LIKE :q_path_title
+                OR sc.ScenarioTitle LIKE :q_scenario_title
+                OR i.Username LIKE :q_instructor_username
+                OR i.DisplayName LIKE :q_instructor_display
+                OR u.Username LIKE :q_learner_username
+                OR u.DisplayName LIKE :q_learner_display
+                OR u.Email LIKE :q_learner_email
+            )";
+            $likeSearch = '%' . $search . '%';
+            $params[':q_session_code'] = $likeSearch;
+            $params[':q_session_title'] = $likeSearch;
+            $params[':q_path_title'] = $likeSearch;
+            $params[':q_scenario_title'] = $likeSearch;
+            $params[':q_instructor_username'] = $likeSearch;
+            $params[':q_instructor_display'] = $likeSearch;
+            $params[':q_learner_username'] = $likeSearch;
+            $params[':q_learner_display'] = $likeSearch;
+            $params[':q_learner_email'] = $likeSearch;
+        }
+
+        $whereSql = $where === [] ? '1=1' : implode(' AND ', $where);
+
+        return $this->prepareFetchAll("
+            SELECT
+                s.TrainingSessionID,
+                su.TrainingSessionUserID,
+                su.UserID,
+                LearnerName = COALESCE(NULLIF(u.DisplayName, N''), u.Username, N'User #' + CONVERT(NVARCHAR(20), su.UserID)),
+                u.Username,
+                u.Email,
+                SessionUserStatus = su.Status,
+                su.JoinedAt,
+                su.CompletedAt AS SessionCompletedAt,
+                {$progressColumnsSql},
+                EvidenceCount = {$evidenceCountSql}
+            FROM dbo.tblTrainingSessions s
+            INNER JOIN dbo.tblTrainingSessionUsers su
+                ON su.TrainingSessionID = s.TrainingSessionID
+            LEFT JOIN dbo.tblUsers u
+                ON u.UserID = su.UserID
+            LEFT JOIN dbo.tblUsers i
+                ON i.UserID = s.InstructorUserID
+            LEFT JOIN dbo.tblTrainingPaths p
+                ON p.PathCode = s.PathCode
+            LEFT JOIN dbo.tblTrainingScenarios sc
+                ON sc.ScenarioCode = s.ScenarioCode
+            {$progressApplySql}
+            WHERE {$whereSql}
+            ORDER BY s.TrainingSessionID DESC, COALESCE(NULLIF(u.DisplayName, N''), u.Username), su.UserID
+        ", $params);
+    }
+
     public function saveSession(array $data, int $updatedBy): int
     {
         $sessionCode = trim((string) ($data['SessionCode'] ?? ''));
@@ -719,6 +976,281 @@ final class TrainingManagementModel
         return [
             'session' => $session + ['PathScenarioCount' => $pathScenarioCount],
             'participants' => $participants,
+        ];
+    }
+
+    public function resetSessionTrainingProgress(int $sessionId, int $updatedBy): array
+    {
+        if ($sessionId <= 0 || !$this->supportsManagementTables()) {
+            throw new \RuntimeException('Training management tables are not installed.');
+        }
+
+        $sessionStmt = $this->db->prepare("
+            SELECT TrainingSessionID, PathCode, ScenarioCode
+            FROM dbo.tblTrainingSessions
+            WHERE TrainingSessionID = :session_id
+        ");
+        $sessionStmt->execute([':session_id' => $sessionId]);
+        $session = $sessionStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($session === null) {
+            throw new \RuntimeException('Training session was not found.');
+        }
+
+        $participantStmt = $this->db->prepare("
+            SELECT UserID
+            FROM dbo.tblTrainingSessionUsers
+            WHERE TrainingSessionID = :session_id
+        ");
+        $participantStmt->execute([':session_id' => $sessionId]);
+        $participantUserIds = array_values(array_unique(array_map(
+            static fn(array $row): int => (int) ($row['UserID'] ?? 0),
+            $participantStmt->fetchAll(PDO::FETCH_ASSOC) ?: []
+        )));
+        $participantUserIds = array_values(array_filter($participantUserIds, static fn(int $userId): bool => $userId > 0));
+
+        $scenarioCode = trim((string) ($session['ScenarioCode'] ?? ''));
+        $pathCode = trim((string) ($session['PathCode'] ?? ''));
+        $scenarioCodes = [];
+        if ($scenarioCode !== '') {
+            $scenarioCodes[] = $scenarioCode;
+        } elseif ($pathCode !== '') {
+            foreach ($this->listPathScenarios($pathCode) as $pathScenario) {
+                $pathScenarioCode = trim((string) ($pathScenario['ScenarioCode'] ?? ''));
+                if ($pathScenarioCode !== '') {
+                    $scenarioCodes[] = $pathScenarioCode;
+                }
+            }
+        }
+        $scenarioCodes = array_values(array_unique($scenarioCodes));
+
+        if ($scenarioCodes === []) {
+            throw new \RuntimeException('The selected session does not have a scenario or course/path scenario scope to reset.');
+        }
+
+        $progressDeleted = 0;
+        $participantsReset = 0;
+        $assignmentsReset = 0;
+        $auditUserId = $updatedBy > 0 ? $updatedBy : null;
+
+        $this->db->beginTransaction();
+        try {
+            if ($participantUserIds !== []) {
+                $participantsStmt = $this->db->prepare("
+                    UPDATE dbo.tblTrainingSessionUsers
+                    SET Status = N'assigned',
+                        CompletedAt = NULL,
+                        UpdatedBy = :updated_by,
+                        UpdatedDate = SYSUTCDATETIME()
+                    WHERE TrainingSessionID = :session_id
+                ");
+                $participantsStmt->execute([
+                    ':updated_by' => $auditUserId,
+                    ':session_id' => $sessionId,
+                ]);
+                $participantsReset = (int) $participantsStmt->rowCount();
+
+                $assignmentSql = "
+                    UPDATE a
+                    SET Status = N'assigned',
+                        CompletedAt = NULL,
+                        UpdatedBy = :assignment_updated_by,
+                        UpdatedDate = SYSUTCDATETIME()
+                    FROM dbo.tblTrainingAssignments a
+                    INNER JOIN dbo.tblTrainingSessionUsers su
+                        ON su.UserID = a.UserID
+                    WHERE su.TrainingSessionID = :assignment_session_id
+                      AND a.Notes = :assignment_note
+                      AND a.Status IN (N'assigned', N'active', N'in_progress', N'completed')
+                ";
+                $assignmentParams = [
+                    ':assignment_updated_by' => $auditUserId,
+                    ':assignment_session_id' => $sessionId,
+                    ':assignment_note' => 'Created from instructor-led session #' . $sessionId . '.',
+                ];
+                if ($scenarioCode !== '') {
+                    $assignmentSql .= " AND a.ScenarioCode = :assignment_scenario_code";
+                    $assignmentParams[':assignment_scenario_code'] = $scenarioCode;
+                } else {
+                    $assignmentSql .= " AND a.PathCode = :assignment_path_code AND a.ScenarioCode IS NULL";
+                    $assignmentParams[':assignment_path_code'] = $pathCode;
+                }
+                $assignmentStmt = $this->db->prepare($assignmentSql);
+                $assignmentStmt->execute($assignmentParams);
+                $assignmentsReset = (int) $assignmentStmt->rowCount();
+
+                $hasProgressTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingProgress', N'U')")->fetchColumn() ?: 0) > 0;
+                if ($hasProgressTable) {
+                    $scenarioPlaceholders = [];
+                    $progressParams = [
+                        ':progress_session_id' => $sessionId,
+                    ];
+                    foreach ($scenarioCodes as $index => $resetScenarioCode) {
+                        $placeholder = ':progress_scenario_' . $index;
+                        $scenarioPlaceholders[] = $placeholder;
+                        $progressParams[$placeholder] = $resetScenarioCode;
+                    }
+
+                    $progressStmt = $this->db->prepare("
+                        DELETE tp
+                        FROM dbo.tblTrainingProgress tp
+                        INNER JOIN dbo.tblTrainingSessionUsers su
+                            ON su.UserID = tp.UserID
+                        WHERE su.TrainingSessionID = :progress_session_id
+                          AND tp.ScenarioCode IN (" . implode(', ', $scenarioPlaceholders) . ")
+                    ");
+                    $progressStmt->execute($progressParams);
+                    $progressDeleted = (int) $progressStmt->rowCount();
+                }
+            }
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return [
+            'participants' => count($participantUserIds),
+            'participant_rows_reset' => $participantsReset,
+            'scenario_count' => count($scenarioCodes),
+            'progress_rows_deleted' => $progressDeleted,
+            'assignments_reset' => $assignmentsReset,
+        ];
+    }
+
+    public function resetSessionParticipantTrainingProgress(int $sessionId, int $userId, int $updatedBy): array
+    {
+        if ($sessionId <= 0 || $userId <= 0 || !$this->supportsManagementTables()) {
+            throw new \RuntimeException('Training management tables are not installed.');
+        }
+
+        $sessionStmt = $this->db->prepare("
+            SELECT TrainingSessionID, PathCode, ScenarioCode
+            FROM dbo.tblTrainingSessions
+            WHERE TrainingSessionID = :session_id
+        ");
+        $sessionStmt->execute([':session_id' => $sessionId]);
+        $session = $sessionStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($session === null) {
+            throw new \RuntimeException('Training session was not found.');
+        }
+
+        $participantStmt = $this->db->prepare("
+            SELECT 1
+            FROM dbo.tblTrainingSessionUsers
+            WHERE TrainingSessionID = :participant_session_id
+              AND UserID = :participant_user_id
+        ");
+        $participantStmt->execute([
+            ':participant_session_id' => $sessionId,
+            ':participant_user_id' => $userId,
+        ]);
+        if (!$participantStmt->fetchColumn()) {
+            throw new \RuntimeException('The selected user is not a participant in this training session.');
+        }
+
+        $scenarioCode = trim((string) ($session['ScenarioCode'] ?? ''));
+        $pathCode = trim((string) ($session['PathCode'] ?? ''));
+        $scenarioCodes = [];
+        if ($scenarioCode !== '') {
+            $scenarioCodes[] = $scenarioCode;
+        } elseif ($pathCode !== '') {
+            foreach ($this->listPathScenarios($pathCode) as $pathScenario) {
+                $pathScenarioCode = trim((string) ($pathScenario['ScenarioCode'] ?? ''));
+                if ($pathScenarioCode !== '') {
+                    $scenarioCodes[] = $pathScenarioCode;
+                }
+            }
+        }
+        $scenarioCodes = array_values(array_unique($scenarioCodes));
+
+        if ($scenarioCodes === []) {
+            throw new \RuntimeException('The selected session does not have a scenario or course/path scenario scope to reset.');
+        }
+
+        $progressDeleted = 0;
+        $participantsReset = 0;
+        $assignmentsReset = 0;
+        $auditUserId = $updatedBy > 0 ? $updatedBy : null;
+
+        $this->db->beginTransaction();
+        try {
+            $participantsStmt = $this->db->prepare("
+                UPDATE dbo.tblTrainingSessionUsers
+                SET Status = N'assigned',
+                    CompletedAt = NULL,
+                    UpdatedBy = :updated_by,
+                    UpdatedDate = SYSUTCDATETIME()
+                WHERE TrainingSessionID = :session_id
+                  AND UserID = :user_id
+            ");
+            $participantsStmt->execute([
+                ':updated_by' => $auditUserId,
+                ':session_id' => $sessionId,
+                ':user_id' => $userId,
+            ]);
+            $participantsReset = (int) $participantsStmt->rowCount();
+
+            $assignmentSql = "
+                UPDATE a
+                SET Status = N'assigned',
+                    CompletedAt = NULL,
+                    UpdatedBy = :assignment_updated_by,
+                    UpdatedDate = SYSUTCDATETIME()
+                FROM dbo.tblTrainingAssignments a
+                WHERE a.UserID = :assignment_user_id
+                  AND a.Notes = :assignment_note
+                  AND a.Status IN (N'assigned', N'active', N'in_progress', N'completed')
+            ";
+            $assignmentParams = [
+                ':assignment_updated_by' => $auditUserId,
+                ':assignment_user_id' => $userId,
+                ':assignment_note' => 'Created from instructor-led session #' . $sessionId . '.',
+            ];
+            if ($scenarioCode !== '') {
+                $assignmentSql .= " AND a.ScenarioCode = :assignment_scenario_code";
+                $assignmentParams[':assignment_scenario_code'] = $scenarioCode;
+            } else {
+                $assignmentSql .= " AND a.PathCode = :assignment_path_code AND a.ScenarioCode IS NULL";
+                $assignmentParams[':assignment_path_code'] = $pathCode;
+            }
+            $assignmentStmt = $this->db->prepare($assignmentSql);
+            $assignmentStmt->execute($assignmentParams);
+            $assignmentsReset = (int) $assignmentStmt->rowCount();
+
+            $hasProgressTable = (int) ($this->db->query("SELECT OBJECT_ID(N'dbo.tblTrainingProgress', N'U')")->fetchColumn() ?: 0) > 0;
+            if ($hasProgressTable) {
+                $scenarioPlaceholders = [];
+                $progressParams = [
+                    ':progress_user_id' => $userId,
+                ];
+                foreach ($scenarioCodes as $index => $resetScenarioCode) {
+                    $placeholder = ':progress_scenario_' . $index;
+                    $scenarioPlaceholders[] = $placeholder;
+                    $progressParams[$placeholder] = $resetScenarioCode;
+                }
+
+                $progressStmt = $this->db->prepare("
+                    DELETE FROM dbo.tblTrainingProgress
+                    WHERE UserID = :progress_user_id
+                      AND ScenarioCode IN (" . implode(', ', $scenarioPlaceholders) . ")
+                ");
+                $progressStmt->execute($progressParams);
+                $progressDeleted = (int) $progressStmt->rowCount();
+            }
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return [
+            'participants' => 1,
+            'participant_rows_reset' => $participantsReset,
+            'scenario_count' => count($scenarioCodes),
+            'progress_rows_deleted' => $progressDeleted,
+            'assignments_reset' => $assignmentsReset,
         ];
     }
 

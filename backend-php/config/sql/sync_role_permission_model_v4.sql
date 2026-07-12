@@ -1,4 +1,4 @@
-USE [CBMSv2];
+
 GO
 
 SET NOCOUNT ON;

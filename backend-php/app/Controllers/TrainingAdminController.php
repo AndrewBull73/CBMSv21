@@ -43,8 +43,14 @@ final class TrainingAdminController extends BaseController
         'cancelAssignment' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'save-session' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'saveSession' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'session-summary' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'sessionSummary' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'session-dashboard' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'sessionDashboard' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'reset-session' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'resetSession' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'reset-session-participant' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'resetSessionParticipant' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'save-evidence' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'saveEvidence' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
         'validation' => ['auth' => true, 'permsAny' => ['TRAINING_ADMIN', 'TRAINING_CONFIG', 'ADMIN_ALL', 'SYSADMIN']],
@@ -682,6 +688,120 @@ final class TrainingAdminController extends BaseController
             header('Location: index.php?route=training-admin/operations' . ($returnPathCode !== '' ? '&path_code=' . urlencode($returnPathCode) : '') . '#training-ops-sessions');
             return;
         }
+    }
+
+    public function sessionSummary(): void
+    {
+        $this->ensureTrainingEnabled();
+
+        $management = $this->managementModel();
+        $managementInstalled = $management->supportsManagementTables();
+        $filters = [
+            'status' => trim((string) ($_GET['status'] ?? '')),
+            'path_code' => trim((string) ($_GET['path_code'] ?? '')),
+            'q' => trim((string) ($_GET['q'] ?? '')),
+        ];
+
+        $this->render('trainingadmin/SessionSummary', [
+            'title' => 'Training Session Summary',
+            'managementInstalled' => $managementInstalled,
+            'filters' => $filters,
+            'paths' => $managementInstalled ? $management->listPaths() : [],
+            'sessions' => $managementInstalled ? $management->listSessionSummary($filters) : [],
+            'participants' => $managementInstalled ? $management->listSessionSummaryParticipants($filters) : [],
+        ]);
+    }
+
+    public function resetSession(): void
+    {
+        $this->ensureTrainingEnabled();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        $sessionId = (int) ($_POST['TrainingSessionID'] ?? 0);
+        $returnParams = ['route' => 'training-admin/session-summary'];
+        foreach (['status', 'path_code', 'q'] as $key) {
+            $value = trim((string) ($_POST['return_' . $key] ?? ''));
+            if ($value !== '') {
+                $returnParams[$key] = $value;
+            }
+        }
+        $returnUrl = 'index.php?' . http_build_query($returnParams);
+
+        try {
+            $this->ensureManagementInstalled();
+            $result = $this->managementModel()->resetSessionTrainingProgress($sessionId, (int) SessionHelper::get('auth.user_id', 0));
+            $participants = (int) ($result['participants'] ?? 0);
+            $scenarios = (int) ($result['scenario_count'] ?? 0);
+            $progressRows = (int) ($result['progress_rows_deleted'] ?? 0);
+            $assignments = (int) ($result['assignments_reset'] ?? 0);
+            $this->flashSuccess(
+                'Training session reset. ' .
+                $participants . ' participant' . ($participants === 1 ? '' : 's') .
+                ' reset across ' . $scenarios . ' scenario' . ($scenarios === 1 ? '' : 's') .
+                '. ' . $progressRows . ' progress row' . ($progressRows === 1 ? '' : 's') .
+                ' cleared and ' . $assignments . ' dashboard assignment' . ($assignments === 1 ? '' : 's') . ' reset.'
+            );
+        } catch (\Throwable $e) {
+            if (function_exists('app_log')) {
+                app_log('Training session reset failed', [
+                    'error' => $e->getMessage(),
+                    'session_id' => $sessionId,
+                ], 'error');
+            }
+            $this->flashError('Training session reset failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $returnUrl);
+    }
+
+    public function resetSessionParticipant(): void
+    {
+        $this->ensureTrainingEnabled();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        $sessionId = (int) ($_POST['TrainingSessionID'] ?? 0);
+        $userId = (int) ($_POST['UserID'] ?? 0);
+        $returnParams = ['route' => 'training-admin/session-summary'];
+        foreach (['status', 'path_code', 'q'] as $key) {
+            $value = trim((string) ($_POST['return_' . $key] ?? ''));
+            if ($value !== '') {
+                $returnParams[$key] = $value;
+            }
+        }
+        $returnUrl = 'index.php?' . http_build_query($returnParams);
+
+        try {
+            $this->ensureManagementInstalled();
+            $result = $this->managementModel()->resetSessionParticipantTrainingProgress($sessionId, $userId, (int) SessionHelper::get('auth.user_id', 0));
+            $scenarios = (int) ($result['scenario_count'] ?? 0);
+            $progressRows = (int) ($result['progress_rows_deleted'] ?? 0);
+            $assignments = (int) ($result['assignments_reset'] ?? 0);
+            $this->flashSuccess(
+                'Training reset for selected participant. ' .
+                $scenarios . ' scenario' . ($scenarios === 1 ? '' : 's') .
+                ' reset, ' . $progressRows . ' progress row' . ($progressRows === 1 ? '' : 's') .
+                ' cleared, and ' . $assignments . ' dashboard assignment' . ($assignments === 1 ? '' : 's') . ' reset.'
+            );
+        } catch (\Throwable $e) {
+            if (function_exists('app_log')) {
+                app_log('Training session participant reset failed', [
+                    'error' => $e->getMessage(),
+                    'session_id' => $sessionId,
+                    'user_id' => $userId,
+                ], 'error');
+            }
+            $this->flashError('Participant reset failed: ' . $e->getMessage());
+        }
+
+        header('Location: ' . $returnUrl);
     }
 
     public function sessionDashboard(): void

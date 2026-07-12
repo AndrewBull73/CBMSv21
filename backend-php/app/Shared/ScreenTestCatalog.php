@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Shared;
 
+require_once __DIR__ . '/CbmsModuleCatalog.php';
+
 final class ScreenTestCatalog
 {
     public const CBMS_CONTEXT_SMOKE = 'cbms_context_smoke';
@@ -319,7 +321,7 @@ final class ScreenTestCatalog
         $id = trim((string) ($scenario['id'] ?? ''));
         $normalized = [
             'id' => $id,
-            'module' => trim((string) ($scenario['module'] ?? '')),
+            'module' => CbmsModuleCatalog::canonicalize((string) ($scenario['module'] ?? '')),
             'screen_family' => trim((string) ($scenario['screen_family'] ?? '')),
             'title' => trim((string) ($scenario['title'] ?? $id)),
             'description' => trim((string) ($scenario['description'] ?? '')),

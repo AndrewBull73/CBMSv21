@@ -19,6 +19,7 @@ $recentRuns = is_array($recentRuns ?? null) ? $recentRuns : [];
 $resolvedVerificationQueries = is_array($resolvedVerificationQueries ?? null) ? $resolvedVerificationQueries : [];
 $storageReady = (bool) ($storageReady ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
+$createAttachmentTableScript = (string) ($createAttachmentTableScript ?? 'backend-php/config/sql/create_tblScreenTestRunAttachment.sql');
 $targetUrl = (string) ($targetUrl ?? 'index.php?route=home/index');
 $captureEnabled = (bool) ($captureEnabled ?? false);
 $captureStorageReady = (bool) ($captureStorageReady ?? false);
@@ -62,6 +63,18 @@ if ($startedAt !== '') {
       <div class="alert alert-info">
         <?= __t('screen_tests_runner_intro') ?>
       </div>
+
+      <?php
+      $testingQuickLinksMode = 'tester';
+      require __DIR__ . '/_TestingQuickLinks.php';
+      $testingHelperTitle = 'How to run this test script';
+      $testingHelperItems = [
+          'Review the prerequisites, test data, steps, and expected results before opening the target screen.',
+          'Use <strong>Start Test Run</strong> before recording a result so the attempt number, duration, and evidence are captured correctly.',
+          'Save <strong>Passed</strong>, <strong>Failed</strong>, or <strong>Blocked</strong> with clear notes and a defect reference when follow-up is needed.',
+      ];
+      require __DIR__ . '/_TestingHelperInstructions.php';
+      ?>
 
       <div class="d-flex gap-2 flex-wrap mb-3">
         <a href="index.php?route=screen-tests/scenarios" class="btn btn-sm btn-outline-secondary">
@@ -309,7 +322,8 @@ if ($startedAt !== '') {
                     </div>
                   </div>
                 <?php elseif ($captureEnabled && !$captureStorageReady): ?>
-                  <div class="small text-muted mb-3"><?= __t('screen_tests_capture_storage_required') ?></div>
+                  <div class="small text-muted mb-1"><?= __t('screen_tests_capture_storage_required') ?></div>
+                  <div class="small text-muted mb-3"><?= __t('screen_tests_attachment_storage_help', ['script' => $createAttachmentTableScript]) ?></div>
                 <?php endif; ?>
 
                 <form method="post" action="index.php?route=screen-tests/save-result">

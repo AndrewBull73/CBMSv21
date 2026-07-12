@@ -25,6 +25,8 @@ $storagePath = (string) ($storagePath ?? '');
       </div>
       <div class="d-inline-flex gap-2">
         <a href="index.php?route=screen-tests/scenarios" class="btn btn-sm btn-outline-secondary"><i class="bi bi-play-circle me-1"></i>Tester View</a>
+        <a href="index.php?route=screen-tests-admin/summary" class="btn btn-sm btn-outline-secondary"><i class="bi bi-bar-chart-line me-1"></i>Summary</a>
+        <a href="index.php?route=screen-tests-admin/assignments" class="btn btn-sm btn-outline-secondary"><i class="bi bi-person-check me-1"></i>Assign Scripts</a>
         <a href="index.php?route=screen-tests-admin/scenario-form" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Create Script</a>
       </div>
     </div>
@@ -39,6 +41,18 @@ $storagePath = (string) ($storagePath ?? '');
       <div class="alert alert-info">
         Editable overrides are stored at <code><?= h($storagePath) ?></code>. Built-in scripts remain as the fallback catalogue and can be reset to default from this screen.
       </div>
+
+      <?php
+      $testingQuickLinksMode = 'admin';
+      require __DIR__ . '/../screentests/_TestingQuickLinks.php';
+      $testingHelperTitle = 'How to maintain the test catalogue';
+      $testingHelperItems = [
+          'Use this catalogue to review built-in and custom scripts by module, screen family, target route, and step count.',
+          'Keep script IDs stable after assignments or run history exist because results are linked by script code.',
+          'Use <strong>Create Script</strong> for new coverage and <strong>Edit</strong> when wording, steps, or expected outcomes need refinement.',
+      ];
+      require __DIR__ . '/../screentests/_TestingHelperInstructions.php';
+      ?>
 
       <form method="get" action="index.php" class="row g-2 mb-3">
         <input type="hidden" name="route" value="screen-tests-admin/scenarios">

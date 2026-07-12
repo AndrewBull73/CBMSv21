@@ -643,8 +643,15 @@ $statusBadge = static function (string $status): string {
 
       <div class="card shadow-sm mb-0">
         <div class="card-header">
-          <h5 class="mb-0">Session List</h5>
-          <div class="small text-muted mt-1">Review instructor-led sessions and open the session dashboard for attendance, evidence, and trainer follow-up.</div>
+          <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+            <div>
+              <h5 class="mb-0">Session List</h5>
+              <div class="small text-muted mt-1">Review instructor-led sessions and open the session dashboard for attendance, evidence, and trainer follow-up.</div>
+            </div>
+            <a href="index.php?route=training-admin/session-summary" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-calendar2-week me-1"></i>Session Summary
+            </a>
+          </div>
         </div>
         <div class="card-body">
           <div class="table-responsive">

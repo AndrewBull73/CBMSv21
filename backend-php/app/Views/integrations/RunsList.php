@@ -108,6 +108,8 @@ $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
                       !empty($row['VersionID']) ? 'Version ' . $row['VersionID'] : '',
                       !empty($row['DataObjectCode']) ? 'Scope ' . $row['DataObjectCode'] : '',
                   ]);
+                  $isPreviewOnly = (string) ($row['TriggerSourceCode'] ?? '') === 'manual_preview';
+                  $isMockSystem = str_starts_with(strtoupper((string) ($row['SystemCode'] ?? '')), 'MOCK_');
                   ?>
                   <tr>
                     <td>
@@ -118,10 +120,16 @@ $statusOptions = is_array($statusOptions ?? null) ? $statusOptions : [];
                       <div class="fw-semibold"><?= h((string) ($row['InterfaceName'] ?? '')) ?></div>
                       <div class="small text-muted"><?= h((string) (($row['SystemCode'] ?? '') . ' / ' . ($row['InterfaceCode'] ?? ''))) ?></div>
                       <div class="small text-muted"><?= h(trim((string) (($row['DirectionCode'] ?? '') . ' ' . ($row['ModuleCode'] ?? '') . ' ' . ($row['EntityCode'] ?? '')))) ?></div>
+                      <?php if ($isMockSystem): ?>
+                        <div class="small mt-1"><span class="badge text-bg-warning">Mock system</span></div>
+                      <?php endif; ?>
                     </td>
                     <td><span class="badge <?= h($statusClass) ?>"><?= h((string) ($row['RunStatusCode'] ?? '')) ?></span></td>
                     <td>
                       <div><?= h((string) ($row['TriggerSourceCode'] ?? '')) ?></div>
+                      <?php if ($isPreviewOnly): ?>
+                        <div class="small"><span class="badge text-bg-warning">No external dispatch</span></div>
+                      <?php endif; ?>
                       <div class="small text-muted"><?= h((string) (($row['DisplayName'] ?? '') !== '' ? $row['DisplayName'] : ($row['Username'] ?? ''))) ?></div>
                     </td>
                     <td><?= h($scopeParts !== [] ? implode(' | ', $scopeParts) : 'N/A') ?></td>

@@ -19,6 +19,11 @@ final class IntegrationAdminModel
             && $this->tableExists('dbo.tblIntegrationRun');
     }
 
+    public function supportsIntegrationMappings(): bool
+    {
+        return $this->tableExists('dbo.tblIntegrationCodeCrosswalk');
+    }
+
     public function listSystems(array $filters = []): array
     {
         if (!$this->tableExists('dbo.tblIntegrationSystem')) {
@@ -62,6 +67,78 @@ final class IntegrationAdminModel
         $stmt = $this->conn->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function dashboardSummary(): array
+    {
+        $empty = [
+            'system_count' => 0,
+            'active_system_count' => 0,
+            'interface_count' => 0,
+            'active_interface_count' => 0,
+            'ready_interface_count' => 0,
+            'run_count_24h' => 0,
+            'success_run_count_24h' => 0,
+            'failed_run_count_24h' => 0,
+            'latest_run_at' => null,
+        ];
+
+        if (!$this->supportsIntegrationFoundation()) {
+            return $empty;
+        }
+
+        $systemRow = $this->conn->query("
+            SELECT
+                COUNT(1) AS SystemCount,
+                SUM(CASE WHEN ActiveFlag = 1 THEN 1 ELSE 0 END) AS ActiveSystemCount
+            FROM dbo.tblIntegrationSystem
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $interfaceRow = $this->conn->query("
+            SELECT
+                COUNT(1) AS InterfaceCount,
+                SUM(CASE WHEN ActiveFlag = 1 THEN 1 ELSE 0 END) AS ActiveInterfaceCount,
+                SUM(CASE WHEN ActiveFlag = 1 AND UPPER(ISNULL(ReadinessStatus, N'')) IN (N'READY', N'TEST_READY', N'UAT_READY', N'PRODUCTION_READY', N'APPROVED', N'LIVE') THEN 1 ELSE 0 END) AS ReadyInterfaceCount
+            FROM dbo.tblIntegrationInterface
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $runRow = $this->conn->query("
+            SELECT
+                COUNT(1) AS RunCount24h,
+                SUM(CASE WHEN RunStatusCode IN (N'success', N'completed') THEN 1 ELSE 0 END) AS SuccessRunCount24h,
+                SUM(CASE WHEN RunStatusCode IN (N'failed', N'error') THEN 1 ELSE 0 END) AS FailedRunCount24h,
+                MAX(StartedAt) AS LatestRunAt
+            FROM dbo.tblIntegrationRun
+            WHERE StartedAt >= DATEADD(HOUR, -24, SYSDATETIME())
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        return [
+            'system_count' => (int) ($systemRow['SystemCount'] ?? 0),
+            'active_system_count' => (int) ($systemRow['ActiveSystemCount'] ?? 0),
+            'interface_count' => (int) ($interfaceRow['InterfaceCount'] ?? 0),
+            'active_interface_count' => (int) ($interfaceRow['ActiveInterfaceCount'] ?? 0),
+            'ready_interface_count' => (int) ($interfaceRow['ReadyInterfaceCount'] ?? 0),
+            'run_count_24h' => (int) ($runRow['RunCount24h'] ?? 0),
+            'success_run_count_24h' => (int) ($runRow['SuccessRunCount24h'] ?? 0),
+            'failed_run_count_24h' => (int) ($runRow['FailedRunCount24h'] ?? 0),
+            'latest_run_at' => $runRow['LatestRunAt'] ?? null,
+        ];
+    }
+
+    public function listInterfaceReadinessSummary(): array
+    {
+        if (!$this->tableExists('dbo.tblIntegrationInterface')) {
+            return [];
+        }
+
+        return $this->conn->query("
+            SELECT
+                ReadinessStatus = COALESCE(NULLIF(LTRIM(RTRIM(ReadinessStatus)), N''), N'Not Set'),
+                COUNT(1) AS InterfaceCount
+            FROM dbo.tblIntegrationInterface
+            GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(ReadinessStatus)), N''), N'Not Set')
+            ORDER BY InterfaceCount DESC, ReadinessStatus ASC
+        ")->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     public function getSystem(int $id): ?array
@@ -487,6 +564,148 @@ final class IntegrationAdminModel
         return $this->conn->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
+    public function listCodeCrosswalks(array $filters = []): array
+    {
+        if (!$this->tableExists('dbo.tblIntegrationCodeCrosswalk')) {
+            return [];
+        }
+
+        $where = ['1=1'];
+        $params = [];
+        if (($filters['system_id'] ?? '') !== '') {
+            $where[] = 'cw.IntegrationSystemID = :systemId';
+            $params[':systemId'] = (int) $filters['system_id'];
+        }
+        if (($filters['interface_id'] ?? '') !== '') {
+            $where[] = 'cw.IntegrationInterfaceID = :interfaceId';
+            $params[':interfaceId'] = (int) $filters['interface_id'];
+        }
+        if (($filters['mapping_type'] ?? '') !== '') {
+            $where[] = 'cw.MappingTypeCode = :mappingType';
+            $params[':mappingType'] = trim((string) $filters['mapping_type']);
+        }
+        if (($filters['active'] ?? '') !== '') {
+            $where[] = 'cw.ActiveFlag = :active';
+            $params[':active'] = ((string) $filters['active'] === '1') ? 1 : 0;
+        }
+        if (($filters['q'] ?? '') !== '') {
+            $needle = '%' . trim((string) $filters['q']) . '%';
+            $where[] = '(
+                cw.ExternalCode LIKE :q1
+                OR cw.ExternalDescription LIKE :q2
+                OR cw.CbmsCode LIKE :q3
+                OR cw.CbmsDescription LIKE :q4
+            )';
+            $params[':q1'] = $needle;
+            $params[':q2'] = $needle;
+            $params[':q3'] = $needle;
+            $params[':q4'] = $needle;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT TOP 500
+                cw.*,
+                s.SystemCode,
+                s.SystemName,
+                i.InterfaceCode,
+                i.InterfaceName
+            FROM dbo.tblIntegrationCodeCrosswalk cw
+            INNER JOIN dbo.tblIntegrationSystem s
+                ON s.IntegrationSystemID = cw.IntegrationSystemID
+            LEFT JOIN dbo.tblIntegrationInterface i
+                ON i.IntegrationInterfaceID = cw.IntegrationInterfaceID
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY cw.MappingTypeCode ASC, s.SystemCode ASC, cw.ExternalCode ASC
+        ");
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function saveCodeCrosswalk(array $data, int $userId): int
+    {
+        $this->requireTable('dbo.tblIntegrationCodeCrosswalk');
+        $id = (int) ($data['IntegrationCodeCrosswalkID'] ?? 0);
+        $payload = [
+            ':IntegrationSystemID' => (int) ($data['IntegrationSystemID'] ?? 0),
+            ':IntegrationInterfaceID' => $this->nullableInt($data['IntegrationInterfaceID'] ?? null),
+            ':MappingTypeCode' => trim((string) ($data['MappingTypeCode'] ?? '')),
+            ':ExternalCode' => trim((string) ($data['ExternalCode'] ?? '')),
+            ':ExternalDescription' => $this->nullableString($data['ExternalDescription'] ?? null),
+            ':CbmsCode' => trim((string) ($data['CbmsCode'] ?? '')),
+            ':CbmsDescription' => $this->nullableString($data['CbmsDescription'] ?? null),
+            ':FiscalYearID' => $this->nullableInt($data['FiscalYearID'] ?? null),
+            ':VersionID' => $this->nullableInt($data['VersionID'] ?? null),
+            ':EffectiveFrom' => $this->nullableString($data['EffectiveFrom'] ?? null),
+            ':EffectiveTo' => $this->nullableString($data['EffectiveTo'] ?? null),
+            ':ActiveFlag' => ((int) ($data['ActiveFlag'] ?? 1) === 1) ? 1 : 0,
+            ':Notes' => $this->nullableString($data['Notes'] ?? null),
+            ':UserID' => $userId > 0 ? $userId : null,
+        ];
+
+        if ($id > 0) {
+            $stmt = $this->conn->prepare("
+                UPDATE dbo.tblIntegrationCodeCrosswalk
+                SET IntegrationSystemID = :IntegrationSystemID,
+                    IntegrationInterfaceID = :IntegrationInterfaceID,
+                    MappingTypeCode = :MappingTypeCode,
+                    ExternalCode = :ExternalCode,
+                    ExternalDescription = :ExternalDescription,
+                    CbmsCode = :CbmsCode,
+                    CbmsDescription = :CbmsDescription,
+                    FiscalYearID = :FiscalYearID,
+                    VersionID = :VersionID,
+                    EffectiveFrom = :EffectiveFrom,
+                    EffectiveTo = :EffectiveTo,
+                    ActiveFlag = :ActiveFlag,
+                    Notes = :Notes,
+                    UpdatedBy = :UserID,
+                    UpdatedDate = SYSUTCDATETIME()
+                WHERE IntegrationCodeCrosswalkID = :ID
+            ");
+            $stmt->execute($payload + [':ID' => $id]);
+            return $id;
+        }
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO dbo.tblIntegrationCodeCrosswalk (
+                IntegrationSystemID,
+                IntegrationInterfaceID,
+                MappingTypeCode,
+                ExternalCode,
+                ExternalDescription,
+                CbmsCode,
+                CbmsDescription,
+                FiscalYearID,
+                VersionID,
+                EffectiveFrom,
+                EffectiveTo,
+                ActiveFlag,
+                Notes,
+                CreatedBy,
+                CreatedDate
+            )
+            VALUES (
+                :IntegrationSystemID,
+                :IntegrationInterfaceID,
+                :MappingTypeCode,
+                :ExternalCode,
+                :ExternalDescription,
+                :CbmsCode,
+                :CbmsDescription,
+                :FiscalYearID,
+                :VersionID,
+                :EffectiveFrom,
+                :EffectiveTo,
+                :ActiveFlag,
+                :Notes,
+                :UserID,
+                SYSUTCDATETIME()
+            )
+        ");
+        $stmt->execute($payload);
+        return (int) $this->conn->lastInsertId();
+    }
+
     public function startRun(array $data): int
     {
         $this->requireTable('dbo.tblIntegrationRun');
@@ -797,10 +1016,690 @@ final class IntegrationAdminModel
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
+    public function supportsActualsImportStaging(): bool
+    {
+        return $this->tableExists('dbo.tblIntegrationActualsImportStaging')
+            && $this->columnExists('dbo.tblIntegrationActualsImportStaging', 'PostingReadinessCode')
+            && $this->columnExists('dbo.tblIntegrationActualsImportStaging', 'PostingReadinessMessage')
+            && $this->columnExists('dbo.tblIntegrationActualsImportStaging', 'PostingTarget');
+    }
+
+    public function stageActualsImportRows(int $runId, array $records, string $correlationId, int $userId): int
+    {
+        $this->requireTable('dbo.tblIntegrationActualsImportStaging');
+        if ($runId <= 0) {
+            throw new \RuntimeException('Integration run ID is required before staging actuals.');
+        }
+
+        $stmt = $this->conn->prepare("
+            INSERT INTO dbo.tblIntegrationActualsImportStaging (
+                IntegrationRunID,
+                TransactionReference,
+                ExternalCorrelationID,
+                FiscalYearID,
+                VersionID,
+                PeriodNo,
+                PostingDate,
+                DataObjectCode,
+                ProgramCode,
+                EconomicCode,
+                SupplierName,
+                ActualAmount,
+                CurrencyCode,
+                StagingStatusCode,
+                SourcePayloadJson,
+                CreatedBy,
+                CreatedDate
+            )
+            VALUES (
+                :IntegrationRunID,
+                :TransactionReference,
+                :ExternalCorrelationID,
+                :FiscalYearID,
+                :VersionID,
+                :PeriodNo,
+                :PostingDate,
+                :DataObjectCode,
+                :ProgramCode,
+                :EconomicCode,
+                :SupplierName,
+                :ActualAmount,
+                :CurrencyCode,
+                N'staged',
+                :SourcePayloadJson,
+                :CreatedBy,
+                SYSUTCDATETIME()
+            )
+        ");
+
+        $created = 0;
+        foreach ($records as $record) {
+            if (!is_array($record)) {
+                continue;
+            }
+
+            $reference = trim((string) ($record['transactionReference'] ?? ''));
+            if ($reference === '') {
+                continue;
+            }
+
+            $stmt->execute([
+                ':IntegrationRunID' => $runId,
+                ':TransactionReference' => $reference,
+                ':ExternalCorrelationID' => $this->nullableString($correlationId),
+                ':FiscalYearID' => $this->nullableInt($record['fiscalYear'] ?? null),
+                ':VersionID' => $this->nullableInt($record['version'] ?? null),
+                ':PeriodNo' => $this->nullableInt($record['period'] ?? null),
+                ':PostingDate' => $this->nullableString($record['postingDate'] ?? null),
+                ':DataObjectCode' => $this->nullableString($record['dataObjectCode'] ?? null),
+                ':ProgramCode' => $this->nullableString($record['programCode'] ?? null),
+                ':EconomicCode' => $this->nullableString($record['economicCode'] ?? null),
+                ':SupplierName' => $this->nullableString($record['supplierName'] ?? null),
+                ':ActualAmount' => is_numeric($record['actualAmount'] ?? null) ? (string) $record['actualAmount'] : null,
+                ':CurrencyCode' => $this->nullableString($record['currencyCode'] ?? null),
+                ':SourcePayloadJson' => json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ':CreatedBy' => $userId > 0 ? $userId : null,
+            ]);
+            $created++;
+        }
+
+        return $created;
+    }
+
+    public function listActualsImportStagingForRun(int $runId): array
+    {
+        if ($runId <= 0 || !$this->tableExists('dbo.tblIntegrationActualsImportStaging')) {
+            return [];
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT
+                IntegrationActualsImportStagingID,
+                TransactionReference,
+                ExternalCorrelationID,
+                FiscalYearID,
+                VersionID,
+                PeriodNo,
+                PostingDate,
+                DataObjectCode,
+                ProgramCode,
+                EconomicCode,
+                SupplierName,
+                ActualAmount,
+                CurrencyCode,
+                StagingStatusCode,
+                ValidationMessage,
+                PostingReadinessCode,
+                PostingReadinessMessage,
+                PostingTarget,
+                CreatedDate
+            FROM dbo.tblIntegrationActualsImportStaging
+            WHERE IntegrationRunID = :runId
+              AND ActiveFlag = 1
+            ORDER BY IntegrationActualsImportStagingID ASC
+        ");
+        $stmt->execute([':runId' => $runId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function actualsImportStagingSummary(): array
+    {
+        $empty = [
+            'total_count' => 0,
+            'staged_count' => 0,
+            'validated_count' => 0,
+            'rejected_count' => 0,
+            'posted_count' => 0,
+            'total_amount' => 0.0,
+        ];
+
+        if (!$this->tableExists('dbo.tblIntegrationActualsImportStaging')) {
+            return $empty;
+        }
+
+        $row = $this->conn->query("
+            SELECT
+                COUNT(1) AS TotalCount,
+                SUM(CASE WHEN StagingStatusCode = N'staged' THEN 1 ELSE 0 END) AS StagedCount,
+                SUM(CASE WHEN StagingStatusCode = N'validated' THEN 1 ELSE 0 END) AS ValidatedCount,
+                SUM(CASE WHEN StagingStatusCode = N'rejected' THEN 1 ELSE 0 END) AS RejectedCount,
+                SUM(CASE WHEN StagingStatusCode = N'posted' THEN 1 ELSE 0 END) AS PostedCount,
+                SUM(ISNULL(ActualAmount, 0)) AS TotalAmount
+            FROM dbo.tblIntegrationActualsImportStaging
+            WHERE ActiveFlag = 1
+        ")->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        return [
+            'total_count' => (int) ($row['TotalCount'] ?? 0),
+            'staged_count' => (int) ($row['StagedCount'] ?? 0),
+            'validated_count' => (int) ($row['ValidatedCount'] ?? 0),
+            'rejected_count' => (int) ($row['RejectedCount'] ?? 0),
+            'posted_count' => (int) ($row['PostedCount'] ?? 0),
+            'total_amount' => (float) ($row['TotalAmount'] ?? 0),
+        ];
+    }
+
+    public function listActualsImportStaging(array $filters = []): array
+    {
+        if (!$this->tableExists('dbo.tblIntegrationActualsImportStaging')) {
+            return [];
+        }
+
+        $where = ['stg.ActiveFlag = 1'];
+        $params = [];
+
+        if (($filters['run_id'] ?? '') !== '') {
+            $where[] = 'stg.IntegrationRunID = :runId';
+            $params[':runId'] = (int) $filters['run_id'];
+        }
+        if (($filters['status'] ?? '') !== '') {
+            $where[] = 'stg.StagingStatusCode = :status';
+            $params[':status'] = trim((string) $filters['status']);
+        }
+        if (($filters['fiscal_year'] ?? '') !== '') {
+            $where[] = 'stg.FiscalYearID = :fy';
+            $params[':fy'] = (int) $filters['fiscal_year'];
+        }
+        if (($filters['version'] ?? '') !== '') {
+            $where[] = 'stg.VersionID = :versionId';
+            $params[':versionId'] = (int) $filters['version'];
+        }
+        if (($filters['period'] ?? '') !== '') {
+            $where[] = 'stg.PeriodNo = :periodNo';
+            $params[':periodNo'] = (int) $filters['period'];
+        }
+        if (($filters['scope'] ?? '') !== '') {
+            $where[] = 'stg.DataObjectCode = :scope';
+            $params[':scope'] = trim((string) $filters['scope']);
+        }
+        if (($filters['q'] ?? '') !== '') {
+            $needle = '%' . trim((string) $filters['q']) . '%';
+            $where[] = '(
+                stg.TransactionReference LIKE :q1
+                OR stg.ProgramCode LIKE :q2
+                OR stg.EconomicCode LIKE :q3
+                OR stg.SupplierName LIKE :q4
+                OR stg.ExternalCorrelationID LIKE :q5
+            )';
+            $params[':q1'] = $needle;
+            $params[':q2'] = $needle;
+            $params[':q3'] = $needle;
+            $params[':q4'] = $needle;
+            $params[':q5'] = $needle;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT TOP 500
+                stg.*,
+                r.StartedAt,
+                r.RunStatusCode,
+                i.InterfaceCode,
+                i.InterfaceName,
+                s.IntegrationSystemID,
+                s.SystemCode,
+                s.SystemName
+            FROM dbo.tblIntegrationActualsImportStaging stg
+            INNER JOIN dbo.tblIntegrationRun r
+                ON r.IntegrationRunID = stg.IntegrationRunID
+            INNER JOIN dbo.tblIntegrationInterface i
+                ON i.IntegrationInterfaceID = r.IntegrationInterfaceID
+            INNER JOIN dbo.tblIntegrationSystem s
+                ON s.IntegrationSystemID = i.IntegrationSystemID
+            WHERE " . implode(' AND ', $where) . "
+            ORDER BY stg.CreatedDate DESC, stg.IntegrationActualsImportStagingID DESC
+        ");
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    public function checkActualsImportPostabilityRow(int $stagingId, int $userId): array
+    {
+        $this->requireTable('dbo.tblIntegrationActualsImportStaging');
+        $row = $this->getActualsImportStagingRow($stagingId);
+        if ($row === null) {
+            throw new \RuntimeException('Actuals staging row not found.');
+        }
+
+        $result = $this->buildActualsImportPostabilityResult($row);
+        $this->updateActualsImportPostability(
+            $stagingId,
+            $result['code'],
+            $result['message'],
+            $result['target'],
+            $userId
+        );
+
+        return $result;
+    }
+
+    public function checkActualsImportPostabilityForFilters(array $filters, int $userId): array
+    {
+        $rows = $this->listActualsImportStaging($filters);
+        $checked = 0;
+        $ready = 0;
+        $blocked = 0;
+
+        foreach ($rows as $row) {
+            $stagingId = (int) ($row['IntegrationActualsImportStagingID'] ?? 0);
+            if ($stagingId <= 0) {
+                continue;
+            }
+            $result = $this->buildActualsImportPostabilityResult($row);
+            $this->updateActualsImportPostability(
+                $stagingId,
+                $result['code'],
+                $result['message'],
+                $result['target'],
+                $userId
+            );
+            $checked++;
+            if ($result['code'] === 'ready_to_post') {
+                $ready++;
+            } else {
+                $blocked++;
+            }
+        }
+
+        return ['checked' => $checked, 'ready' => $ready, 'blocked' => $blocked];
+    }
+
+    public function validateActualsImportStagingRow(int $stagingId, int $userId): array
+    {
+        $this->requireTable('dbo.tblIntegrationActualsImportStaging');
+        $row = $this->getActualsImportStagingRow($stagingId);
+        if ($row === null) {
+            throw new \RuntimeException('Actuals staging row not found.');
+        }
+        if ((string) ($row['StagingStatusCode'] ?? '') === 'posted') {
+            throw new \RuntimeException('Posted actuals import rows cannot be revalidated.');
+        }
+
+        $issues = $this->validateActualsImportStagingPayload($row);
+        $status = $issues === [] ? 'validated' : 'rejected';
+        $message = $issues === [] ? 'Validated and ready for posting.' : implode(' ', $issues);
+        $this->updateActualsImportStagingStatus($stagingId, $status, $message, $userId);
+
+        return ['status' => $status, 'message' => $message];
+    }
+
+    public function rejectActualsImportStagingRow(int $stagingId, string $message, int $userId): void
+    {
+        $this->requireTable('dbo.tblIntegrationActualsImportStaging');
+        $row = $this->getActualsImportStagingRow($stagingId);
+        if ($row === null) {
+            throw new \RuntimeException('Actuals staging row not found.');
+        }
+        if ((string) ($row['StagingStatusCode'] ?? '') === 'posted') {
+            throw new \RuntimeException('Posted actuals import rows cannot be rejected.');
+        }
+
+        $this->updateActualsImportStagingStatus(
+            $stagingId,
+            'rejected',
+            trim($message) !== '' ? trim($message) : 'Rejected during import review.',
+            $userId
+        );
+    }
+
+    private function getActualsImportStagingRow(int $stagingId): ?array
+    {
+        if ($stagingId <= 0 || !$this->tableExists('dbo.tblIntegrationActualsImportStaging')) {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT
+                stg.*,
+                r.IntegrationInterfaceID,
+                i.IntegrationSystemID
+            FROM dbo.tblIntegrationActualsImportStaging stg
+            INNER JOIN dbo.tblIntegrationRun r
+                ON r.IntegrationRunID = stg.IntegrationRunID
+            INNER JOIN dbo.tblIntegrationInterface i
+                ON i.IntegrationInterfaceID = r.IntegrationInterfaceID
+            WHERE stg.IntegrationActualsImportStagingID = :id
+              AND stg.ActiveFlag = 1
+        ");
+        $stmt->execute([':id' => $stagingId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    private function validateActualsImportStagingPayload(array $row): array
+    {
+        $issues = [];
+        foreach ([
+            'TransactionReference' => 'Transaction reference',
+            'FiscalYearID' => 'Fiscal year',
+            'VersionID' => 'Version',
+            'PeriodNo' => 'Period',
+            'ProgramCode' => 'Program code',
+            'EconomicCode' => 'Economic code',
+            'ActualAmount' => 'Actual amount',
+        ] as $field => $label) {
+            if (!array_key_exists($field, $row) || trim((string) $row[$field]) === '') {
+                $issues[] = $label . ' is missing.';
+            }
+        }
+
+        $period = (int) ($row['PeriodNo'] ?? 0);
+        if ($period < 1 || $period > 12) {
+            $issues[] = 'Period must be between 1 and 12.';
+        }
+        if (!is_numeric($row['ActualAmount'] ?? null)) {
+            $issues[] = 'Actual amount must be numeric.';
+        } elseif ((float) $row['ActualAmount'] === 0.0) {
+            $issues[] = 'Actual amount cannot be zero.';
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(1)
+            FROM dbo.tblIntegrationActualsImportStaging
+            WHERE ActiveFlag = 1
+              AND TransactionReference = :reference
+              AND IntegrationActualsImportStagingID <> :id
+              AND StagingStatusCode IN (N'staged', N'validated', N'posted')
+        ");
+        $stmt->execute([
+            ':reference' => (string) ($row['TransactionReference'] ?? ''),
+            ':id' => (int) ($row['IntegrationActualsImportStagingID'] ?? 0),
+        ]);
+        if ((int) ($stmt->fetchColumn() ?: 0) > 0) {
+            $issues[] = 'Transaction reference already exists in active staging.';
+        }
+
+        return $issues;
+    }
+
+    private function updateActualsImportStagingStatus(int $stagingId, string $status, string $message, int $userId): void
+    {
+        $stmt = $this->conn->prepare("
+            UPDATE dbo.tblIntegrationActualsImportStaging
+            SET StagingStatusCode = :status,
+                ValidationMessage = :message,
+                UpdatedBy = :userId,
+                UpdatedDate = SYSUTCDATETIME()
+            WHERE IntegrationActualsImportStagingID = :id
+              AND ActiveFlag = 1
+        ");
+        $stmt->execute([
+            ':id' => $stagingId,
+            ':status' => $status,
+            ':message' => $this->nullableString($message),
+            ':userId' => $userId > 0 ? $userId : null,
+        ]);
+    }
+
+    private function buildActualsImportPostabilityResult(array $row): array
+    {
+        $issues = [];
+        $notes = [];
+
+        if ((string) ($row['StagingStatusCode'] ?? '') !== 'validated') {
+            $issues[] = 'Row must be validated before it can be posted.';
+        }
+
+        $fy = (int) ($row['FiscalYearID'] ?? 0);
+        $version = (int) ($row['VersionID'] ?? 0);
+        $period = (int) ($row['PeriodNo'] ?? 0);
+        $scope = trim((string) ($row['DataObjectCode'] ?? ''));
+        $program = trim((string) ($row['ProgramCode'] ?? ''));
+        $economic = trim((string) ($row['EconomicCode'] ?? ''));
+        $systemId = (int) ($row['IntegrationSystemID'] ?? 0);
+        $interfaceId = (int) ($row['IntegrationInterfaceID'] ?? 0);
+
+        $scopeMap = $this->resolveIntegrationCodeCrosswalk($systemId, $interfaceId, 'data_object', $scope, $fy, $version);
+        $programMap = $this->resolveIntegrationCodeCrosswalk($systemId, $interfaceId, 'program', $program, $fy, $version);
+        $economicMap = $this->resolveIntegrationCodeCrosswalk($systemId, $interfaceId, 'economic', $economic, $fy, $version);
+        $scopeForCheck = $scopeMap['target_code'];
+        $programForCheck = $programMap['target_code'];
+        $economicForCheck = $economicMap['target_code'];
+
+        foreach ([
+            'Scope' => $scopeMap,
+            'Program' => $programMap,
+            'Economic' => $economicMap,
+        ] as $label => $map) {
+            if ($map['external_code'] !== '' && $map['mapping_required'] && !$map['mapped']) {
+                $issues[] = $label . ' code "' . $map['external_code'] . '" has no active integration crosswalk.';
+            } elseif ($map['mapped']) {
+                $notes[] = $label . ' mapped ' . $map['external_code'] . ' to ' . $map['target_code'] . '.';
+            }
+        }
+
+        if ($fy <= 0) {
+            $issues[] = 'Fiscal year is missing.';
+        } elseif ($this->tableExists('dbo.tblFiscalYears') && !$this->existsByConditions('dbo.tblFiscalYears', ['FiscalYearID' => $fy])) {
+            $issues[] = 'Fiscal year was not found in CBMS.';
+        }
+
+        if ($version <= 0) {
+            $issues[] = 'Version is missing.';
+        } elseif ($this->tableExists('dbo.tblVersions')) {
+            $conditions = ['VersionID' => $version];
+            if ($this->columnExists('dbo.tblVersions', 'FiscalYearID') && $fy > 0) {
+                $conditions['FiscalYearID'] = $fy;
+            }
+            if (!$this->existsByConditions('dbo.tblVersions', $conditions)) {
+                $issues[] = 'Version was not found for the fiscal context.';
+            }
+        }
+
+        if ($period < 1 || $period > 12) {
+            $issues[] = 'Period must be between 1 and 12.';
+        }
+
+        if ($scopeForCheck !== '' && $this->tableExists('dbo.tblDataObjectCodes')) {
+            $conditions = ['DataObjectCode' => $scopeForCheck];
+            if ($this->columnExists('dbo.tblDataObjectCodes', 'FiscalYearID') && $fy > 0) {
+                $conditions['FiscalYearID'] = $fy;
+            }
+            if (!$this->existsByConditions('dbo.tblDataObjectCodes', $conditions)) {
+                $issues[] = 'Scope/data object code is not configured in CBMS.';
+            }
+        }
+
+        if ($programForCheck !== '' && $this->tableExists('dbo.tblSegmentValues')) {
+            if (!$this->segmentValueExists($fy, $programForCheck)) {
+                $issues[] = 'Program code is not configured as an active segment value.';
+            }
+        } elseif ($programForCheck !== '') {
+            $notes[] = 'Program code reference table was not available for checking.';
+        }
+
+        if ($economicForCheck !== '' && $this->tableExists('dbo.tblSegmentValues')) {
+            if (!$this->segmentValueExists($fy, $economicForCheck)) {
+                $issues[] = 'Economic code is not configured as an active segment value.';
+            }
+        } elseif ($economicForCheck !== '') {
+            $notes[] = 'Economic code reference table was not available for checking.';
+        }
+
+        if ($this->duplicatePostedOrReadyActualReferenceExists($row)) {
+            $issues[] = 'Transaction reference is already ready or posted in staging.';
+        }
+
+        $target = 'Posting target not configured - staging review only';
+        if ($issues === []) {
+            $message = 'Ready to post once the final CBMS actuals posting target is configured.';
+            if ($notes !== []) {
+                $message .= ' ' . implode(' ', $notes);
+            }
+            return ['code' => 'ready_to_post', 'message' => $message, 'target' => $target];
+        }
+
+        return [
+            'code' => 'blocked',
+            'message' => implode(' ', array_merge($issues, $notes)),
+            'target' => $target,
+        ];
+    }
+
+    private function resolveIntegrationCodeCrosswalk(int $systemId, int $interfaceId, string $mappingType, string $externalCode, int $fiscalYearId, int $versionId): array
+    {
+        $externalCode = trim($externalCode);
+        if ($externalCode === '' || !$this->tableExists('dbo.tblIntegrationCodeCrosswalk') || $systemId <= 0) {
+            return [
+                'external_code' => $externalCode,
+                'target_code' => $externalCode,
+                'mapped' => false,
+                'mapping_required' => false,
+            ];
+        }
+
+        $mappingExists = $this->integrationCrosswalkTypeExists($systemId, $interfaceId, $mappingType);
+        $stmt = $this->conn->prepare("
+            SELECT TOP 1 CbmsCode
+            FROM dbo.tblIntegrationCodeCrosswalk
+            WHERE IntegrationSystemID = :systemId
+              AND MappingTypeCode = :mappingType
+              AND ExternalCode = :externalCode
+              AND ActiveFlag = 1
+              AND (IntegrationInterfaceID = :interfaceId OR IntegrationInterfaceID IS NULL)
+              AND (FiscalYearID = :fy OR FiscalYearID IS NULL)
+              AND (VersionID = :versionId OR VersionID IS NULL)
+              AND (EffectiveFrom IS NULL OR EffectiveFrom <= CAST(SYSUTCDATETIME() AS DATE))
+              AND (EffectiveTo IS NULL OR EffectiveTo >= CAST(SYSUTCDATETIME() AS DATE))
+            ORDER BY
+                CASE WHEN IntegrationInterfaceID = :interfaceId THEN 0 ELSE 1 END,
+                CASE WHEN FiscalYearID = :fy THEN 0 ELSE 1 END,
+                CASE WHEN VersionID = :versionId THEN 0 ELSE 1 END,
+                IntegrationCodeCrosswalkID DESC
+        ");
+        $stmt->execute([
+            ':systemId' => $systemId,
+            ':interfaceId' => $interfaceId > 0 ? $interfaceId : -1,
+            ':mappingType' => $mappingType,
+            ':externalCode' => $externalCode,
+            ':fy' => $fiscalYearId > 0 ? $fiscalYearId : -1,
+            ':versionId' => $versionId > 0 ? $versionId : -1,
+        ]);
+        $mappedCode = trim((string) ($stmt->fetchColumn() ?: ''));
+
+        return [
+            'external_code' => $externalCode,
+            'target_code' => $mappedCode !== '' ? $mappedCode : $externalCode,
+            'mapped' => $mappedCode !== '',
+            'mapping_required' => $mappingExists,
+        ];
+    }
+
+    private function integrationCrosswalkTypeExists(int $systemId, int $interfaceId, string $mappingType): bool
+    {
+        if (!$this->tableExists('dbo.tblIntegrationCodeCrosswalk') || $systemId <= 0) {
+            return false;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(1)
+            FROM dbo.tblIntegrationCodeCrosswalk
+            WHERE IntegrationSystemID = :systemId
+              AND MappingTypeCode = :mappingType
+              AND ActiveFlag = 1
+              AND (IntegrationInterfaceID = :interfaceId OR IntegrationInterfaceID IS NULL)
+        ");
+        $stmt->execute([
+            ':systemId' => $systemId,
+            ':interfaceId' => $interfaceId > 0 ? $interfaceId : -1,
+            ':mappingType' => $mappingType,
+        ]);
+        return (int) ($stmt->fetchColumn() ?: 0) > 0;
+    }
+
+    private function updateActualsImportPostability(int $stagingId, string $code, string $message, string $target, int $userId): void
+    {
+        $stmt = $this->conn->prepare("
+            UPDATE dbo.tblIntegrationActualsImportStaging
+            SET PostingReadinessCode = :code,
+                PostingReadinessMessage = :message,
+                PostingTarget = :target,
+                UpdatedBy = :userId,
+                UpdatedDate = SYSUTCDATETIME()
+            WHERE IntegrationActualsImportStagingID = :id
+              AND ActiveFlag = 1
+        ");
+        $stmt->execute([
+            ':id' => $stagingId,
+            ':code' => $this->nullableString($code),
+            ':message' => $this->nullableString($message),
+            ':target' => $this->nullableString($target),
+            ':userId' => $userId > 0 ? $userId : null,
+        ]);
+    }
+
+    private function duplicatePostedOrReadyActualReferenceExists(array $row): bool
+    {
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(1)
+            FROM dbo.tblIntegrationActualsImportStaging
+            WHERE ActiveFlag = 1
+              AND TransactionReference = :reference
+              AND IntegrationActualsImportStagingID <> :id
+              AND (
+                    StagingStatusCode = N'posted'
+                    OR PostingReadinessCode = N'ready_to_post'
+                  )
+        ");
+        $stmt->execute([
+            ':reference' => (string) ($row['TransactionReference'] ?? ''),
+            ':id' => (int) ($row['IntegrationActualsImportStagingID'] ?? 0),
+        ]);
+        return (int) ($stmt->fetchColumn() ?: 0) > 0;
+    }
+
+    private function segmentValueExists(int $fiscalYearId, string $segmentCode): bool
+    {
+        $conditions = ['SegmentCode' => $segmentCode];
+        if ($this->columnExists('dbo.tblSegmentValues', 'FiscalYearID') && $fiscalYearId > 0) {
+            $conditions['FiscalYearID'] = $fiscalYearId;
+        }
+        if ($this->columnExists('dbo.tblSegmentValues', 'ActiveFlag')) {
+            $conditions['ActiveFlag'] = 1;
+        }
+
+        return $this->existsByConditions('dbo.tblSegmentValues', $conditions);
+    }
+
     private function tableExists(string $tableName): bool
     {
         $stmt = $this->conn->prepare("SELECT OBJECT_ID(:tableName, 'U')");
         $stmt->execute([':tableName' => $tableName]);
+        return (int) ($stmt->fetchColumn() ?: 0) > 0;
+    }
+
+    private function columnExists(string $tableName, string $columnName): bool
+    {
+        $stmt = $this->conn->prepare('SELECT COL_LENGTH(:tableName, :columnName)');
+        $stmt->execute([
+            ':tableName' => $tableName,
+            ':columnName' => $columnName,
+        ]);
+        $value = $stmt->fetchColumn();
+        return $value !== false && $value !== null;
+    }
+
+    private function existsByConditions(string $tableName, array $conditions): bool
+    {
+        $this->assertQualifiedTableName($tableName);
+        if ($conditions === []) {
+            return false;
+        }
+
+        $where = [];
+        $params = [];
+        foreach ($conditions as $column => $value) {
+            $column = (string) $column;
+            $this->assertSimpleIdentifier($column, 'condition column');
+            $param = ':p_' . preg_replace('/[^a-z0-9_]+/i', '_', $column);
+            $where[] = $this->quoteIdentifier($column) . ' = ' . $param;
+            $params[$param] = $value;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(1)
+            FROM " . $this->quoteQualifiedObject($tableName) . "
+            WHERE " . implode(' AND ', $where) . "
+        ");
+        $stmt->execute($params);
         return (int) ($stmt->fetchColumn() ?: 0) > 0;
     }
 
@@ -852,5 +1751,15 @@ final class IntegrationAdminModel
         }
 
         return $this->quoteIdentifier($parts[0]) . '.' . $this->quoteIdentifier($parts[1]);
+    }
+
+    private function assertQualifiedTableName(string $tableName): void
+    {
+        $parts = array_values(array_filter(array_map('trim', explode('.', $tableName)), static fn (string $part): bool => $part !== ''));
+        if (count($parts) !== 2) {
+            throw new \RuntimeException('Table name must be provided as schema.object.');
+        }
+        $this->assertSimpleIdentifier($parts[0], 'schema name');
+        $this->assertSimpleIdentifier($parts[1], 'table name');
     }
 }

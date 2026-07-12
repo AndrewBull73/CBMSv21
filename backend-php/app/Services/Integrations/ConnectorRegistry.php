@@ -5,6 +5,7 @@ namespace App\Services\Integrations;
 
 use App\Services\Integrations\Adapters\FinanceSystemAAdapter;
 use App\Services\Integrations\Adapters\FinanceSystemBAdapter;
+use App\Services\Integrations\Adapters\MockFinanceAdapter;
 
 final class ConnectorRegistry
 {
@@ -16,6 +17,7 @@ final class ConnectorRegistry
         $defaults = $adapters ?? [
             new FinanceSystemAAdapter(),
             new FinanceSystemBAdapter(),
+            new MockFinanceAdapter(),
         ];
 
         foreach ($defaults as $adapter) {

@@ -4,31 +4,42 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\ScreenTestRunModel;
+use App\Shared\CbmsModuleCatalog;
 use App\Shared\ScreenTestCatalog;
 use App\Shared\SessionHelper;
 
 require_once __DIR__ . '/../../shared/csrf.php';
 require_once __DIR__ . '/../../shared/screen_test_capture.php';
+require_once __DIR__ . '/../Shared/CbmsModuleCatalog.php';
 
 final class ScreenTestsController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true],
-        'scenarios' => ['auth' => true],
-        'runner' => ['auth' => true],
-        'start' => ['auth' => true],
-        'saveResult' => ['auth' => true],
-        'summary' => ['auth' => true],
-        'captureScreenshot' => ['auth' => true],
-        'uploadAttachment' => ['auth' => true],
-        'viewAttachment' => ['auth' => true],
-        'downloadAttachment' => ['auth' => true],
+        '*' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'myScripts' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'scenarios' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'runner' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'start' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveResult' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'summary' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportResultsExcel' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'export-results-excel' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'captureScreenshot' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'uploadAttachment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'viewAttachment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'downloadAttachment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_RUN', 'TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function __construct()
     {
         parent::__construct();
         $this->ensureScreenTestingEnabled();
+    }
+
+    public function myScripts(): void
+    {
+        $_GET['view'] = 'assigned';
+        $this->scenarios();
     }
 
     public function scenarios(): void
@@ -38,12 +49,29 @@ final class ScreenTestsController extends BaseController
             'q' => trim((string) ($_GET['q'] ?? '')),
             'module' => trim((string) ($_GET['module'] ?? '')),
             'result' => trim((string) ($_GET['result'] ?? '')),
+            'view' => trim((string) ($_GET['view'] ?? 'assigned')),
         ];
 
         $userId = (int) SessionHelper::get('auth.user_id', 0);
         $allRuns = $this->listRuns($userId, [], false);
         $latestRuns = $this->latestRunsByScenario($allRuns);
         $activeRuns = $this->activeRuns();
+        $model = $this->screenTestRunModel();
+        $assignmentsInstalled = $model instanceof ScreenTestRunModel && $model->supportsScreenTestAssignments();
+        $userAssignments = $assignmentsInstalled ? $model->listAssignments(['user_id' => $userId]) : [];
+        $userAssignmentsByScenario = [];
+        foreach ($userAssignments as $assignment) {
+            $assignmentScenarioCode = trim((string) ($assignment['ScenarioCode'] ?? ''));
+            if ($assignmentScenarioCode !== '' && !isset($userAssignmentsByScenario[$assignmentScenarioCode])) {
+                $userAssignmentsByScenario[$assignmentScenarioCode] = $assignment;
+            }
+        }
+        if (!$assignmentsInstalled || $userAssignmentsByScenario === []) {
+            $filters['view'] = 'all';
+        }
+        if (!in_array($filters['view'], ['assigned', 'all'], true)) {
+            $filters['view'] = 'assigned';
+        }
 
         $moduleOptions = [];
         foreach ($allScenarios as $scenario) {
@@ -52,9 +80,9 @@ final class ScreenTestsController extends BaseController
                 $moduleOptions[$moduleName] = $moduleName;
             }
         }
-        ksort($moduleOptions, SORT_NATURAL | SORT_FLAG_CASE);
+        $moduleOptions = CbmsModuleCatalog::mergeWithObserved($moduleOptions);
 
-        $scenarios = array_values(array_filter($allScenarios, function (array $scenario) use ($filters, $latestRuns, $activeRuns): bool {
+        $scenarios = array_values(array_filter($allScenarios, function (array $scenario) use ($filters, $latestRuns, $activeRuns, $userAssignmentsByScenario): bool {
             $scenarioId = trim((string) ($scenario['id'] ?? ''));
             $moduleName = trim((string) ($scenario['module'] ?? ''));
             $title = trim((string) ($scenario['title'] ?? ''));
@@ -62,8 +90,20 @@ final class ScreenTestsController extends BaseController
             $screenFamily = trim((string) ($scenario['screen_family'] ?? ''));
             $audience = trim((string) ($scenario['audience'] ?? ''));
             $resultState = $this->scenarioCardResult($scenarioId, $latestRuns[$scenarioId] ?? null, $activeRuns[$scenarioId] ?? null);
+            $assignment = $userAssignmentsByScenario[$scenarioId] ?? null;
+            if (is_array($assignment)) {
+                $assignmentStatus = strtolower(trim((string) ($assignment['Status'] ?? 'assigned')));
+                if ($assignmentStatus === 'assigned') {
+                    $resultState = 'not_run';
+                } elseif ($assignmentStatus === 'completed' && $resultState === 'not_run') {
+                    $resultState = 'passed';
+                }
+            }
 
             if ($filters['module'] !== '' && strcasecmp($moduleName, $filters['module']) !== 0) {
+                return false;
+            }
+            if (($filters['view'] ?? 'all') === 'assigned' && !isset($userAssignmentsByScenario[$scenarioId])) {
                 return false;
             }
             if ($filters['result'] !== '' && $resultState !== strtolower($filters['result'])) {
@@ -104,6 +144,9 @@ final class ScreenTestsController extends BaseController
             'moduleOptions' => $moduleOptions,
             'latestRuns' => $latestRuns,
             'activeRuns' => $activeRuns,
+            'assignmentsInstalled' => $assignmentsInstalled,
+            'userAssignmentsByScenario' => $userAssignmentsByScenario,
+            'assignedCount' => count($userAssignmentsByScenario),
             'storageReady' => $this->persistentStorageAvailable(),
             'createTableScript' => 'backend-php/config/sql/create_tblScreenTestRuns.sql',
         ]);
@@ -152,6 +195,7 @@ final class ScreenTestsController extends BaseController
             'createTableScript' => 'backend-php/config/sql/create_tblScreenTestRuns.sql',
             'captureEnabled' => $this->screenCaptureFeatureEnabled(),
             'captureStorageReady' => $this->screenCaptureStorageAvailable(),
+            'createAttachmentTableScript' => 'backend-php/config/sql/create_tblScreenTestRunAttachment.sql',
             'pendingAttachments' => $this->pendingAttachmentsFromRun($activeRun),
         ]);
     }
@@ -273,6 +317,7 @@ final class ScreenTestsController extends BaseController
         if ($model instanceof ScreenTestRunModel && $model->supportsScreenTestRuns()) {
             $savedRunId = $model->recordRun($row);
             $this->persistPendingAttachments($model, $savedRunId, $activeRun, $userId);
+            $model->markAssignmentsAfterRun($userId, $scenarioId, $runResult, $userId);
         } else {
             $this->saveSessionRun($row);
             $this->cleanupPendingAttachmentsFromRun($activeRun);
@@ -284,25 +329,32 @@ final class ScreenTestsController extends BaseController
         SessionHelper::set('screen_tests.requested_scenario_id', $scenarioId);
 
         $this->flashSuccess('screen_tests_result_saved');
-        header('Location: index.php?route=screen-tests/runner&scenario_id=' . rawurlencode($scenarioId));
+        header('Location: index.php?route=screen-tests/my-scripts');
         exit;
     }
 
     public function summary(): void
     {
-        $filters = [
-            'q' => trim((string) ($_GET['q'] ?? '')),
-            'scenario_code' => trim((string) ($_GET['scenario_code'] ?? '')),
-            'module' => trim((string) ($_GET['module'] ?? '')),
-            'result' => trim((string) ($_GET['result'] ?? '')),
-            'verification' => trim((string) ($_GET['verification'] ?? '')),
-        ];
+        $filters = $this->summaryFiltersFromRequest();
 
         $userId = (int) SessionHelper::get('auth.user_id', 0);
         $canViewAll = $this->canViewAllRuns();
         $rows = $this->listRuns($userId, $filters, $canViewAll);
         $attachmentsByRunId = [];
         $model = $this->screenTestRunModel();
+        $assignmentsInstalled = $model instanceof ScreenTestRunModel && $model->supportsScreenTestAssignments();
+        $assignmentSummary = [
+            'total' => 0,
+            'assigned' => 0,
+            'in_progress' => 0,
+            'completed' => 0,
+            'overdue' => 0,
+        ];
+        $assignmentRows = [];
+        if ($assignmentsInstalled && $model instanceof ScreenTestRunModel) {
+            $assignmentSummary = $model->summarizeAssignments($userId, $filters, $canViewAll);
+            $assignmentRows = $model->listAssignmentProgress($userId, $filters, $canViewAll);
+        }
         if ($model instanceof ScreenTestRunModel && $model->supportsScreenTestRunAttachments()) {
             $attachmentsByRunId = $model->listAttachmentsByRunIds(array_map(
                 static fn (array $row): int => (int) ($row['ScreenTestRunID'] ?? 0),
@@ -320,7 +372,7 @@ final class ScreenTestsController extends BaseController
             }
         }
         ksort($scenarioOptions, SORT_NATURAL | SORT_FLAG_CASE);
-        ksort($moduleOptions, SORT_NATURAL | SORT_FLAG_CASE);
+        $moduleOptions = CbmsModuleCatalog::mergeWithObserved($moduleOptions);
 
         $this->render('screentests/Summary', [
             'title' => __t('screen_tests_results_title'),
@@ -332,7 +384,77 @@ final class ScreenTestsController extends BaseController
             'createTableScript' => 'backend-php/config/sql/create_tblScreenTestRuns.sql',
             'canViewAllRuns' => $canViewAll,
             'attachmentsByRunId' => $attachmentsByRunId,
+            'assignmentsInstalled' => $assignmentsInstalled,
+            'assignmentSummary' => $assignmentSummary,
+            'assignmentRows' => $assignmentRows,
+            'createAssignmentsScript' => 'backend-php/config/sql/create_tblScreenTestAssignments.sql',
         ]);
+    }
+
+    public function exportResultsExcel(): void
+    {
+        $filters = $this->summaryFiltersFromRequest();
+        $userId = (int) SessionHelper::get('auth.user_id', 0);
+        $canViewAll = $this->canViewAllRuns();
+        $rows = $this->listRuns($userId, $filters, $canViewAll);
+        $model = $this->screenTestRunModel();
+        $assignmentsInstalled = $model instanceof ScreenTestRunModel && $model->supportsScreenTestAssignments();
+        $assignmentRows = $assignmentsInstalled && $model instanceof ScreenTestRunModel
+            ? $model->listAssignmentProgress($userId, $filters, $canViewAll)
+            : [];
+        $exportRows = [];
+
+        foreach ($assignmentRows as $row) {
+            $exportRows[] = [
+                'Section' => 'Assignment Progress',
+                'Script' => (string) ($row['ScenarioTitle'] ?? $row['ScenarioCode'] ?? ''),
+                'Module' => (string) ($row['ModuleName'] ?? ''),
+                'Tester' => $this->displayNameFromRow($row),
+                'Username' => (string) ($row['Username'] ?? ''),
+                'Due Date' => (string) ($row['DueDate'] ?? ''),
+                'Assignment Status' => $this->assignmentStatusLabel((string) ($row['AssignmentStatus'] ?? 'assigned')),
+                'Run Result' => $this->runResultLabel((string) ($row['RunResult'] ?? '')),
+                'Verification' => '',
+                'Completed At' => (string) ($row['CompletedAt'] ?? ''),
+                'Latest Run' => (string) ($row['LatestRunCompletedAt'] ?? ''),
+                'Defect Reference' => (string) ($row['DefectReference'] ?? ''),
+                'Notes' => (string) ($row['Notes'] ?? ''),
+            ];
+        }
+
+        foreach ($rows as $row) {
+            $exportRows[] = [
+                'Section' => 'Run History',
+                'Script' => (string) ($row['ScenarioTitle'] ?? $row['ScenarioCode'] ?? ''),
+                'Module' => (string) ($row['ModuleName'] ?? ''),
+                'Tester' => $this->displayNameFromRow($row),
+                'Username' => (string) ($row['Username'] ?? $row['TesterUsername'] ?? ''),
+                'Due Date' => '',
+                'Assignment Status' => '',
+                'Run Result' => $this->runResultLabel((string) ($row['RunResult'] ?? '')),
+                'Verification' => $this->verificationStatusLabel((string) ($row['VerificationStatus'] ?? '')),
+                'Completed At' => (string) ($row['CompletedAt'] ?? ''),
+                'Latest Run' => '',
+                'Defect Reference' => (string) ($row['DefectReference'] ?? ''),
+                'Notes' => (string) ($row['TesterNotes'] ?? $row['OutcomeSummary'] ?? ''),
+            ];
+        }
+
+        $this->downloadExcel('Test Results', 'TestResults', [
+            ['label' => 'Section', 'key' => 'Section'],
+            ['label' => 'Script', 'key' => 'Script'],
+            ['label' => 'Module', 'key' => 'Module'],
+            ['label' => 'Tester', 'key' => 'Tester'],
+            ['label' => 'Username', 'key' => 'Username'],
+            ['label' => 'Due Date', 'key' => 'Due Date'],
+            ['label' => 'Assignment Status', 'key' => 'Assignment Status'],
+            ['label' => 'Run Result', 'key' => 'Run Result'],
+            ['label' => 'Verification', 'key' => 'Verification'],
+            ['label' => 'Completed At', 'key' => 'Completed At'],
+            ['label' => 'Latest Run', 'key' => 'Latest Run'],
+            ['label' => 'Defect Reference', 'key' => 'Defect Reference'],
+            ['label' => 'Notes', 'key' => 'Notes'],
+        ], $exportRows);
     }
 
     public function captureScreenshot(): void
@@ -490,6 +612,62 @@ final class ScreenTestsController extends BaseController
     public function downloadAttachment(): void
     {
         $this->serveAttachment(true);
+    }
+
+    private function summaryFiltersFromRequest(): array
+    {
+        return [
+            'q' => trim((string) ($_GET['q'] ?? '')),
+            'scenario_code' => trim((string) ($_GET['scenario_code'] ?? '')),
+            'module' => trim((string) ($_GET['module'] ?? '')),
+            'result' => trim((string) ($_GET['result'] ?? '')),
+            'verification' => trim((string) ($_GET['verification'] ?? '')),
+        ];
+    }
+
+    private function assignmentStatusLabel(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'completed' => 'Completed',
+            'in_progress' => 'In Progress',
+            'cancelled' => 'Cancelled',
+            default => 'Not Started',
+        };
+    }
+
+    private function runResultLabel(string $result): string
+    {
+        return match (strtolower(trim($result))) {
+            'passed' => 'Passed',
+            'failed' => 'Failed',
+            'blocked' => 'Blocked',
+            default => 'Not Run',
+        };
+    }
+
+    private function verificationStatusLabel(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'manual_pass' => 'Manual Pass',
+            'manual_fail' => 'Manual Fail',
+            default => 'Not Run',
+        };
+    }
+
+    private function displayNameFromRow(array $row): string
+    {
+        $displayName = trim((string) ($row['DisplayName'] ?? ''));
+        if ($displayName !== '') {
+            return $displayName;
+        }
+
+        $username = trim((string) ($row['Username'] ?? $row['TesterUsername'] ?? ''));
+        if ($username !== '') {
+            return $username;
+        }
+
+        $userId = (int) ($row['UserID'] ?? $row['TesterUserID'] ?? 0);
+        return $userId > 0 ? 'User #' . $userId : '';
     }
 
     private function screenTestRunModel(): ?ScreenTestRunModel
@@ -704,7 +882,7 @@ final class ScreenTestsController extends BaseController
 
     private function canViewAllRuns(): bool
     {
-        return $this->hasAnyPermission(['USERS_VIEW', 'USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
+        return $this->hasAnyPermission(['TEST_SCRIPT_RESULTS', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']);
     }
 
     private function hasAnyPermission(array $required): bool
@@ -844,7 +1022,7 @@ final class ScreenTestsController extends BaseController
 
         $userId = (int) SessionHelper::get('auth.user_id', 0);
         if ((int) ($run['UserID'] ?? 0) !== $userId && !$this->canViewAllRuns()) {
-            $this->renderAccessDeniedNotice('Missing one of: USERS_VIEW, USERS_ADMIN, ADMIN_ALL, SYSADMIN', 403, 'compact');
+            $this->renderAccessDeniedNotice('Missing one of: TEST_SCRIPT_RESULTS, TEST_SCRIPT_ADMIN, ADMIN_ALL, SYSADMIN', 403, 'compact');
             return;
         }
 

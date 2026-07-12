@@ -208,6 +208,7 @@ $pageTitle = $pageTitleKey !== ''
     data-training-step="<?= (int) $activeTrainingStepNumber ?>"
 >
 <?php
+    use App\Core\Rbac;
     use App\Shared\Lang;
     use App\Shared\SessionHelper;
 
@@ -514,6 +515,24 @@ $pageTitle = $pageTitleKey !== ''
                             data-route="<?= htmlspecialchars($currentRoute, ENT_QUOTES) ?>">
                         <i class="bi bi-question-circle"></i> <?= __t('help') ?>
                     </button>
+                    <?php if (Rbac::can('AI_HELP_USE')): ?>
+                        <?php
+                            $askAiUrl = 'index.php?' . http_build_query([
+                                'route' => 'ai-knowledge/ask',
+                                'screen' => $currentRoute,
+                                'link_context' => 1,
+                                'fy' => (int) ($currentFY ?? 0),
+                                'ver' => (int) ($currentVer ?? 0),
+                                'scope_dataobject_code' => $scopeCode,
+                                'scope_dataobject_name' => $scopeName,
+                            ]);
+                        ?>
+                        <a class="btn btn-outline-light btn-sm"
+                           href="<?= htmlspecialchars($askAiUrl, ENT_QUOTES, 'UTF-8') ?>"
+                           title="Ask AI about this screen">
+                            <i class="bi bi-stars me-1"></i>Ask AI
+                        </a>
+                    <?php endif; ?>
                     <?php if ($screenTestingEnabled && $screenTestLauncher !== null): ?>
                         <?php
                             $screenTestTitle = trim((string) ($screenTestLauncher['scenarioTitle'] ?? ''));

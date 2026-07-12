@@ -13,6 +13,7 @@ if (!function_exists('h')) {
 $record = is_array($record ?? null) ? $record : [];
 $sourceState = (string) ($sourceState ?? 'custom');
 $storagePath = (string) ($storagePath ?? '');
+$moduleOptions = is_array($moduleOptions ?? null) ? $moduleOptions : [];
 $scenarioId = (string) ($record['id'] ?? '');
 $baselineContext = is_array($record['baseline_context'] ?? null) ? $record['baseline_context'] : [];
 $prerequisites = array_values(is_array($record['prerequisites'] ?? null) ? $record['prerequisites'] : []);
@@ -54,6 +55,18 @@ $sourceLabel = match ($sourceState) {
         Changes made here are saved as editable overrides in <code><?= h($storagePath) ?></code>. Built-in scripts are not modified in source code.
       </div>
 
+      <?php
+      $testingQuickLinksMode = 'admin';
+      require __DIR__ . '/../screentests/_TestingQuickLinks.php';
+      $testingHelperTitle = 'How to define a test script';
+      $testingHelperItems = [
+          'Use a stable <strong>Script ID</strong> and shared module name so assignments, results, menus, and reporting stay aligned.',
+          'Write steps as tester actions and record expected visible results separately from expected data results.',
+          'Use prerequisites, test data, verification queries, and reset guidance to make the script repeatable for future test cycles.',
+      ];
+      require __DIR__ . '/../screentests/_TestingHelperInstructions.php';
+      ?>
+
       <form method="post" action="index.php?route=screen-tests-admin/save-script" class="row g-3">
         <?= csrf_field() ?>
 
@@ -71,8 +84,13 @@ $sourceLabel = match ($sourceState) {
         </div>
 
         <div class="col-md-4">
-          <label class="form-label">Module</label>
-          <input type="text" name="module" class="form-control form-control-sm" value="<?= h((string) ($record['module'] ?? '')) ?>" required>
+          <label class="form-label" for="ScreenTestScriptModule">Module</label>
+          <input id="ScreenTestScriptModule" type="text" name="module" list="ScreenTestModuleOptions" class="form-control form-control-sm" value="<?= h((string) ($record['module'] ?? '')) ?>" required>
+          <datalist id="ScreenTestModuleOptions">
+            <?php foreach ($moduleOptions as $moduleOption): ?>
+              <option value="<?= h((string) $moduleOption) ?>"></option>
+            <?php endforeach; ?>
+          </datalist>
         </div>
         <div class="col-md-4">
           <label class="form-label">Screen Family</label>

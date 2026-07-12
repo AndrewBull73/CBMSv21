@@ -13,8 +13,14 @@ $filters = is_array($filters ?? null) ? $filters : ['q' => '', 'module' => '', '
 $moduleOptions = is_array($moduleOptions ?? null) ? $moduleOptions : [];
 $latestRuns = is_array($latestRuns ?? null) ? $latestRuns : [];
 $activeRuns = is_array($activeRuns ?? null) ? $activeRuns : [];
+$assignmentsInstalled = (bool) ($assignmentsInstalled ?? false);
+$userAssignmentsByScenario = is_array($userAssignmentsByScenario ?? null) ? $userAssignmentsByScenario : [];
+$assignedCount = (int) ($assignedCount ?? count($userAssignmentsByScenario));
 $storageReady = (bool) ($storageReady ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
+$currentView = (string) ($filters['view'] ?? 'all');
+$currentView = $currentView === 'assigned' ? 'assigned' : 'all';
+$listRoute = $currentView === 'assigned' ? 'screen-tests/my-scripts' : 'screen-tests/scenarios';
 
 $scenariosByModule = [];
 foreach ($scenarios as $scenario) {
@@ -40,6 +46,24 @@ foreach ($scenarios as $scenario) {
         <?= __t('screen_tests_intro') ?>
       </div>
 
+      <?php
+      $testingQuickLinksMode = 'tester';
+      require __DIR__ . '/_TestingQuickLinks.php';
+      $testingHelperTitle = $currentView === 'assigned' ? 'How to complete assigned testing' : 'How to use the test catalogue';
+      $testingHelperItems = $currentView === 'assigned'
+          ? [
+              'Work through the scripts grouped under each module and use <strong>Start Script</strong>, <strong>Resume Script</strong>, or <strong>Retest Script</strong> as shown on each card.',
+              'Check the status badge and due date before opening a script so you know what needs attention first.',
+              'Use <strong>View Results</strong> when you need to inspect previous attempts, evidence, or defect references before retesting.',
+          ]
+          : [
+              'Use <strong>All Scripts</strong> to review the full catalogue or run an ad hoc script that was not assigned to you.',
+              'Use the module and result filters to find a specific area of coverage.',
+              'For normal assigned work, return to <strong>My Test Scripts</strong> so completion is tracked against your assignments.',
+          ];
+      require __DIR__ . '/_TestingHelperInstructions.php';
+      ?>
+
       <?php if (!$storageReady): ?>
         <div class="alert alert-warning">
           <div class="fw-semibold mb-1"><?= __t('screen_tests_storage_missing_title') ?></div>
@@ -47,8 +71,25 @@ foreach ($scenarios as $scenario) {
         </div>
       <?php endif; ?>
 
+      <?php if ($assignmentsInstalled): ?>
+        <ul class="nav nav-pills mb-3">
+          <li class="nav-item">
+            <a class="nav-link <?= $currentView === 'assigned' ? 'active' : '' ?>" href="index.php?route=screen-tests/my-scripts">
+              <i class="bi bi-person-check me-1"></i><?= __t('screen_tests_assigned_to_me') ?>
+              <span class="badge text-bg-light text-dark ms-1"><?= h((string) $assignedCount) ?></span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?= $currentView === 'all' ? 'active' : '' ?>" href="index.php?route=screen-tests/scenarios&amp;view=all">
+              <i class="bi bi-list-check me-1"></i><?= __t('screen_tests_all_scripts') ?>
+            </a>
+          </li>
+        </ul>
+      <?php endif; ?>
+
         <form method="get" action="index.php" class="row g-2 mb-4">
-          <input type="hidden" name="route" value="screen-tests/scenarios">
+          <input type="hidden" name="route" value="<?= h($listRoute) ?>">
+          <input type="hidden" name="view" value="<?= h($currentView) ?>">
           <div class="col-lg-5">
           <label for="screenTestSearch" class="form-label"><?= __t('search') ?></label>
           <input
@@ -86,7 +127,7 @@ foreach ($scenarios as $scenario) {
           <button type="submit" class="btn btn-outline-primary flex-fill">
             <i class="bi bi-funnel me-1"></i><?= __t('filter') ?>
           </button>
-          <a href="index.php?route=screen-tests/scenarios" class="btn btn-outline-secondary flex-fill">
+          <a href="index.php?route=<?= h($listRoute) ?><?= $currentView === 'all' ? '&amp;view=all' : '' ?>" class="btn btn-outline-secondary flex-fill">
             <?= __t('reset') ?>
           </a>
         </div>
@@ -107,13 +148,19 @@ foreach ($scenarios as $scenario) {
             <?php foreach ($moduleScenarios as $scenario): ?>
               <?php
               $scenarioId = (string) ($scenario['id'] ?? '');
+              $assignment = $userAssignmentsByScenario[$scenarioId] ?? null;
               $latestRun = $latestRuns[$scenarioId] ?? null;
               $activeRun = $activeRuns[$scenarioId] ?? null;
               $resultState = 'not_run';
+              $assignmentStatus = is_array($assignment) ? strtolower(trim((string) ($assignment['Status'] ?? 'assigned'))) : '';
               if (is_array($activeRun)) {
                   $resultState = 'active';
+              } elseif ($assignmentStatus === 'assigned') {
+                  $resultState = 'not_run';
               } elseif (is_array($latestRun)) {
                   $resultState = strtolower(trim((string) ($latestRun['RunResult'] ?? ''))) ?: 'not_run';
+              } elseif ($assignmentStatus === 'completed') {
+                  $resultState = 'passed';
               }
               $statusLabel = match ($resultState) {
                   'passed' => __t('screen_tests_result_passed'),
@@ -129,7 +176,11 @@ foreach ($scenarios as $scenario) {
                   'active' => 'text-bg-primary',
                   default => 'text-bg-light border',
               };
-              $launchLabel = is_array($activeRun) ? __t('screen_tests_resume_script') : __t('screen_tests_open_script');
+              $launchLabel = match (true) {
+                  is_array($activeRun) => __t('screen_tests_resume_script'),
+                  in_array($resultState, ['passed', 'failed', 'blocked'], true) => __t('screen_tests_retest_script'),
+                  default => __t('screen_tests_start_script'),
+              };
               $stepCount = count(is_array($scenario['steps'] ?? null) ? $scenario['steps'] : []);
               $attemptNo = is_array($activeRun)
                   ? (int) ($activeRun['attempt_no'] ?? 0)
@@ -141,6 +192,9 @@ foreach ($scenarios as $scenario) {
                     <div class="d-flex align-items-center gap-2">
                       <span class="badge text-bg-light border"><?= h((string) ($scenario['screen_family'] ?? 'test')) ?></span>
                       <span class="badge <?= h($statusClass) ?>"><?= h($statusLabel) ?></span>
+                      <?php if (is_array($assignment)): ?>
+                        <span class="badge text-bg-info"><?= __t('assigned') ?></span>
+                      <?php endif; ?>
                     </div>
                     <div class="small text-muted"><?= h((string) ($scenario['difficulty'] ?? '')) ?></div>
                   </div>
@@ -161,6 +215,12 @@ foreach ($scenarios as $scenario) {
                         <div class="text-muted"><?= __t('training_attempt_label') ?></div>
                         <div class="fw-semibold"><?= h((string) max(0, $attemptNo)) ?></div>
                       </div>
+                      <?php if (is_array($assignment) && trim((string) ($assignment['DueDate'] ?? '')) !== ''): ?>
+                        <div class="col-sm-12">
+                          <div class="text-muted"><?= __t('screen_tests_assignment_due') ?></div>
+                          <div class="fw-semibold"><?= h((string) ($assignment['DueDate'] ?? '')) ?></div>
+                        </div>
+                      <?php endif; ?>
                     </div>
 
                     <div class="small text-muted mb-3"><?= h((string) ($scenario['purpose'] ?? '')) ?></div>

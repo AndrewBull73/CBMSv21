@@ -15,12 +15,51 @@ $trainingEnabled = training_features_enabled($GLOBALS['conn'] ?? null);
 return [
 
   [
+    'label' => 'Intelligence',
+    'code'  => 'IE',
+    'icon'  => 'cpu',
+    'roles' => [],
+    'perms' => ['INTEL_VIEW','INTEL_ADMIN','INTEL_FORECAST_VIEW','INTEL_FORECAST_CREATE','INTEL_SCENARIO_CREATE','ML_VIEW','ML_ADMIN','AI_VIEW','AI_ADMIN','AI_VIEW_AUDIT','ADMIN_ALL','SYSADMIN'],
+    'active' => ['intelligence/*','ai-dataset/*'],
+    'children' => [
+      ['label'=>'Intelligence Dashboard','code'=>'IEDB','route'=>'intelligence/index','icon'=>'speedometer2','active'=>['intelligence/index'],'roles'=>[],'perms'=>['INTEL_VIEW','INTEL_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Engine Health','code'=>'IEHE','route'=>'intelligence/health','icon'=>'heart-pulse','active'=>['intelligence/health'],'roles'=>[],'perms'=>['INTEL_VIEW','INTEL_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Dataset Analysis','code'=>'IEDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['AI_DATASET_ANALYZE','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Analysis Datasets','code'=>'IEDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Budget Ledger Version Roles','code'=>'IEVR','route'=>'intelligence/budget-ledger-version-roles','icon'=>'diagram-2','active'=>['intelligence/budget-ledger-version-roles'],'roles'=>[],'perms'=>['INTEL_ADMIN','ML_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'ML Model Register','code'=>'IEML','route'=>'intelligence/ml-models','icon'=>'diagram-3','active'=>['intelligence/ml-models'],'roles'=>[],'perms'=>['ML_VIEW','ML_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI / Engine Config','code'=>'IECF','route'=>'intelligence/config','icon'=>'sliders','active'=>['intelligence/config'],'roles'=>[],'perms'=>['INTEL_ADMIN','AI_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Engine Runs Audit','code'=>'IERU','route'=>'intelligence/runs','icon'=>'clock-history','active'=>['intelligence/runs'],'roles'=>[],'perms'=>['AI_VIEW_AUDIT','INTEL_ADMIN','ADMIN_ALL','SYSADMIN']],
+    ],
+  ],
+
+  [
     'label'  => __t('menu_home'),
     'route'  => 'home/index',
     'icon'   => 'house',
     'active' => ['home/*'],
     'roles'  => [],
     'perms'  => ['AUTHENTICATED'],
+  ],
+
+  [
+    'label' => 'Help & Knowledge',
+    'code'  => 'HK',
+    'icon'  => 'stars',
+    'roles' => [],
+    'perms' => ['AI_HELP_USE','AI_HELP_ADMIN','AI_HELP_UPLOAD','AI_HELP_VIEW_LOGS','AI_DATASET_ANALYZE','AI_DATASET_ADMIN','AI_DATASET_VIEW_LOGS','ADMIN_ALL','SYSADMIN'],
+    'active' => ['ai-knowledge/*','ai-dataset/*'],
+    'children' => [
+      ['label'=>'Ask CBMS Assistant','code'=>'HKAI','route'=>'ai-knowledge/ask','icon'=>'stars','active'=>['ai-knowledge/ask'],'roles'=>[],'perms'=>['AI_HELP_USE','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Knowledge Base','code'=>'HKKB','route'=>'ai-knowledge/admin','icon'=>'database','active'=>['ai-knowledge/admin'],'roles'=>[],'perms'=>['AI_HELP_ADMIN','AI_HELP_UPLOAD','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Knowledge Documents','code'=>'HKDO','route'=>'ai-knowledge/documents','icon'=>'files','active'=>['ai-knowledge/documents','ai-knowledge/chunks'],'roles'=>[],'perms'=>['AI_HELP_ADMIN','AI_HELP_UPLOAD','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Upload Knowledge','code'=>'HKUP','route'=>'ai-knowledge/upload','icon'=>'upload','active'=>['ai-knowledge/upload'],'roles'=>[],'perms'=>['AI_HELP_UPLOAD','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Question Logs','code'=>'HKLG','route'=>'ai-knowledge/logs','icon'=>'clock-history','active'=>['ai-knowledge/logs'],'roles'=>[],'perms'=>['AI_HELP_VIEW_LOGS','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Usage Dashboard','code'=>'HKUS','route'=>'ai-knowledge/usage','icon'=>'bar-chart-line','active'=>['ai-knowledge/usage'],'roles'=>[],'perms'=>['AI_HELP_VIEW_LOGS','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Dataset Analysis','code'=>'HKDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['AI_DATASET_ANALYZE','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Analysis Datasets','code'=>'HKDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'AI Dataset Logs','code'=>'HKDL','route'=>'ai-dataset/logs','icon'=>'shield-lock','active'=>['ai-dataset/logs'],'roles'=>[],'perms'=>['AI_DATASET_VIEW_LOGS','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+    ],
   ],
 
   [
@@ -340,19 +379,24 @@ return [
           ['label'=>__t('menu_health'),'code'=>'ADHE','route'=>'health/index','icon'=>'heart-pulse','active'=>['health/*'],'roles'=>[],'perms'=>['HEALTH_VIEW','ADMIN_ALL','SYSADMIN']],
         ],
       ],
-      [
-        'label' => 'Screen Testing',
-        'code'  => 'RDTS',
-        'icon'  => 'clipboard-check',
-        'roles' => [],
-        'perms' => ['AUTHENTICATED'],
-        'enabled' => $testingEnabled,
-        'children' => [
-          ['label' => 'Test Scripts', 'code' => 'TSSC', 'route' => 'screen-tests/scenarios', 'icon' => 'list-check', 'active' => ['screen-tests/scenarios', 'screen-tests/runner'], 'roles' => [], 'perms' => ['AUTHENTICATED'], 'enabled' => $testingEnabled],
-          ['label' => 'Test Results', 'code' => 'TSSR', 'route' => 'screen-tests/summary', 'icon' => 'table', 'active' => ['screen-tests/summary'], 'roles' => [], 'perms' => ['AUTHENTICATED'], 'enabled' => $testingEnabled],
-          ['label' => 'Test Script Catalogue', 'code' => 'TSTC', 'route' => 'screen-tests-admin/scenarios', 'icon' => 'journal-text', 'active' => ['screen-tests-admin/*'], 'roles' => [], 'perms' => ['USERS_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
-        ],
-      ],
+    ],
+  ],
+
+  [
+    'label' => 'Testing Scripts',
+    'code'  => 'TS',
+    'icon'  => 'clipboard-check',
+    'roles' => [],
+    'perms' => ['TEST_SCRIPT_RUN','TEST_SCRIPT_RESULTS','TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'],
+    'active' => ['screen-tests/*','screen-tests-admin/*'],
+    'enabled' => $testingEnabled,
+    'children' => [
+      ['label' => 'My Test Scripts', 'code' => 'TSMY', 'route' => 'screen-tests/my-scripts', 'icon' => 'person-check', 'active' => ['screen-tests/my-scripts', 'screen-tests/runner'], 'roles' => [], 'perms' => ['TEST_SCRIPT_RUN','TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
+      ['label' => 'All Test Scripts', 'code' => 'TSSC', 'route' => 'screen-tests/scenarios', 'icon' => 'list-check', 'active' => ['screen-tests/scenarios'], 'roles' => [], 'perms' => ['TEST_SCRIPT_RUN','TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
+      ['label' => 'Test Results', 'code' => 'TSSR', 'route' => 'screen-tests/summary', 'icon' => 'table', 'active' => ['screen-tests/summary'], 'roles' => [], 'perms' => ['TEST_SCRIPT_RUN','TEST_SCRIPT_RESULTS','TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
+      ['label' => 'Testing Summary', 'code' => 'TSSU', 'route' => 'screen-tests-admin/summary', 'icon' => 'bar-chart-line', 'active' => ['screen-tests-admin/summary'], 'roles' => [], 'perms' => ['TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
+      ['label' => 'Assign Test Scripts', 'code' => 'TSSA', 'route' => 'screen-tests-admin/assignments', 'icon' => 'person-check', 'active' => ['screen-tests-admin/assignments'], 'roles' => [], 'perms' => ['TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
+      ['label' => 'Test Script Catalogue', 'code' => 'TSTC', 'route' => 'screen-tests-admin/scenarios', 'icon' => 'journal-text', 'active' => ['screen-tests-admin/scenarios','screen-tests-admin/scenario-form','screen-tests-admin/save-script','screen-tests-admin/reset-script','screen-tests-admin/delete-script'], 'roles' => [], 'perms' => ['TEST_SCRIPT_ADMIN','ADMIN_ALL','SYSADMIN'], 'enabled' => $testingEnabled],
     ],
   ],
 
@@ -362,7 +406,7 @@ return [
     'icon'  => 'sliders',
     'roles' => [],
     'perms' => ['BASE_CONFIG_VIEW','BASE_CONFIG_EDIT','FIN_CONFIG_VIEW','FIN_CONFIG_EDIT','CALC_ADMIN','STRATEGY_CONFIG_EDIT','STRATEGY_SEGMENT_PUBLISH','SYSSETTINGS_VIEW','SYSSETTINGS_EDIT','WORKFLOW_VIEW','WORKFLOW_EDIT','WORKFLOW_ADMIN','ADMIN_ALL','SYSADMIN'],
-    'active' => ['fiscal-years/*','versions/*','version-types/*','currencies/*','currency-rates/*','system-settings/*','workflow-engine/*','workflow-task-types/*','workflow-task-statuses/*','workflow-assignments/*','transaction-type-segment-config/*','scenario-admin/*','report-admin/*','integration-admin/*'],
+    'active' => ['fiscal-years/*','versions/*','version-types/*','currencies/*','currency-rates/*','system-settings/*','workflow-engine/*','workflow-task-types/*','workflow-task-statuses/*','workflow-assignments/*','transaction-type-segment-config/*','scenario-admin/*','report-admin/*'],
     'children' => [
       [
         'label' => 'Fiscal Context',
@@ -440,18 +484,23 @@ return [
           ['label'=>'Report Definitions','code'=>'CFRD','route'=>'report-admin/definitions','icon'=>'journal-text','active'=>['report-admin/definitions','report-admin/definition-form'],'roles'=>[],'perms'=>['ADMIN_ALL','SYSADMIN']],
         ],
       ],
-      [
-        'label' => 'Integration Configuration',
-        'code'  => 'CFIN',
-        'icon'  => 'arrow-left-right',
-        'roles' => [],
-        'perms' => ['ADMIN_ALL','SYSADMIN'],
-        'children' => [
-          ['label'=>'Integration Systems','code'=>'CFIS','route'=>'integration-admin/systems','icon'=>'diagram-3','active'=>['integration-admin/systems','integration-admin/system-form'],'roles'=>[],'perms'=>['ADMIN_ALL','SYSADMIN']],
-          ['label'=>'Integration Interfaces','code'=>'CFII','route'=>'integration-admin/interfaces','icon'=>'arrow-left-right','active'=>['integration-admin/interfaces','integration-admin/interface-form'],'roles'=>[],'perms'=>['ADMIN_ALL','SYSADMIN']],
-          ['label'=>'Integration Run History','code'=>'CFIR','route'=>'integration-admin/runs','icon'=>'clock-history','active'=>['integration-admin/runs'],'roles'=>[],'perms'=>['ADMIN_ALL','SYSADMIN']],
-        ],
-      ],
+    ],
+  ],
+
+  [
+    'label' => 'Integrations',
+    'code'  => 'IN',
+    'icon'  => 'arrow-left-right',
+    'roles' => [],
+    'perms' => ['INTEGRATION_VIEW','INTEGRATION_ADMIN','INTEGRATION_RUN','ADMIN_ALL','SYSADMIN'],
+    'active' => ['integration-admin/*'],
+    'children' => [
+      ['label'=>'Integration Dashboard','code'=>'INDD','route'=>'integration-admin/dashboard','icon'=>'speedometer2','active'=>['integration-admin/dashboard'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_ADMIN','INTEGRATION_RUN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Integration Systems','code'=>'INSY','route'=>'integration-admin/systems','icon'=>'diagram-3','active'=>['integration-admin/systems','integration-admin/system-form'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Integration Interfaces','code'=>'INIF','route'=>'integration-admin/interfaces','icon'=>'plug','active'=>['integration-admin/interfaces','integration-admin/interface-form','integration-admin/test-export'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_ADMIN','INTEGRATION_RUN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Code Crosswalks','code'=>'INCW','route'=>'integration-admin/crosswalks','icon'=>'shuffle','active'=>['integration-admin/crosswalks'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Actuals Import Review','code'=>'INAR','route'=>'integration-admin/actuals-review','icon'=>'clipboard-check','active'=>['integration-admin/actuals-review'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_RUN','INTEGRATION_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Integration Run History','code'=>'INRH','route'=>'integration-admin/runs','icon'=>'clock-history','active'=>['integration-admin/runs','integration-admin/run-detail'],'roles'=>[],'perms'=>['INTEGRATION_VIEW','INTEGRATION_RUN','INTEGRATION_ADMIN','ADMIN_ALL','SYSADMIN']],
     ],
   ],
 
@@ -485,7 +534,7 @@ return [
       ['label'=>'Training Dashboard','code'=>'TRDB','route'=>'training/dashboard','icon'=>'speedometer2','active'=>['training/dashboard'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
       ['label'=>'Training Scenarios','code'=>'TRSC','route'=>'training/scenarios','icon'=>'list-check','active'=>['training/scenarios','training/runner','training/users','training/users-edit'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
       ['label'=>'Certifications','code'=>'TRCF','route'=>'training-certifications/modules','icon'=>'award','active'=>['training-certifications/modules','training-certifications/take','training-certifications/result'],'roles'=>[],'perms'=>['TRAINING_USER','TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
-      ['label'=>'Training Operations','code'=>'TROP','route'=>'training-admin/operations','icon'=>'clipboard2-check','active'=>['training-admin/operations','training-admin/session-dashboard','training-admin/validation'],'roles'=>[],'perms'=>['TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
+      ['label'=>'Training Operations','code'=>'TROP','route'=>'training-admin/operations','icon'=>'clipboard2-check','active'=>['training-admin/operations','training-admin/session-summary','training-admin/session-dashboard','training-admin/validation'],'roles'=>[],'perms'=>['TRAINING_ADMIN','TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
       ['label'=>'Training Summary','code'=>'TRSM','route'=>'training/summary','icon'=>'mortarboard','active'=>['training/summary'],'roles'=>[],'perms'=>['TRAINING_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
       ['label'=>'Certification Results','code'=>'TRCR','route'=>'training-certifications/results','icon'=>'table','active'=>['training-certifications/results'],'roles'=>[],'perms'=>['TRAINING_ADMIN','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],
       ['label'=>'Training Catalogue','code'=>'TRCG','route'=>'training-admin/scenarios','icon'=>'journal-text','active'=>['training-admin/scenarios','training-admin/scenario-form','training-admin/steps','training-admin/step-form','training-admin/translations'],'roles'=>[],'perms'=>['TRAINING_CONFIG','ADMIN_ALL','SYSADMIN'],'enabled'=>$trainingEnabled],

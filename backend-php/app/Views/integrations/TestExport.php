@@ -14,11 +14,14 @@ $interface = is_array($interface ?? null) ? $interface : [];
 $mappingConfig = is_array($mappingConfig ?? null) ? $mappingConfig : [];
 $formData = is_array($formData ?? null) ? $formData : [];
 $previewResult = is_array($previewResult ?? null) ? $previewResult : null;
+$dispatchResult = is_array($dispatchResult ?? null) ? $dispatchResult : null;
 $recentRuns = is_array($recentRuns ?? null) ? $recentRuns : [];
 $outputProfileOptions = is_array($outputProfileOptions ?? null) ? $outputProfileOptions : [];
 $mappingPretty = $mappingConfig !== []
     ? json_encode($mappingConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
     : '';
+$isMockInterface = str_starts_with(strtoupper((string) ($interface['SystemCode'] ?? '')), 'MOCK_')
+    || str_starts_with(strtolower((string) ($interface['BaseUrl'] ?? '')), 'local://');
 ?>
 
 <div class="container mt-4">
@@ -35,8 +38,13 @@ $mappingPretty = $mappingConfig !== []
       <?php endif; ?>
 
 
-      <div class="alert alert-info">
-        This runner is a safe preview only. It reads from the configured source object, maps the records, builds the outbound JSON preview, and logs the run, but it does not call the finance-system endpoint yet.
+      <div class="alert <?= $isMockInterface ? 'alert-warning' : 'alert-info' ?>">
+        <div class="fw-semibold mb-1">
+          <?= $isMockInterface ? 'Mock Run - No External Dispatch' : 'Safe Preview - No External Dispatch' ?>
+        </div>
+        <div>
+          This runner reads from the configured source object, maps the records, builds the outbound JSON preview, and logs the run. It does not call an external endpoint.
+        </div>
       </div>
 
       <div class="d-flex justify-content-end gap-2 flex-wrap mb-3">
@@ -114,8 +122,13 @@ $mappingPretty = $mappingConfig !== []
           </div>
         </div>
 
-        <div class="col-12 d-flex justify-content-end">
+        <div class="col-12 d-flex justify-content-end gap-2 flex-wrap">
           <button type="submit" class="btn btn-primary"><i class="bi bi-play-circle me-1"></i>Run Test Export</button>
+          <?php if ($isMockInterface): ?>
+            <button type="submit" class="btn btn-outline-primary" formaction="index.php?route=integration-admin/dispatch-test-export">
+              <i class="bi bi-send-check me-1"></i>Dispatch to Mock API
+            </button>
+          <?php endif; ?>
         </div>
       </form>
 
@@ -161,7 +174,12 @@ $mappingPretty = $mappingConfig !== []
                           <td><?= h((string) ($run['StartedAt'] ?? '')) ?></td>
                           <td><span class="badge <?= h($statusClass) ?>"><?= h((string) ($run['RunStatusCode'] ?? '')) ?></span></td>
                           <td><?= (int) ($run['RecordsProcessed'] ?? 0) ?></td>
-                          <td><?= h((string) ($run['SummaryText'] ?? '')) ?></td>
+                          <td>
+                            <div><?= h((string) ($run['SummaryText'] ?? '')) ?></div>
+                            <?php if (in_array((string) ($run['TriggerSourceCode'] ?? ''), ['manual_preview', 'mock_api_dispatch'], true)): ?>
+                              <div class="small mt-1"><span class="badge text-bg-warning">No external dispatch</span></div>
+                            <?php endif; ?>
+                          </td>
                         </tr>
                       <?php endforeach; ?>
                     <?php endif; ?>
@@ -186,7 +204,39 @@ $mappingPretty = $mappingConfig !== []
         <div class="alert alert-<?= h($statusClass) ?>">
           <div class="fw-semibold mb-1">Run <?= h((string) ($previewResult['run_id'] ?? '')) ?>: <?= h((string) strtoupper($status)) ?></div>
           <div><?= h((string) ($previewResult['summary'] ?? '')) ?></div>
+          <div class="mt-2"><span class="badge text-bg-warning">Mock / preview only - no external dispatch</span></div>
         </div>
+
+        <?php if ($dispatchResult !== null): ?>
+          <?php
+          $dispatchStatus = strtolower((string) ($dispatchResult['status'] ?? 'warning'));
+          $dispatchClass = match ($dispatchStatus) {
+              'success' => 'success',
+              'warning' => 'warning',
+              'failed' => 'danger',
+              default => 'secondary',
+          };
+          ?>
+          <div class="alert alert-<?= h($dispatchClass) ?>">
+            <div class="fw-semibold mb-1">Mock API Dispatch <?= h((string) strtoupper($dispatchStatus)) ?></div>
+            <div><?= h((string) ($dispatchResult['summary'] ?? '')) ?></div>
+            <?php if (!empty($dispatchResult['correlation_id'])): ?>
+              <div class="small mt-1">Mock correlation ID: <code><?= h((string) $dispatchResult['correlation_id']) ?></code></div>
+            <?php endif; ?>
+          </div>
+
+          <div class="card mb-4">
+            <div class="card-header">Mock API Response</div>
+            <div class="card-body">
+              <div class="row g-3 mb-3">
+                <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Records Sent</div><div class="fs-4 fw-semibold"><?= (int) ($dispatchResult['record_count'] ?? 0) ?></div></div></div>
+                <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Accepted</div><div class="fs-4 fw-semibold"><?= (int) ($dispatchResult['accepted_count'] ?? 0) ?></div></div></div>
+                <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Failed</div><div class="fs-4 fw-semibold"><?= (int) ($dispatchResult['failed_count'] ?? 0) ?></div></div></div>
+              </div>
+              <textarea class="form-control font-monospace" rows="12" readonly><?= h((string) ($dispatchResult['response_json'] ?? '')) ?></textarea>
+            </div>
+          </div>
+        <?php endif; ?>
 
         <div class="d-flex justify-content-end gap-2 flex-wrap mb-3">
           <form method="post" action="index.php?route=integration-admin/download-test-export">
@@ -244,6 +294,12 @@ $mappingPretty = $mappingConfig !== []
             <div class="border rounded p-3 h-100">
               <div class="small text-muted">Row Limit Reached</div>
               <div class="fs-4 fw-semibold"><?= !empty($previewResult['truncated']) ? 'Yes' : 'No' ?></div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted">External Dispatch</div>
+              <div class="fs-4 fw-semibold">No</div>
             </div>
           </div>
         </div>

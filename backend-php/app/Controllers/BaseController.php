@@ -1220,6 +1220,9 @@ abstract class BaseController
         if ($route === '' || str_starts_with($route, 'auth/') || str_starts_with($route, 'screen-tests/')) {
             return null;
         }
+        if (!(new Rbac($GLOBALS['conn'] ?? null))->canAny(['TEST_SCRIPT_RUN', 'TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN'])) {
+            return null;
+        }
 
         $scenario = ScreenTestCatalog::firstForTargetRoute($route);
         if (is_array($scenario)) {

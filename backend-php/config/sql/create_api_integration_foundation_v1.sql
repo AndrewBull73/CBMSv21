@@ -8,7 +8,7 @@
     - optional item-level run log
 */
 
-USE [CBMSv2];
+
 GO
 
 IF OBJECT_ID(N'dbo.tblIntegrationSystem', N'U') IS NULL

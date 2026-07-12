@@ -16,18 +16,61 @@ $storageReady = (bool) ($storageReady ?? false);
 $createTableScript = (string) ($createTableScript ?? '');
 $canViewAllRuns = (bool) ($canViewAllRuns ?? false);
 $attachmentsByRunId = is_array($attachmentsByRunId ?? null) ? $attachmentsByRunId : [];
+$assignmentsInstalled = (bool) ($assignmentsInstalled ?? false);
+$assignmentSummary = is_array($assignmentSummary ?? null) ? $assignmentSummary : [];
+$assignmentRows = array_values(is_array($assignmentRows ?? null) ? $assignmentRows : []);
+$createAssignmentsScript = (string) ($createAssignmentsScript ?? '');
+$exportQuery = http_build_query([
+    'route' => 'screen-tests/export-results-excel',
+    'q' => (string) ($filters['q'] ?? ''),
+    'scenario_code' => (string) ($filters['scenario_code'] ?? ''),
+    'module' => (string) ($filters['module'] ?? ''),
+    'result' => (string) ($filters['result'] ?? ''),
+    'verification' => (string) ($filters['verification'] ?? ''),
+]);
+$assignmentStatusBadge = static function (string $status): string {
+    return match (strtolower(trim($status))) {
+        'completed' => 'text-bg-success',
+        'in_progress' => 'text-bg-primary',
+        'cancelled' => 'text-bg-secondary',
+        default => 'text-bg-light border text-dark',
+    };
+};
+$resultBadge = static function (string $result): string {
+    return match (strtolower(trim($result))) {
+        'passed' => 'text-bg-success',
+        'failed' => 'text-bg-danger',
+        'blocked' => 'text-bg-warning',
+        default => 'text-bg-light border text-dark',
+    };
+};
 ?>
 
 <div class="container mt-4">
   <div class="card shadow-sm">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
       <h3 class="mb-0"><i class="bi bi-table me-2"></i><?= __t('screen_tests_results_title') ?></h3>
+      <a href="index.php?<?= h($exportQuery) ?>" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+      </a>
     </div>
     <div class="card-body">
 
       <div class="alert alert-info">
         <?= __t('screen_tests_summary_intro') ?>
       </div>
+
+      <?php
+      $testingQuickLinksMode = $canViewAllRuns ? 'admin' : 'tester';
+      require __DIR__ . '/_TestingQuickLinks.php';
+      $testingHelperTitle = 'How to review test results';
+      $testingHelperItems = [
+          'Use <strong>Assignment Progress</strong> to see current assigned work and the latest result for each user/script combination.',
+          'Use <strong>Run History</strong> to inspect saved attempts, context, evidence, outcome notes, and defect references.',
+          'Filter by script, module, result, verification status, or search text when reviewing failed, blocked, or overdue work.',
+      ];
+      require __DIR__ . '/_TestingHelperInstructions.php';
+      ?>
 
       <?php if (!$storageReady): ?>
         <div class="alert alert-warning">
@@ -99,6 +142,118 @@ $attachmentsByRunId = is_array($attachmentsByRunId ?? null) ? $attachmentsByRunI
         </div>
       </form>
 
+      <?php if ($assignmentsInstalled): ?>
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-3 mb-4">
+          <div class="col">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted"><?= __t('screen_tests_assignments_total') ?></div>
+              <div class="fs-4 fw-semibold"><?= h((string) (int) ($assignmentSummary['total'] ?? 0)) ?></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted"><?= __t('screen_tests_assignments_not_started') ?></div>
+              <div class="fs-4 fw-semibold"><?= h((string) (int) ($assignmentSummary['assigned'] ?? 0)) ?></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted"><?= __t('screen_tests_assignments_in_progress') ?></div>
+              <div class="fs-4 fw-semibold"><?= h((string) (int) ($assignmentSummary['in_progress'] ?? 0)) ?></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted"><?= __t('screen_tests_assignments_completed') ?></div>
+              <div class="fs-4 fw-semibold"><?= h((string) (int) ($assignmentSummary['completed'] ?? 0)) ?></div>
+            </div>
+          </div>
+          <div class="col">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted"><?= __t('screen_tests_assignments_overdue') ?></div>
+              <div class="fs-4 fw-semibold"><?= h((string) (int) ($assignmentSummary['overdue'] ?? 0)) ?></div>
+            </div>
+          </div>
+        </div>
+
+        <h4 class="h5 mb-3"><?= __t('screen_tests_assignment_progress_title') ?></h4>
+        <?php if ($assignmentRows === []): ?>
+          <div class="text-center text-muted py-3 border rounded mb-4"><?= __t('screen_tests_no_assignments') ?></div>
+        <?php else: ?>
+          <div class="table-responsive mb-4">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th><?= __t('screen_tests_scenario_label') ?></th>
+                  <?php if ($canViewAllRuns): ?>
+                    <th><?= __t('assigned_to') ?></th>
+                  <?php endif; ?>
+                  <th><?= __t('screen_tests_filter_module') ?></th>
+                  <th><?= __t('due_date') ?></th>
+                  <th><?= __t('status') ?></th>
+                  <th><?= __t('screen_tests_result_label') ?></th>
+                  <th><?= __t('screen_tests_latest_run') ?></th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($assignmentRows as $assignment): ?>
+                  <?php
+                  $assignmentStatus = strtolower((string) ($assignment['AssignmentStatus'] ?? 'assigned'));
+                  $runResult = strtolower((string) ($assignment['RunResult'] ?? ''));
+                  $displayName = trim((string) ($assignment['DisplayName'] ?? ''));
+                  if ($displayName === '') {
+                      $displayName = trim((string) ($assignment['Username'] ?? 'User #' . (int) ($assignment['UserID'] ?? 0)));
+                  }
+                  $assignmentStatusLabel = match ($assignmentStatus) {
+                      'completed' => __t('screen_tests_assignments_completed'),
+                      'in_progress' => __t('screen_tests_status_in_progress'),
+                      'cancelled' => __t('cancelled'),
+                      default => __t('assigned'),
+                  };
+                  $runResultLabel = match ($runResult) {
+                      'passed' => __t('screen_tests_result_passed'),
+                      'failed' => __t('screen_tests_result_failed'),
+                      'blocked' => __t('screen_tests_result_blocked'),
+                      default => __t('screen_tests_status_not_run'),
+                  };
+                  ?>
+                  <tr>
+                    <td>
+                      <div class="fw-semibold"><?= h((string) ($assignment['ScenarioTitle'] ?? $assignment['ScenarioCode'] ?? '')) ?></div>
+                      <div class="small text-muted"><code><?= h((string) ($assignment['ScenarioCode'] ?? '')) ?></code></div>
+                    </td>
+                    <?php if ($canViewAllRuns): ?>
+                      <td>
+                        <?= h($displayName) ?>
+                        <div class="small text-muted"><?= h((string) ($assignment['Username'] ?? '')) ?></div>
+                      </td>
+                    <?php endif; ?>
+                    <td><?= h((string) ($assignment['ModuleName'] ?? '')) ?></td>
+                    <td><?= h(trim((string) ($assignment['DueDate'] ?? '')) !== '' ? (string) $assignment['DueDate'] : 'n/a') ?></td>
+                    <td><span class="badge rounded-pill <?= h($assignmentStatusBadge($assignmentStatus)) ?>"><?= h($assignmentStatusLabel) ?></span></td>
+                    <td><span class="badge rounded-pill <?= h($resultBadge($runResult)) ?>"><?= h($runResultLabel) ?></span></td>
+                    <td>
+                      <?php if ((int) ($assignment['ScreenTestRunID'] ?? 0) <= 0): ?>
+                        <span class="text-muted small"><?= __t('screen_tests_no_recent_runs') ?></span>
+                      <?php else: ?>
+                        <div><?= h((string) ($assignment['LatestRunCompletedAt'] ?? '')) ?></div>
+                        <div class="small text-muted"><?= __t('training_attempt_label') ?> <?= h((string) ($assignment['AttemptNo'] ?? '')) ?></div>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      <?php elseif ($createAssignmentsScript !== ''): ?>
+        <div class="alert alert-warning">
+          <div class="fw-semibold mb-1"><?= __t('screen_tests_assignments_not_installed') ?></div>
+          <div class="small"><?= h($createAssignmentsScript) ?></div>
+        </div>
+      <?php endif; ?>
+
+      <h4 class="h5 mb-3"><?= __t('screen_tests_run_history_title') ?></h4>
       <?php if ($rows === []): ?>
         <div class="text-center text-muted py-4"><?= __t('screen_tests_no_results') ?></div>
       <?php else: ?>

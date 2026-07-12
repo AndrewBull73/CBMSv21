@@ -3,20 +3,163 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\ScreenTestRunModel;
+use App\Models\WorkflowUserGroupModel;
+use App\Shared\CbmsModuleCatalog;
 use App\Shared\ScreenTestCatalog;
+use App\Shared\SessionHelper;
 
 require_once __DIR__ . '/../../shared/csrf.php';
+require_once __DIR__ . '/../Shared/CbmsModuleCatalog.php';
 
 final class ScreenTestsAdminController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['USERS_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'userSearch' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'user-search' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'saveAssignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-assignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cancelAssignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cancel-assignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cleanupAssignments' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'cleanup-assignments' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'resetAssignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'reset-assignment' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'exportSummaryExcel' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'export-summary-excel' => ['auth' => true, 'permsAny' => ['TEST_SCRIPT_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     public function __construct()
     {
         parent::__construct();
         $this->ensureScreenTestingEnabled();
+    }
+
+    public function summary(): void
+    {
+        $data = $this->buildTestingSummaryData($this->testingSummaryFiltersFromRequest());
+
+        $this->render('screentestsadmin/Summary', [
+            'title' => 'Testing Summary',
+            'assignmentsInstalled' => $data['assignmentsInstalled'],
+            'createAssignmentsScript' => 'backend-php/config/sql/create_tblScreenTestAssignments.sql',
+            'filters' => $data['filters'],
+            'moduleOptions' => $data['moduleOptions'],
+            'overall' => $data['overall'],
+            'moduleSummary' => $data['moduleSummary'],
+            'userSummary' => $data['userSummary'],
+            'assignmentRows' => $data['assignmentRows'],
+        ]);
+    }
+
+    public function exportSummaryExcel(): void
+    {
+        $data = $this->buildTestingSummaryData($this->testingSummaryFiltersFromRequest());
+        $exportRows = [];
+
+        foreach ([
+            'Total Assigned' => 'total',
+            'Not Started' => 'not_started',
+            'In Progress' => 'in_progress',
+            'Completed' => 'completed',
+            'Overdue' => 'overdue',
+        ] as $label => $key) {
+            $exportRows[] = [
+                'Section' => 'Overall',
+                'Name' => $label,
+                'Username' => '',
+                'Script' => '',
+                'Module' => '',
+                'Due Date' => '',
+                'Status' => '',
+                'Latest Result' => '',
+                'Latest Run' => '',
+                'Defect Reference' => '',
+                'Total' => (string) (int) ($data['overall'][$key] ?? 0),
+                'Completed' => '',
+                'Overdue' => '',
+                'Completion Percent' => '',
+            ];
+        }
+
+        foreach ($data['moduleSummary'] as $row) {
+            $exportRows[] = [
+                'Section' => 'Module Summary',
+                'Name' => (string) ($row['module'] ?? ''),
+                'Username' => '',
+                'Script' => '',
+                'Module' => (string) ($row['module'] ?? ''),
+                'Due Date' => '',
+                'Status' => '',
+                'Latest Result' => '',
+                'Latest Run' => '',
+                'Defect Reference' => '',
+                'Total' => (string) (int) ($row['total'] ?? 0),
+                'Completed' => (string) (int) ($row['completed'] ?? 0),
+                'Overdue' => (string) (int) ($row['overdue'] ?? 0),
+                'Completion Percent' => (string) (int) ($row['completion_percent'] ?? 0),
+            ];
+        }
+
+        foreach ($data['userSummary'] as $row) {
+            $exportRows[] = [
+                'Section' => 'Tester Summary',
+                'Name' => (string) ($row['user_name'] ?? ''),
+                'Username' => (string) ($row['username'] ?? ''),
+                'Script' => '',
+                'Module' => '',
+                'Due Date' => '',
+                'Status' => '',
+                'Latest Result' => '',
+                'Latest Run' => '',
+                'Defect Reference' => '',
+                'Total' => (string) (int) ($row['total'] ?? 0),
+                'Completed' => (string) (int) ($row['completed'] ?? 0),
+                'Overdue' => (string) (int) ($row['overdue'] ?? 0),
+                'Completion Percent' => (string) (int) ($row['completion_percent'] ?? 0),
+            ];
+        }
+
+        foreach ($data['assignmentRows'] as $row) {
+            $displayName = trim((string) ($row['DisplayName'] ?? ''));
+            if ($displayName === '') {
+                $displayName = trim((string) ($row['Username'] ?? ('User #' . (int) ($row['UserID'] ?? 0))));
+            }
+            $exportRows[] = [
+                'Section' => 'Assignment Detail',
+                'Name' => $displayName,
+                'Username' => (string) ($row['Username'] ?? ''),
+                'Script' => (string) ($row['ScenarioTitle'] ?? $row['ScenarioCode'] ?? ''),
+                'Module' => (string) ($row['ModuleName'] ?? ''),
+                'Due Date' => (string) ($row['DueDate'] ?? ''),
+                'Status' => $this->testingStatusLabel((string) ($row['AssignmentStatus'] ?? 'assigned')),
+                'Latest Result' => $this->testingResultLabel((string) ($row['RunResult'] ?? '')),
+                'Latest Run' => (string) ($row['LatestRunCompletedAt'] ?? ''),
+                'Defect Reference' => (string) ($row['DefectReference'] ?? ''),
+                'Total' => '',
+                'Completed' => '',
+                'Overdue' => '',
+                'Completion Percent' => '',
+            ];
+        }
+
+        $this->downloadExcel('Testing Summary', 'TestingSummary', [
+            ['label' => 'Section', 'key' => 'Section'],
+            ['label' => 'Name', 'key' => 'Name'],
+            ['label' => 'Username', 'key' => 'Username'],
+            ['label' => 'Script', 'key' => 'Script'],
+            ['label' => 'Module', 'key' => 'Module'],
+            ['label' => 'Due Date', 'key' => 'Due Date'],
+            ['label' => 'Status', 'key' => 'Status'],
+            ['label' => 'Latest Result', 'key' => 'Latest Result'],
+            ['label' => 'Latest Run', 'key' => 'Latest Run'],
+            ['label' => 'Defect Reference', 'key' => 'Defect Reference'],
+            ['label' => 'Total', 'key' => 'Total'],
+            ['label' => 'Completed', 'key' => 'Completed'],
+            ['label' => 'Overdue', 'key' => 'Overdue'],
+            ['label' => 'Completion Percent', 'key' => 'Completion Percent'],
+        ], $exportRows);
     }
 
     public function scenarios(): void
@@ -71,7 +214,7 @@ final class ScreenTestsAdminController extends BaseController
             return strcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
         });
 
-        ksort($moduleOptions, SORT_NATURAL | SORT_FLAG_CASE);
+        $moduleOptions = CbmsModuleCatalog::mergeWithObserved($moduleOptions);
 
         $this->render('screentestsadmin/ScenarioList', [
             'title' => 'Test Script Catalogue',
@@ -93,7 +236,242 @@ final class ScreenTestsAdminController extends BaseController
             'record' => $record,
             'sourceState' => $sourceState,
             'storagePath' => ScreenTestCatalog::storagePath(),
+            'moduleOptions' => CbmsModuleCatalog::mergeWithObserved($record !== null ? [(string) ($record['module'] ?? '')] : []),
         ]);
+    }
+
+    public function assignments(): void
+    {
+        $model = $this->screenTestRunModel();
+        $assignmentsInstalled = $model instanceof ScreenTestRunModel && $model->supportsScreenTestAssignments();
+        $workflowGroupModel = $this->workflowUserGroupModel();
+        $workflowGroupsInstalled = $workflowGroupModel instanceof WorkflowUserGroupModel && $workflowGroupModel->supportsWorkflowUserGroups();
+
+        $scenarioRows = [];
+        $moduleOptions = [];
+        foreach (ScreenTestCatalog::all() as $scenarioId => $scenario) {
+            $moduleName = trim((string) ($scenario['module'] ?? ''));
+            if ($moduleName !== '') {
+                $moduleOptions[$moduleName] = $moduleName;
+            }
+            $scenarioRows[] = [
+                'id' => $scenarioId,
+                'title' => (string) ($scenario['title'] ?? $scenarioId),
+                'module' => $moduleName,
+                'screen_family' => (string) ($scenario['screen_family'] ?? ''),
+                'target_route' => (string) ($scenario['target_route'] ?? ''),
+            ];
+        }
+        usort($scenarioRows, static function (array $left, array $right): int {
+            $moduleCompare = strcasecmp((string) ($left['module'] ?? ''), (string) ($right['module'] ?? ''));
+            if ($moduleCompare !== 0) {
+                return $moduleCompare;
+            }
+
+            return strcasecmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
+        });
+        $moduleOptions = CbmsModuleCatalog::mergeWithObserved($moduleOptions);
+
+        $this->render('screentestsadmin/Assignments', [
+            'title' => 'Assign Test Scripts',
+            'assignmentsInstalled' => $assignmentsInstalled,
+            'createAssignmentsScript' => 'backend-php/config/sql/create_tblScreenTestAssignments.sql',
+            'scenarioRows' => $scenarioRows,
+            'moduleOptions' => $moduleOptions,
+            'assignments' => $assignmentsInstalled && $model instanceof ScreenTestRunModel ? $model->listAssignments(['status' => 'open']) : [],
+            'workflowUserGroups' => $workflowGroupsInstalled && $workflowGroupModel instanceof WorkflowUserGroupModel ? $workflowGroupModel->listGroups('', '1') : [],
+            'workflowUserGroupsInstalled' => $workflowGroupsInstalled,
+        ]);
+    }
+
+    public function userSearch(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+
+        try {
+            $model = $this->screenTestRunModel();
+            if (!$model instanceof ScreenTestRunModel) {
+                throw new \RuntimeException('Screen test model is not available.');
+            }
+
+            $items = [];
+            foreach ($model->searchUsers(trim((string) ($_GET['q'] ?? '')), (int) ($_GET['limit'] ?? 50)) as $row) {
+                $userId = (int) ($row['UserID'] ?? 0);
+                if ($userId <= 0) {
+                    continue;
+                }
+                $displayName = trim((string) ($row['DisplayName'] ?? ''));
+                $username = trim((string) ($row['Username'] ?? ''));
+                $email = trim((string) ($row['Email'] ?? ''));
+                $label = $displayName !== '' ? $displayName : ($username !== '' ? $username : ('User #' . $userId));
+                $items[] = [
+                    'id' => $userId,
+                    'label' => $label,
+                    'username' => $username,
+                    'email' => $email,
+                ];
+            }
+            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function saveAssignment(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        try {
+            $model = $this->screenTestRunModel();
+            if (!$model instanceof ScreenTestRunModel || !$model->supportsScreenTestAssignments()) {
+                throw new \RuntimeException('Screen test assignment storage is not available.');
+            }
+
+            $selectedUserIds = is_array($_POST['AssignmentUserIDs'] ?? null) ? $_POST['AssignmentUserIDs'] : [];
+            $selectedUserIdsText = implode(',', array_filter(array_map(
+                static fn($userId): string => (string) max(0, (int) $userId),
+                $selectedUserIds
+            )));
+            $selectedGroupIds = $this->normalizeIntArray($_POST['WorkflowUserGroupIDs'] ?? []);
+            $groupUserIds = [];
+            if ($selectedGroupIds !== []) {
+                $workflowUserGroupModel = $this->workflowUserGroupModel();
+                if (!$workflowUserGroupModel instanceof WorkflowUserGroupModel || !$workflowUserGroupModel->supportsWorkflowUserGroups()) {
+                    throw new \RuntimeException('Workflow user group tables are not installed.');
+                }
+                foreach ($workflowUserGroupModel->listActiveMembersForGroups($selectedGroupIds) as $row) {
+                    $groupUserId = (int) ($row['UserID'] ?? 0);
+                    if ($groupUserId > 0) {
+                        $groupUserIds[] = $groupUserId;
+                    }
+                }
+            }
+
+            $selectedScenarioCodes = is_array($_POST['ScenarioCodes'] ?? null) ? $_POST['ScenarioCodes'] : [];
+            $selectedModule = trim((string) ($_POST['ModuleName'] ?? ''));
+            $scenarioCodes = [];
+            $moduleByScenario = [];
+            foreach (ScreenTestCatalog::all() as $scenarioId => $scenario) {
+                $moduleName = trim((string) ($scenario['module'] ?? ''));
+                $isSelectedScenario = in_array((string) $scenarioId, array_map('strval', $selectedScenarioCodes), true);
+                $isSelectedModule = $selectedModule !== '' && strcasecmp($moduleName, $selectedModule) === 0;
+                if ($isSelectedScenario || $isSelectedModule) {
+                    $scenarioCodes[] = (string) $scenarioId;
+                    $moduleByScenario[(string) $scenarioId] = $moduleName;
+                }
+            }
+
+            $result = $model->saveAssignments([
+                'UserIDs' => trim($selectedUserIdsText . ',' . implode(',', $groupUserIds), " \t\n\r\0\x0B,"),
+                'ScenarioCodes' => $scenarioCodes,
+                'ModuleByScenario' => $moduleByScenario,
+                'DueDate' => trim((string) ($_POST['DueDate'] ?? '')),
+                'Notes' => trim((string) ($_POST['Notes'] ?? '')),
+            ], (int) SessionHelper::get('auth.user_id', 0));
+
+            $created = (int) ($result['created'] ?? 0);
+            $skipped = (int) ($result['skipped'] ?? 0);
+            $message = $created . ' test script assignment' . ($created === 1 ? '' : 's') . ' created.';
+            if ($skipped > 0) {
+                $message .= ' ' . $skipped . ' already assigned and skipped.';
+            }
+            $this->flashSuccess($message);
+        } catch (\Throwable $e) {
+            $this->flashError('Test script assignment failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=screen-tests-admin/assignments');
+    }
+
+    public function cancelAssignment(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        try {
+            $model = $this->screenTestRunModel();
+            if (!$model instanceof ScreenTestRunModel) {
+                throw new \RuntimeException('Screen test model is not available.');
+            }
+            $cancelled = $model->cancelAssignment(
+                (int) ($_POST['ScreenTestAssignmentID'] ?? 0),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            if ($cancelled) {
+                $this->flashSuccess('Test script assignment removed.');
+            } else {
+                $this->flashError('Test script assignment could not be removed. It may already be completed or cancelled.');
+            }
+        } catch (\Throwable $e) {
+            $this->flashError('Test script assignment remove failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=screen-tests-admin/assignments');
+    }
+
+    public function cleanupAssignments(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        try {
+            $model = $this->screenTestRunModel();
+            if (!$model instanceof ScreenTestRunModel || !$model->supportsScreenTestAssignments()) {
+                throw new \RuntimeException('Screen test assignment storage is not available.');
+            }
+
+            $cleaned = $model->cleanupAssignments([
+                'scope' => trim((string) ($_POST['CleanupScope'] ?? 'completed')),
+                'module' => trim((string) ($_POST['CleanupModuleName'] ?? '')),
+                'due_before' => trim((string) ($_POST['CleanupDueBefore'] ?? '')),
+            ], (int) SessionHelper::get('auth.user_id', 0));
+
+            $this->flashSuccess($cleaned . ' test script assignment' . ($cleaned === 1 ? '' : 's') . ' cleaned up.');
+        } catch (\Throwable $e) {
+            $this->flashError('Test script assignment cleanup failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=screen-tests-admin/assignments');
+    }
+
+    public function resetAssignment(): void
+    {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' || !csrf_check((string) ($_POST['_csrf'] ?? ''))) {
+            http_response_code(400);
+            echo 'Invalid request.';
+            return;
+        }
+
+        try {
+            $model = $this->screenTestRunModel();
+            if (!$model instanceof ScreenTestRunModel) {
+                throw new \RuntimeException('Screen test model is not available.');
+            }
+            $reset = $model->resetAssignment(
+                (int) ($_POST['ScreenTestAssignmentID'] ?? 0),
+                (int) SessionHelper::get('auth.user_id', 0)
+            );
+            if ($reset) {
+                $this->flashSuccess('Test script assignment reset for retesting.');
+            } else {
+                $this->flashError('Test script assignment could not be reset.');
+            }
+        } catch (\Throwable $e) {
+            $this->flashError('Test script assignment reset failed: ' . $e->getMessage());
+        }
+
+        header('Location: index.php?route=screen-tests-admin/summary');
     }
 
     public function saveScenario(): void
@@ -225,6 +603,199 @@ final class ScreenTestsAdminController extends BaseController
         }
 
         return 'custom';
+    }
+
+    private function screenTestRunModel(): ?ScreenTestRunModel
+    {
+        return $this->db instanceof \PDO ? new ScreenTestRunModel($this->db) : null;
+    }
+
+    private function workflowUserGroupModel(): ?WorkflowUserGroupModel
+    {
+        return $this->db instanceof \PDO ? new WorkflowUserGroupModel($this->db) : null;
+    }
+
+    private function normalizeIntArray(mixed $value): array
+    {
+        $rawValues = is_array($value) ? $value : [$value];
+        $ids = [];
+        foreach ($rawValues as $rawValue) {
+            $id = (int) $rawValue;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    private function testingSummaryFiltersFromRequest(): array
+    {
+        return [
+            'q' => trim((string) ($_GET['q'] ?? '')),
+            'module' => trim((string) ($_GET['module'] ?? '')),
+            'status' => trim((string) ($_GET['status'] ?? '')),
+        ];
+    }
+
+    private function buildTestingSummaryData(array $filters): array
+    {
+        $filters = [
+            'q' => trim((string) ($filters['q'] ?? '')),
+            'module' => trim((string) ($filters['module'] ?? '')),
+            'status' => trim((string) ($filters['status'] ?? '')),
+        ];
+
+        $moduleOptions = [];
+        foreach (ScreenTestCatalog::all() as $scenario) {
+            $moduleName = trim((string) ($scenario['module'] ?? ''));
+            if ($moduleName !== '') {
+                $moduleOptions[$moduleName] = $moduleName;
+            }
+        }
+        $moduleOptions = CbmsModuleCatalog::mergeWithObserved($moduleOptions);
+
+        $model = $this->screenTestRunModel();
+        $assignmentsInstalled = $model instanceof ScreenTestRunModel && $model->supportsScreenTestAssignments();
+        $assignmentRows = [];
+        if ($assignmentsInstalled && $model instanceof ScreenTestRunModel) {
+            $assignmentRows = $model->listAssignmentProgress(0, [
+                'q' => $filters['q'],
+                'module' => $filters['module'],
+            ], true);
+        }
+
+        if ($filters['status'] !== '') {
+            $selectedStatus = strtolower($filters['status']);
+            $assignmentRows = array_values(array_filter($assignmentRows, static function (array $row) use ($selectedStatus): bool {
+                return strtolower((string) ($row['AssignmentStatus'] ?? 'assigned')) === $selectedStatus;
+            }));
+        }
+
+        $overall = $this->emptySummaryBucket();
+        $moduleSummary = [];
+        $userSummary = [];
+        $today = date('Y-m-d');
+
+        foreach ($assignmentRows as $row) {
+            $status = strtolower((string) ($row['AssignmentStatus'] ?? 'assigned'));
+            $result = strtolower((string) ($row['RunResult'] ?? ''));
+            $dueDate = trim((string) ($row['DueDate'] ?? ''));
+            $isOverdue = $dueDate !== '' && $dueDate < $today && $status !== 'completed';
+            $moduleName = trim((string) ($row['ModuleName'] ?? ''));
+            if ($moduleName === '') {
+                $moduleName = 'Unassigned Module';
+            }
+            $userId = (int) ($row['UserID'] ?? 0);
+            $displayName = trim((string) ($row['DisplayName'] ?? ''));
+            if ($displayName === '') {
+                $displayName = trim((string) ($row['Username'] ?? ('User #' . $userId)));
+            }
+
+            $this->addTestingSummaryRow($overall, $status, $result, $isOverdue);
+
+            if (!isset($moduleSummary[$moduleName])) {
+                $moduleSummary[$moduleName] = array_merge($this->emptySummaryBucket(), [
+                    'module' => $moduleName,
+                ]);
+            }
+            $this->addTestingSummaryRow($moduleSummary[$moduleName], $status, $result, $isOverdue);
+
+            if (!isset($userSummary[$userId])) {
+                $userSummary[$userId] = array_merge($this->emptySummaryBucket(), [
+                    'user_id' => $userId,
+                    'user_name' => $displayName,
+                    'username' => (string) ($row['Username'] ?? ''),
+                ]);
+            }
+            $this->addTestingSummaryRow($userSummary[$userId], $status, $result, $isOverdue);
+        }
+
+        $overall = $this->withCompletionPercent($overall);
+        $moduleSummary = array_map(fn (array $row): array => $this->withCompletionPercent($row), array_values($moduleSummary));
+        $userSummary = array_map(fn (array $row): array => $this->withCompletionPercent($row), array_values($userSummary));
+
+        usort($moduleSummary, static function (array $left, array $right): int {
+            return strcasecmp((string) ($left['module'] ?? ''), (string) ($right['module'] ?? ''));
+        });
+        usort($userSummary, static function (array $left, array $right): int {
+            $completionCompare = ((int) ($left['completion_percent'] ?? 0)) <=> ((int) ($right['completion_percent'] ?? 0));
+            if ($completionCompare !== 0) {
+                return $completionCompare;
+            }
+            return strcasecmp((string) ($left['user_name'] ?? ''), (string) ($right['user_name'] ?? ''));
+        });
+
+        return [
+            'filters' => $filters,
+            'moduleOptions' => $moduleOptions,
+            'assignmentsInstalled' => $assignmentsInstalled,
+            'overall' => $overall,
+            'moduleSummary' => $moduleSummary,
+            'userSummary' => $userSummary,
+            'assignmentRows' => $assignmentRows,
+        ];
+    }
+
+    private function testingStatusLabel(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'completed' => 'Completed',
+            'in_progress' => 'In Progress',
+            default => 'Not Started',
+        };
+    }
+
+    private function testingResultLabel(string $result): string
+    {
+        return match (strtolower(trim($result))) {
+            'passed' => 'Passed',
+            'failed' => 'Failed',
+            'blocked' => 'Blocked',
+            default => 'Not Run',
+        };
+    }
+
+    private function emptySummaryBucket(): array
+    {
+        return [
+            'total' => 0,
+            'not_started' => 0,
+            'in_progress' => 0,
+            'completed' => 0,
+            'overdue' => 0,
+            'passed' => 0,
+            'failed' => 0,
+            'blocked' => 0,
+            'completion_percent' => 0,
+        ];
+    }
+
+    private function addTestingSummaryRow(array &$bucket, string $status, string $result, bool $isOverdue): void
+    {
+        $bucket['total'] = (int) ($bucket['total'] ?? 0) + 1;
+        if ($status === 'completed') {
+            $bucket['completed'] = (int) ($bucket['completed'] ?? 0) + 1;
+        } elseif ($status === 'in_progress') {
+            $bucket['in_progress'] = (int) ($bucket['in_progress'] ?? 0) + 1;
+        } else {
+            $bucket['not_started'] = (int) ($bucket['not_started'] ?? 0) + 1;
+        }
+
+        if ($isOverdue) {
+            $bucket['overdue'] = (int) ($bucket['overdue'] ?? 0) + 1;
+        }
+        if (in_array($result, ['passed', 'failed', 'blocked'], true)) {
+            $bucket[$result] = (int) ($bucket[$result] ?? 0) + 1;
+        }
+    }
+
+    private function withCompletionPercent(array $bucket): array
+    {
+        $total = max(0, (int) ($bucket['total'] ?? 0));
+        $completed = max(0, (int) ($bucket['completed'] ?? 0));
+        $bucket['completion_percent'] = $total > 0 ? (int) round(($completed / $total) * 100) : 0;
+        return $bucket;
     }
 
     private function validatePayload(array $payload): void
