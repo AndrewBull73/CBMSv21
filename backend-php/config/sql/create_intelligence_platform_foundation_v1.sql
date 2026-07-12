@@ -181,6 +181,262 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.tblAnalyticsRuns', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblAnalyticsRuns
+    (
+        AnalyticsRunID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        AnalysisTypeCode NVARCHAR(80) NOT NULL,
+        AnalysisName NVARCHAR(255) NULL,
+        DatasetID INT NULL,
+        DatasetCode NVARCHAR(80) NULL,
+        SourceObjectName NVARCHAR(256) NULL,
+        FiscalYearID INT NULL,
+        VersionID INT NULL,
+        ParametersJson NVARCHAR(MAX) NULL,
+        SummaryJson NVARCHAR(MAX) NULL,
+        InputRecordCount INT NULL,
+        OutputRecordCount INT NULL,
+        StatusCode NVARCHAR(40) NOT NULL CONSTRAINT DF_tblAnalyticsRuns_StatusCode DEFAULT (N'PENDING'),
+        ErrorMessage NVARCHAR(2000) NULL,
+        SourceEngineRunID INT NULL,
+        StartedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblAnalyticsRuns_StartedDate DEFAULT (SYSUTCDATETIME()),
+        CompletedDate DATETIME2(0) NULL,
+        ResponseTimeMs INT NULL,
+        CreatedBy INT NULL,
+        CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblAnalyticsRuns_CreatedDate DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_tblAnalyticsRuns_EngineRun
+            FOREIGN KEY (SourceEngineRunID) REFERENCES dbo.tblIntelligenceEngineRuns(EngineRunID)
+    );
+
+    CREATE INDEX IX_tblAnalyticsRuns_Context
+        ON dbo.tblAnalyticsRuns (FiscalYearID, VersionID, AnalysisTypeCode, StatusCode, StartedDate DESC);
+
+    CREATE INDEX IX_tblAnalyticsRuns_Dataset
+        ON dbo.tblAnalyticsRuns (DatasetCode, StatusCode, StartedDate DESC);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblAnalyticsRunResults', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblAnalyticsRunResults
+    (
+        AnalyticsResultID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        AnalyticsRunID INT NOT NULL,
+        ResultTypeCode NVARCHAR(80) NOT NULL,
+        EntityTypeCode NVARCHAR(80) NULL,
+        EntityCode NVARCHAR(200) NULL,
+        EntityName NVARCHAR(255) NULL,
+        FiscalYearID INT NULL,
+        VersionID INT NULL,
+        PeriodNo INT NULL,
+        MetricName NVARCHAR(128) NULL,
+        MetricValue DECIMAL(38,8) NULL,
+        MetricUnitCode NVARCHAR(40) NULL,
+        RankNo INT NULL,
+        DimensionJson NVARCHAR(MAX) NULL,
+        ResultJson NVARCHAR(MAX) NULL,
+        CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblAnalyticsRunResults_CreatedDate DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_tblAnalyticsRunResults_Run
+            FOREIGN KEY (AnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID)
+    );
+
+    CREATE INDEX IX_tblAnalyticsRunResults_Run
+        ON dbo.tblAnalyticsRunResults (AnalyticsRunID, ResultTypeCode, RankNo);
+
+    CREATE INDEX IX_tblAnalyticsRunResults_Entity
+        ON dbo.tblAnalyticsRunResults (EntityTypeCode, EntityCode, FiscalYearID, VersionID, PeriodNo)
+        INCLUDE (MetricName, MetricValue);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblAnalyticsFindings', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblAnalyticsFindings
+    (
+        AnalyticsFindingID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        AnalyticsRunID INT NOT NULL,
+        FindingTypeCode NVARCHAR(80) NOT NULL,
+        SeverityCode NVARCHAR(40) NOT NULL,
+        Title NVARCHAR(255) NOT NULL,
+        [Description] NVARCHAR(MAX) NULL,
+        EntityTypeCode NVARCHAR(80) NULL,
+        EntityCode NVARCHAR(200) NULL,
+        EntityName NVARCHAR(255) NULL,
+        FiscalYearID INT NULL,
+        VersionID INT NULL,
+        PeriodNo INT NULL,
+        Score DECIMAL(18,8) NULL,
+        ConfidenceScore DECIMAL(9,4) NULL,
+        EvidenceJson NVARCHAR(MAX) NULL,
+        RecommendedAction NVARCHAR(1000) NULL,
+        StatusCode NVARCHAR(40) NOT NULL CONSTRAINT DF_tblAnalyticsFindings_StatusCode DEFAULT (N'OPEN'),
+        CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblAnalyticsFindings_CreatedDate DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_tblAnalyticsFindings_Run
+            FOREIGN KEY (AnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID)
+    );
+
+    CREATE INDEX IX_tblAnalyticsFindings_Context
+        ON dbo.tblAnalyticsFindings (FiscalYearID, VersionID, SeverityCode, StatusCode, CreatedDate DESC);
+
+    CREATE INDEX IX_tblAnalyticsFindings_Entity
+        ON dbo.tblAnalyticsFindings (EntityTypeCode, EntityCode, FindingTypeCode, SeverityCode);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblAnalyticsFeatureSignals', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.tblAnalyticsFeatureSignals
+    (
+        AnalyticsFeatureSignalID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        AnalyticsRunID INT NOT NULL,
+        AnalyticsFindingID BIGINT NULL,
+        FeatureSetCode NVARCHAR(80) NOT NULL,
+        EntityTypeCode NVARCHAR(80) NOT NULL,
+        EntityCode NVARCHAR(200) NOT NULL,
+        FiscalYearID INT NULL,
+        VersionID INT NULL,
+        PeriodNo INT NULL,
+        FeatureName NVARCHAR(128) NOT NULL,
+        FeatureValue DECIMAL(38,8) NULL,
+        FeatureTextValue NVARCHAR(500) NULL,
+        FeatureJson NVARCHAR(MAX) NULL,
+        CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblAnalyticsFeatureSignals_CreatedDate DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_tblAnalyticsFeatureSignals_Run
+            FOREIGN KEY (AnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID),
+        CONSTRAINT FK_tblAnalyticsFeatureSignals_Finding
+            FOREIGN KEY (AnalyticsFindingID) REFERENCES dbo.tblAnalyticsFindings(AnalyticsFindingID)
+    );
+
+    CREATE INDEX IX_tblAnalyticsFeatureSignals_FeatureLookup
+        ON dbo.tblAnalyticsFeatureSignals
+            (FeatureSetCode, EntityTypeCode, EntityCode, FiscalYearID, VersionID, PeriodNo, FeatureName)
+        INCLUDE (FeatureValue, FeatureTextValue, AnalyticsRunID, AnalyticsFindingID);
+
+    CREATE INDEX IX_tblAnalyticsFeatureSignals_Run
+        ON dbo.tblAnalyticsFeatureSignals (AnalyticsRunID, FeatureSetCode, FeatureName);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.vwAnalyticsMLFeatureSignals', N'V') IS NULL
+BEGIN
+    EXEC(N'CREATE VIEW dbo.vwAnalyticsMLFeatureSignals AS SELECT CAST(NULL AS BIGINT) AS AnalyticsFeatureSignalID WHERE 1 = 0;');
+END;
+GO
+
+EXEC(N'
+ALTER VIEW dbo.vwAnalyticsMLFeatureSignals
+AS
+SELECT
+    s.AnalyticsFeatureSignalID,
+    s.AnalyticsRunID,
+    r.AnalysisTypeCode,
+    r.DatasetCode,
+    r.SourceObjectName,
+    s.AnalyticsFindingID,
+    f.FindingTypeCode,
+    f.SeverityCode,
+    s.FeatureSetCode,
+    s.EntityTypeCode,
+    s.EntityCode,
+    s.FiscalYearID,
+    s.VersionID,
+    s.PeriodNo,
+    s.FeatureName,
+    s.FeatureValue,
+    s.FeatureTextValue,
+    s.FeatureJson,
+    s.CreatedDate
+FROM dbo.tblAnalyticsFeatureSignals s
+INNER JOIN dbo.tblAnalyticsRuns r
+    ON r.AnalyticsRunID = s.AnalyticsRunID
+LEFT JOIN dbo.tblAnalyticsFindings f
+    ON f.AnalyticsFindingID = s.AnalyticsFindingID;
+');
+GO
+
+IF OBJECT_ID(N'dbo.vwAnalyticsMLFeatureMatrix', N'V') IS NULL
+BEGIN
+    EXEC(N'CREATE VIEW dbo.vwAnalyticsMLFeatureMatrix AS SELECT CAST(NULL AS INT) AS AnalyticsRunID WHERE 1 = 0;');
+END;
+GO
+
+EXEC(N'
+ALTER VIEW dbo.vwAnalyticsMLFeatureMatrix
+AS
+SELECT
+    s.AnalyticsRunID,
+    r.AnalysisTypeCode,
+    r.DatasetCode,
+    r.SourceObjectName,
+    s.AnalyticsFindingID,
+    f.FindingTypeCode,
+    f.SeverityCode,
+    s.FeatureSetCode,
+    s.EntityTypeCode,
+    s.EntityCode,
+    s.FiscalYearID,
+    s.VersionID,
+    s.PeriodNo,
+    TargetScore = CAST(COALESCE(
+        f.Score,
+        MAX(CASE WHEN s.FeatureName IN (N''TargetScore'', N''RiskScore'', N''Score'') THEN s.FeatureValue END)
+    ) AS DECIMAL(18,8)),
+    ConfidenceScore = CAST(COALESCE(
+        f.ConfidenceScore,
+        MAX(CASE WHEN s.FeatureName = N''ConfidenceScore'' THEN s.FeatureValue END)
+    ) AS DECIMAL(9,4)),
+    BudgetAmount = CAST(MAX(CASE WHEN s.FeatureName = N''BudgetAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    ReleasedAmount = CAST(MAX(CASE WHEN s.FeatureName = N''ReleasedAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    WarrantAmount = CAST(MAX(CASE WHEN s.FeatureName = N''WarrantAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    CommitmentAmount = CAST(MAX(CASE WHEN s.FeatureName = N''CommitmentAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    ActualAmount = CAST(MAX(CASE WHEN s.FeatureName = N''ActualAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    AvailableBalance = CAST(MAX(CASE WHEN s.FeatureName = N''AvailableBalance'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    ExecutionRate = CAST(MAX(CASE WHEN s.FeatureName = N''ExecutionRate'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    BudgetSharePct = CAST(MAX(CASE WHEN s.FeatureName = N''BudgetSharePct'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    ActualSharePct = CAST(MAX(CASE WHEN s.FeatureName = N''ActualSharePct'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    CumulativeBudgetAmount = CAST(MAX(CASE WHEN s.FeatureName = N''CumulativeBudgetAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    CumulativeActualAmount = CAST(MAX(CASE WHEN s.FeatureName = N''CumulativeActualAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    CumulativeExecutionRate = CAST(MAX(CASE WHEN s.FeatureName = N''CumulativeExecutionRate'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    ExpectedExecutionRate = CAST(MAX(CASE WHEN s.FeatureName = N''ExpectedExecutionRate'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    VarianceAmount = CAST(MAX(CASE WHEN s.FeatureName = N''VarianceAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    VariancePct = CAST(MAX(CASE WHEN s.FeatureName = N''VariancePct'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    ActualSpikePct = CAST(MAX(CASE WHEN s.FeatureName = N''ActualSpikePct'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    PriorYearActualChangePct = CAST(MAX(CASE WHEN s.FeatureName = N''PriorYearActualChangePct'' THEN s.FeatureValue END) AS DECIMAL(18,8)),
+    MaterialityAmount = CAST(MAX(CASE WHEN s.FeatureName = N''MaterialityAmount'' THEN s.FeatureValue END) AS DECIMAL(38,8)),
+    IsActualWithoutBudget = CAST(MAX(CASE WHEN s.FeatureName = N''IsActualWithoutBudget'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsNegativeAvailableBalance = CAST(MAX(CASE WHEN s.FeatureName = N''IsNegativeAvailableBalance'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsActualSpike = CAST(MAX(CASE WHEN s.FeatureName = N''IsActualSpike'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsPriorYearActualSpike = CAST(MAX(CASE WHEN s.FeatureName = N''IsPriorYearActualSpike'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsDormantLineActivity = CAST(MAX(CASE WHEN s.FeatureName = N''IsDormantLineActivity'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsBudgetWithoutExecution = CAST(MAX(CASE WHEN s.FeatureName = N''IsBudgetWithoutExecution'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    IsAboveExpectedYTD = CAST(MAX(CASE WHEN s.FeatureName = N''IsAboveExpectedYTD'' THEN s.FeatureValue END) AS DECIMAL(9,4)),
+    FeatureCount = COUNT_BIG(1),
+    LastSignalDate = MAX(s.CreatedDate)
+FROM dbo.tblAnalyticsFeatureSignals s
+INNER JOIN dbo.tblAnalyticsRuns r
+    ON r.AnalyticsRunID = s.AnalyticsRunID
+LEFT JOIN dbo.tblAnalyticsFindings f
+    ON f.AnalyticsFindingID = s.AnalyticsFindingID
+GROUP BY
+    s.AnalyticsRunID,
+    r.AnalysisTypeCode,
+    r.DatasetCode,
+    r.SourceObjectName,
+    s.AnalyticsFindingID,
+    f.FindingTypeCode,
+    f.SeverityCode,
+    f.Score,
+    f.ConfidenceScore,
+    s.FeatureSetCode,
+    s.EntityTypeCode,
+    s.EntityCode,
+    s.FiscalYearID,
+    s.VersionID,
+    s.PeriodNo;
+');
+GO
+
 IF OBJECT_ID(N'dbo.tblMLModels', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.tblMLModels
@@ -214,6 +470,7 @@ BEGIN
     (
         MLTrainingRunID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MLModelID INT NOT NULL,
+        SourceAnalyticsRunID INT NULL,
         TrainingPeriodStart DATE NULL,
         TrainingPeriodEnd DATE NULL,
         MetricsJson NVARCHAR(MAX) NULL,
@@ -222,7 +479,9 @@ BEGIN
         StartedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblMLTrainingRuns_StartedDate DEFAULT (SYSUTCDATETIME()),
         CompletedDate DATETIME2(0) NULL,
         CONSTRAINT FK_tblMLTrainingRuns_Model
-            FOREIGN KEY (MLModelID) REFERENCES dbo.tblMLModels(MLModelID)
+            FOREIGN KEY (MLModelID) REFERENCES dbo.tblMLModels(MLModelID),
+        CONSTRAINT FK_tblMLTrainingRuns_AnalyticsRun
+            FOREIGN KEY (SourceAnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID)
     );
 END;
 GO
@@ -233,6 +492,8 @@ BEGIN
     (
         MLPredictionID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
         MLModelID INT NOT NULL,
+        SourceAnalyticsRunID INT NULL,
+        SourceAnalyticsFindingID BIGINT NULL,
         EntityTypeCode NVARCHAR(60) NOT NULL,
         EntityCode NVARCHAR(120) NOT NULL,
         PredictionValue DECIMAL(28,8) NULL,
@@ -241,8 +502,80 @@ BEGIN
         PredictionJson NVARCHAR(MAX) NULL,
         CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_tblMLPredictions_CreatedDate DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT FK_tblMLPredictions_Model
-            FOREIGN KEY (MLModelID) REFERENCES dbo.tblMLModels(MLModelID)
+            FOREIGN KEY (MLModelID) REFERENCES dbo.tblMLModels(MLModelID),
+        CONSTRAINT FK_tblMLPredictions_AnalyticsRun
+            FOREIGN KEY (SourceAnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID),
+        CONSTRAINT FK_tblMLPredictions_AnalyticsFinding
+            FOREIGN KEY (SourceAnalyticsFindingID) REFERENCES dbo.tblAnalyticsFindings(AnalyticsFindingID)
     );
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLTrainingRuns', N'U') IS NOT NULL
+   AND COL_LENGTH(N'dbo.tblMLTrainingRuns', N'SourceAnalyticsRunID') IS NULL
+BEGIN
+    ALTER TABLE dbo.tblMLTrainingRuns
+    ADD SourceAnalyticsRunID INT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLTrainingRuns', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblAnalyticsRuns', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_tblMLTrainingRuns_AnalyticsRun')
+BEGIN
+    ALTER TABLE dbo.tblMLTrainingRuns
+    ADD CONSTRAINT FK_tblMLTrainingRuns_AnalyticsRun
+        FOREIGN KEY (SourceAnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLPredictions', N'U') IS NOT NULL
+   AND COL_LENGTH(N'dbo.tblMLPredictions', N'SourceAnalyticsRunID') IS NULL
+BEGIN
+    ALTER TABLE dbo.tblMLPredictions
+    ADD SourceAnalyticsRunID INT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLPredictions', N'U') IS NOT NULL
+   AND COL_LENGTH(N'dbo.tblMLPredictions', N'SourceAnalyticsFindingID') IS NULL
+BEGIN
+    ALTER TABLE dbo.tblMLPredictions
+    ADD SourceAnalyticsFindingID BIGINT NULL;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLPredictions', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblAnalyticsRuns', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_tblMLPredictions_AnalyticsRun')
+BEGIN
+    ALTER TABLE dbo.tblMLPredictions
+    ADD CONSTRAINT FK_tblMLPredictions_AnalyticsRun
+        FOREIGN KEY (SourceAnalyticsRunID) REFERENCES dbo.tblAnalyticsRuns(AnalyticsRunID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLPredictions', N'U') IS NOT NULL
+   AND OBJECT_ID(N'dbo.tblAnalyticsFindings', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_tblMLPredictions_AnalyticsFinding')
+BEGIN
+    ALTER TABLE dbo.tblMLPredictions
+    ADD CONSTRAINT FK_tblMLPredictions_AnalyticsFinding
+        FOREIGN KEY (SourceAnalyticsFindingID) REFERENCES dbo.tblAnalyticsFindings(AnalyticsFindingID);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.tblMLPredictions', N'U') IS NOT NULL
+   AND NOT EXISTS (
+        SELECT 1
+        FROM sys.indexes
+        WHERE object_id = OBJECT_ID(N'dbo.tblMLPredictions')
+          AND name = N'IX_tblMLPredictions_AnalyticsSource'
+   )
+BEGIN
+    CREATE INDEX IX_tblMLPredictions_AnalyticsSource
+        ON dbo.tblMLPredictions (SourceAnalyticsRunID, SourceAnalyticsFindingID)
+        WHERE SourceAnalyticsRunID IS NOT NULL;
 END;
 GO
 

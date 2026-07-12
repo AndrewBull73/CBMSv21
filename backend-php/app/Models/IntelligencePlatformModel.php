@@ -23,6 +23,14 @@ final class IntelligencePlatformModel
             && $this->tableExists('dbo.tblAIModuleSettings');
     }
 
+    public function supportsAnalyticsOutputs(): bool
+    {
+        return $this->tableExists('dbo.tblAnalyticsRuns')
+            && $this->tableExists('dbo.tblAnalyticsRunResults')
+            && $this->tableExists('dbo.tblAnalyticsFindings')
+            && $this->tableExists('dbo.tblAnalyticsFeatureSignals');
+    }
+
     public function summary(): array
     {
         if (!$this->supportsIntelligencePlatform()) {
@@ -32,6 +40,9 @@ final class IntelligencePlatformModel
                 'scenario_count' => 0,
                 'insight_count' => 0,
                 'critical_insight_count' => 0,
+                'analytics_run_count_7d' => 0,
+                'analytics_finding_count' => 0,
+                'critical_analytics_finding_count' => 0,
                 'latest_run_at' => null,
             ];
         }
@@ -48,6 +59,19 @@ final class IntelligencePlatformModel
                 (SELECT COUNT(1) FROM dbo.tblIntelligenceInsights WHERE StatusCode = N'OPEN') AS InsightCount,
                 (SELECT COUNT(1) FROM dbo.tblIntelligenceInsights WHERE StatusCode = N'OPEN' AND SeverityCode IN (N'HIGH', N'CRITICAL')) AS CriticalInsightCount
         ")->fetch(PDO::FETCH_ASSOC) ?: [];
+        $analytics = [
+            'AnalyticsRunCount7d' => 0,
+            'AnalyticsFindingCount' => 0,
+            'CriticalAnalyticsFindingCount' => 0,
+        ];
+        if ($this->supportsAnalyticsOutputs()) {
+            $analytics = $this->conn->query("
+                SELECT
+                    (SELECT COUNT(1) FROM dbo.tblAnalyticsRuns WHERE StartedDate >= DATEADD(DAY, -7, SYSUTCDATETIME())) AS AnalyticsRunCount7d,
+                    (SELECT COUNT(1) FROM dbo.tblAnalyticsFindings WHERE StatusCode = N'OPEN') AS AnalyticsFindingCount,
+                    (SELECT COUNT(1) FROM dbo.tblAnalyticsFindings WHERE StatusCode = N'OPEN' AND SeverityCode IN (N'HIGH', N'CRITICAL')) AS CriticalAnalyticsFindingCount
+            ")->fetch(PDO::FETCH_ASSOC) ?: $analytics;
+        }
 
         return [
             'run_count_7d' => (int) ($runs['RunCount7d'] ?? 0),
@@ -56,6 +80,9 @@ final class IntelligencePlatformModel
             'scenario_count' => (int) ($counts['ScenarioCount'] ?? 0),
             'insight_count' => (int) ($counts['InsightCount'] ?? 0),
             'critical_insight_count' => (int) ($counts['CriticalInsightCount'] ?? 0),
+            'analytics_run_count_7d' => (int) ($analytics['AnalyticsRunCount7d'] ?? 0),
+            'analytics_finding_count' => (int) ($analytics['AnalyticsFindingCount'] ?? 0),
+            'critical_analytics_finding_count' => (int) ($analytics['CriticalAnalyticsFindingCount'] ?? 0),
         ];
     }
 
@@ -1026,25 +1053,35 @@ final class IntelligencePlatformModel
             return 0;
         }
 
+        $hasAnalyticsRunColumn = $this->columnExists('dbo.tblMLPredictions', 'SourceAnalyticsRunID');
+        $hasAnalyticsFindingColumn = $this->columnExists('dbo.tblMLPredictions', 'SourceAnalyticsFindingID');
+        $columns = ['MLModelID'];
+        $placeholders = [':MLModelID'];
+        if ($hasAnalyticsRunColumn) {
+            $columns[] = 'SourceAnalyticsRunID';
+            $placeholders[] = ':SourceAnalyticsRunID';
+        }
+        if ($hasAnalyticsFindingColumn) {
+            $columns[] = 'SourceAnalyticsFindingID';
+            $placeholders[] = ':SourceAnalyticsFindingID';
+        }
+        $columns = array_merge($columns, ['EntityTypeCode', 'EntityCode', 'PredictionValue', 'RiskScore', 'ConfidenceScore', 'PredictionJson']);
+        $placeholders = array_merge($placeholders, [':EntityTypeCode', ':EntityCode', ':PredictionValue', ':RiskScore', ':ConfidenceScore', ':PredictionJson']);
+
         $stmt = $this->conn->prepare("
-            INSERT INTO dbo.tblMLPredictions (
-                MLModelID, EntityTypeCode, EntityCode, PredictionValue,
-                RiskScore, ConfidenceScore, PredictionJson
-            )
+            INSERT INTO dbo.tblMLPredictions (" . implode(', ', $columns) . ")
             OUTPUT INSERTED.MLPredictionID
-            VALUES (
-                :MLModelID, :EntityTypeCode, :EntityCode, :PredictionValue,
-                :RiskScore, :ConfidenceScore, :PredictionJson
-            )
+            VALUES (" . implode(', ', $placeholders) . ")
         ");
         $count = 0;
         foreach ($predictions as $prediction) {
             if (!is_array($prediction)) {
                 continue;
             }
+            $details = is_array($prediction['prediction_json'] ?? null) ? $prediction['prediction_json'] : $prediction;
             $entityType = mb_substr((string) ($prediction['entity_type'] ?? 'ML_ENTITY'), 0, 60);
             $entityCode = mb_substr((string) ($prediction['entity_code'] ?? ''), 0, 120);
-            $stmt->execute([
+            $params = [
                 ':MLModelID' => $modelId,
                 ':EntityTypeCode' => $entityType,
                 ':EntityCode' => $entityCode,
@@ -1052,7 +1089,14 @@ final class IntelligencePlatformModel
                 ':RiskScore' => $this->nullableDecimal($prediction['risk_score'] ?? null),
                 ':ConfidenceScore' => $this->nullableDecimal($prediction['confidence_score'] ?? null),
                 ':PredictionJson' => json_encode($prediction['prediction_json'] ?? $prediction, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            ]);
+            ];
+            if ($hasAnalyticsRunColumn) {
+                $params[':SourceAnalyticsRunID'] = $this->nullableInt($prediction['source_analytics_run_id'] ?? $details['AnalyticsRunID'] ?? $details['analytics_run_id'] ?? null);
+            }
+            if ($hasAnalyticsFindingColumn) {
+                $params[':SourceAnalyticsFindingID'] = $this->nullableInt($prediction['source_analytics_finding_id'] ?? $details['AnalyticsFindingID'] ?? $details['analytics_finding_id'] ?? null);
+            }
+            $stmt->execute($params);
             $predictionId = (int) ($stmt->fetchColumn() ?: 0);
             if ($predictionId > 0) {
                 $this->storeMLPredictionDrillRow($predictionId, $modelId, $entityType, $entityCode, $prediction);

@@ -14,9 +14,9 @@ final class AIDatasetAnalysisModel
 
     public function supportsDatasetAnalysis(): bool
     {
-        return $this->tableExists('dbo.tblAIDatasets')
-            && $this->tableExists('dbo.tblAIDatasetColumns')
-            && $this->tableExists('dbo.tblAIDatasetQueries');
+        return $this->tableExists('dbo.tblAnalysisDatasets')
+            && $this->tableExists('dbo.tblAnalysisDatasetColumns')
+            && $this->tableExists('dbo.tblAnalysisDatasetQueries');
     }
 
     public function summary(): array
@@ -27,11 +27,11 @@ final class AIDatasetAnalysisModel
 
         $dataset = $this->conn->query("
             SELECT COUNT(1) AS DatasetCount, SUM(CASE WHEN IsActive = 1 THEN 1 ELSE 0 END) AS ActiveDatasetCount
-            FROM dbo.tblAIDatasets
+            FROM dbo.tblAnalysisDatasets
         ")->fetch(PDO::FETCH_ASSOC) ?: [];
         $query = $this->conn->query("
             SELECT COUNT(1) AS QueryCount7d, MAX(CreatedDate) AS LatestQueryAt
-            FROM dbo.tblAIDatasetQueries
+            FROM dbo.tblAnalysisDatasetQueries
             WHERE CreatedDate >= DATEADD(DAY, -7, SYSUTCDATETIME())
         ")->fetch(PDO::FETCH_ASSOC) ?: [];
 
@@ -45,7 +45,7 @@ final class AIDatasetAnalysisModel
 
     public function listDatasets(bool $activeOnly = false): array
     {
-        if (!$this->tableExists('dbo.tblAIDatasets')) {
+        if (!$this->tableExists('dbo.tblAnalysisDatasets')) {
             return [];
         }
 
@@ -53,8 +53,8 @@ final class AIDatasetAnalysisModel
         $stmt = $this->conn->query("
             SELECT
                 d.*,
-                (SELECT COUNT(1) FROM dbo.tblAIDatasetColumns c WHERE c.DatasetID = d.DatasetID AND c.IsActive = 1) AS ColumnCount
-            FROM dbo.tblAIDatasets d
+                (SELECT COUNT(1) FROM dbo.tblAnalysisDatasetColumns c WHERE c.DatasetID = d.DatasetID AND c.IsActive = 1) AS ColumnCount
+            FROM dbo.tblAnalysisDatasets d
             {$where}
             ORDER BY d.DatasetName ASC, d.DatasetID ASC
         ");
@@ -63,18 +63,18 @@ final class AIDatasetAnalysisModel
 
     public function getDataset(int $datasetId): ?array
     {
-        if ($datasetId <= 0 || !$this->tableExists('dbo.tblAIDatasets')) {
+        if ($datasetId <= 0 || !$this->tableExists('dbo.tblAnalysisDatasets')) {
             return null;
         }
 
-        $stmt = $this->conn->prepare('SELECT * FROM dbo.tblAIDatasets WHERE DatasetID = :id');
+        $stmt = $this->conn->prepare('SELECT * FROM dbo.tblAnalysisDatasets WHERE DatasetID = :id');
         $stmt->execute([':id' => $datasetId]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     public function listColumns(int $datasetId, bool $activeOnly = true): array
     {
-        if ($datasetId <= 0 || !$this->tableExists('dbo.tblAIDatasetColumns')) {
+        if ($datasetId <= 0 || !$this->tableExists('dbo.tblAnalysisDatasetColumns')) {
             return [];
         }
 
@@ -84,7 +84,7 @@ final class AIDatasetAnalysisModel
         }
         $stmt = $this->conn->prepare("
             SELECT *
-            FROM dbo.tblAIDatasetColumns
+            FROM dbo.tblAnalysisDatasetColumns
             WHERE " . implode(' AND ', $where) . "
             ORDER BY DisplayOrder ASC, ColumnName ASC
         ");
@@ -111,7 +111,7 @@ final class AIDatasetAnalysisModel
             ':SourceObjectName' => $sourceObject,
             ':SourceType' => strtoupper(trim((string) ($data['SourceType'] ?? 'VIEW'))) === 'TABLE' ? 'TABLE' : 'VIEW',
             ':SensitivityLevel' => $this->normaliseSensitivity((string) ($data['SensitivityLevel'] ?? 'RESTRICTED')),
-            ':AllowedPermissionCodes' => $this->normalisePermissionCsv((string) ($data['AllowedPermissionCodes'] ?? 'AI_DATASET_ANALYZE')),
+            ':AllowedPermissionCodes' => $this->normalisePermissionCsv((string) ($data['AllowedPermissionCodes'] ?? 'ANALYSIS_DATASET_ANALYZE')),
             ':DefaultFiscalYearColumn' => $this->nullableString($data['DefaultFiscalYearColumn'] ?? null),
             ':DefaultVersionColumn' => $this->nullableString($data['DefaultVersionColumn'] ?? null),
             ':MaxRows' => max(1, min(500, (int) ($data['MaxRows'] ?? 100))),
@@ -126,7 +126,7 @@ final class AIDatasetAnalysisModel
 
         if ($datasetId > 0) {
             $stmt = $this->conn->prepare("
-                UPDATE dbo.tblAIDatasets
+                UPDATE dbo.tblAnalysisDatasets
                 SET DatasetCode = :DatasetCode,
                     DatasetName = :DatasetName,
                     Description = :Description,
@@ -149,7 +149,7 @@ final class AIDatasetAnalysisModel
         }
 
         $stmt = $this->conn->prepare("
-            INSERT INTO dbo.tblAIDatasets (
+            INSERT INTO dbo.tblAnalysisDatasets (
                 DatasetCode, DatasetName, Description, SourceObjectName, SourceType, SensitivityLevel,
                 AllowedPermissionCodes, DefaultFiscalYearColumn, DefaultVersionColumn, MaxRows,
                 RequireContext, IsActive, CreatedBy, Notes
@@ -175,7 +175,7 @@ final class AIDatasetAnalysisModel
         $this->conn->beginTransaction();
         try {
             $stmt = $this->conn->prepare("
-                MERGE dbo.tblAIDatasetColumns AS target
+                MERGE dbo.tblAnalysisDatasetColumns AS target
                 USING (
                     SELECT
                         :DatasetID AS DatasetID,
@@ -237,7 +237,7 @@ final class AIDatasetAnalysisModel
         }
 
         $stmt = $this->conn->prepare("
-            UPDATE dbo.tblAIDatasetColumns
+            UPDATE dbo.tblAnalysisDatasetColumns
             SET DisplayName = :DisplayName,
                 SemanticType = :SemanticType,
                 IsDimension = :IsDimension,
@@ -439,7 +439,7 @@ final class AIDatasetAnalysisModel
     {
         $this->requireFoundation();
         $stmt = $this->conn->prepare("
-            INSERT INTO dbo.tblAIDatasetQueries (
+            INSERT INTO dbo.tblAnalysisDatasetQueries (
                 DatasetID, UserID, Question, AnalysisPlanJson, ExecutedSql, ParametersJson,
                 ResponseSummary, [RowCount], ResponseTimeMs, ProviderCode, ModelCode,
                 PromptTokens, CompletionTokens, TotalTokens, StatusCode, ErrorMessage
@@ -473,14 +473,14 @@ final class AIDatasetAnalysisModel
 
     public function recentQueries(int $limit = 50): array
     {
-        if (!$this->tableExists('dbo.tblAIDatasetQueries')) {
+        if (!$this->tableExists('dbo.tblAnalysisDatasetQueries')) {
             return [];
         }
         $limit = max(1, min(200, $limit));
         $stmt = $this->conn->query("
             SELECT TOP {$limit} q.*, d.DatasetName, d.DatasetCode
-            FROM dbo.tblAIDatasetQueries q
-            LEFT JOIN dbo.tblAIDatasets d ON d.DatasetID = q.DatasetID
+            FROM dbo.tblAnalysisDatasetQueries q
+            LEFT JOIN dbo.tblAnalysisDatasets d ON d.DatasetID = q.DatasetID
             ORDER BY q.CreatedDate DESC, q.DatasetQueryID DESC
         ");
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -613,7 +613,7 @@ final class AIDatasetAnalysisModel
                 $codes[$code] = true;
             }
         }
-        return $codes !== [] ? implode(',', array_keys($codes)) : 'AI_DATASET_ANALYZE';
+        return $codes !== [] ? implode(',', array_keys($codes)) : 'ANALYSIS_DATASET_ANALYZE';
     }
 
     private function displayName(string $columnName): string
@@ -625,7 +625,7 @@ final class AIDatasetAnalysisModel
     private function requireFoundation(): void
     {
         if (!$this->supportsDatasetAnalysis()) {
-            throw new \RuntimeException('AI dataset analysis schema is not installed.');
+            throw new \RuntimeException('Analysis dataset schema is not installed.');
         }
     }
 

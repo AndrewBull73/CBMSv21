@@ -6,7 +6,7 @@ $rows = array_values(is_array($rows ?? null) ? $rows : []);
 <div class="container mt-4">
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
-      <h3 class="mb-0"><i class="bi bi-database me-2"></i>AI Analysis Datasets</h3>
+      <h3 class="mb-0"><i class="bi bi-database me-2"></i>Analysis Datasets</h3>
       <div class="d-inline-flex gap-2">
         <a class="btn btn-sm btn-outline-secondary" href="index.php?route=ai-dataset/index"><i class="bi bi-graph-up-arrow me-1"></i>Analyze</a>
         <a class="btn btn-sm btn-primary" href="index.php?route=ai-dataset/dataset-form"><i class="bi bi-plus-lg me-1"></i>Register</a>
@@ -21,7 +21,7 @@ $rows = array_values(is_array($rows ?? null) ? $rows : []);
             <thead class="table-light"><tr><th>Dataset</th><th>Source</th><th>Sensitivity</th><th class="text-end">Columns</th><th></th></tr></thead>
             <tbody>
             <?php if ($rows === []): ?>
-              <tr><td colspan="5" class="text-center text-muted py-3">No AI analysis datasets registered.</td></tr>
+              <tr><td colspan="5" class="text-center text-muted py-3">No analysis datasets registered.</td></tr>
             <?php else: foreach ($rows as $row): ?>
               <tr>
                 <td><div class="fw-semibold"><?= h((string) ($row['DatasetName'] ?? '')) ?></div><div class="small text-muted"><?= h((string) ($row['DatasetCode'] ?? '')) ?></div></td>

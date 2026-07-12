@@ -199,9 +199,9 @@ FROM dbo.vwAI_BudgetLedgerGeneric;
 ');
 GO
 
-IF OBJECT_ID(N'dbo.tblAIDatasets', N'U') IS NOT NULL
+IF OBJECT_ID(N'dbo.tblAnalysisDatasets', N'U') IS NOT NULL
 BEGIN
-    MERGE dbo.tblAIDatasets AS target
+    MERGE dbo.tblAnalysisDatasets AS target
     USING (
         SELECT
             N'BUDGET_LEDGER_ANALYSIS' AS DatasetCode,
@@ -210,7 +210,7 @@ BEGIN
             N'dbo.vwAI_BudgetLedgerAnalysis' AS SourceObjectName,
             N'VIEW' AS SourceType,
             N'RESTRICTED' AS SensitivityLevel,
-            N'AI_DATASET_ANALYZE' AS AllowedPermissionCodes,
+            N'ANALYSIS_DATASET_ANALYZE' AS AllowedPermissionCodes,
             N'FiscalYearID' AS DefaultFiscalYearColumn,
             N'BudgetVersionID' AS DefaultVersionColumn,
             CAST(250 AS INT) AS MaxRows,

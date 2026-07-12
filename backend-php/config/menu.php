@@ -24,8 +24,8 @@ return [
     'children' => [
       ['label'=>'Intelligence Dashboard','code'=>'IEDB','route'=>'intelligence/index','icon'=>'speedometer2','active'=>['intelligence/index'],'roles'=>[],'perms'=>['INTEL_VIEW','INTEL_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'Engine Health','code'=>'IEHE','route'=>'intelligence/health','icon'=>'heart-pulse','active'=>['intelligence/health'],'roles'=>[],'perms'=>['INTEL_VIEW','INTEL_ADMIN','ADMIN_ALL','SYSADMIN']],
-      ['label'=>'AI Dataset Analysis','code'=>'IEDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['AI_DATASET_ANALYZE','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
-      ['label'=>'Analysis Datasets','code'=>'IEDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Dataset Analysis','code'=>'IEDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['ANALYSIS_DATASET_ANALYZE','ANALYSIS_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Analysis Datasets','code'=>'IEDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['ANALYSIS_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'Budget Ledger Version Roles','code'=>'IEVR','route'=>'intelligence/budget-ledger-version-roles','icon'=>'diagram-2','active'=>['intelligence/budget-ledger-version-roles'],'roles'=>[],'perms'=>['INTEL_ADMIN','ML_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'ML Model Register','code'=>'IEML','route'=>'intelligence/ml-models','icon'=>'diagram-3','active'=>['intelligence/ml-models'],'roles'=>[],'perms'=>['ML_VIEW','ML_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'AI / Engine Config','code'=>'IECF','route'=>'intelligence/config','icon'=>'sliders','active'=>['intelligence/config'],'roles'=>[],'perms'=>['INTEL_ADMIN','AI_ADMIN','ADMIN_ALL','SYSADMIN']],
@@ -47,7 +47,7 @@ return [
     'code'  => 'HK',
     'icon'  => 'stars',
     'roles' => [],
-    'perms' => ['AI_HELP_USE','AI_HELP_ADMIN','AI_HELP_UPLOAD','AI_HELP_VIEW_LOGS','AI_DATASET_ANALYZE','AI_DATASET_ADMIN','AI_DATASET_VIEW_LOGS','ADMIN_ALL','SYSADMIN'],
+    'perms' => ['AI_HELP_USE','AI_HELP_ADMIN','AI_HELP_UPLOAD','AI_HELP_VIEW_LOGS','ANALYSIS_DATASET_ANALYZE','ANALYSIS_DATASET_ADMIN','ANALYSIS_DATASET_VIEW_LOGS','ADMIN_ALL','SYSADMIN'],
     'active' => ['ai-knowledge/*','ai-dataset/*'],
     'children' => [
       ['label'=>'Ask CBMS Assistant','code'=>'HKAI','route'=>'ai-knowledge/ask','icon'=>'stars','active'=>['ai-knowledge/ask'],'roles'=>[],'perms'=>['AI_HELP_USE','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
@@ -56,9 +56,9 @@ return [
       ['label'=>'Upload Knowledge','code'=>'HKUP','route'=>'ai-knowledge/upload','icon'=>'upload','active'=>['ai-knowledge/upload'],'roles'=>[],'perms'=>['AI_HELP_UPLOAD','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'AI Question Logs','code'=>'HKLG','route'=>'ai-knowledge/logs','icon'=>'clock-history','active'=>['ai-knowledge/logs'],'roles'=>[],'perms'=>['AI_HELP_VIEW_LOGS','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
       ['label'=>'AI Usage Dashboard','code'=>'HKUS','route'=>'ai-knowledge/usage','icon'=>'bar-chart-line','active'=>['ai-knowledge/usage'],'roles'=>[],'perms'=>['AI_HELP_VIEW_LOGS','AI_HELP_ADMIN','ADMIN_ALL','SYSADMIN']],
-      ['label'=>'AI Dataset Analysis','code'=>'HKDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['AI_DATASET_ANALYZE','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
-      ['label'=>'AI Analysis Datasets','code'=>'HKDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
-      ['label'=>'AI Dataset Logs','code'=>'HKDL','route'=>'ai-dataset/logs','icon'=>'shield-lock','active'=>['ai-dataset/logs'],'roles'=>[],'perms'=>['AI_DATASET_VIEW_LOGS','AI_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Dataset Analysis','code'=>'HKDA','route'=>'ai-dataset/index','icon'=>'graph-up-arrow','active'=>['ai-dataset/index'],'roles'=>[],'perms'=>['ANALYSIS_DATASET_ANALYZE','ANALYSIS_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Analysis Datasets','code'=>'HKDS','route'=>'ai-dataset/datasets','icon'=>'database','active'=>['ai-dataset/datasets','ai-dataset/dataset-form'],'roles'=>[],'perms'=>['ANALYSIS_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
+      ['label'=>'Analysis Dataset Logs','code'=>'HKDL','route'=>'ai-dataset/logs','icon'=>'shield-lock','active'=>['ai-dataset/logs'],'roles'=>[],'perms'=>['ANALYSIS_DATASET_VIEW_LOGS','ANALYSIS_DATASET_ADMIN','ADMIN_ALL','SYSADMIN']],
     ],
   ],
 

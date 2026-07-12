@@ -15,13 +15,13 @@ require_once __DIR__ . '/../../shared/env.php';
 final class AIDatasetAnalysisController extends BaseController
 {
     protected array $acl = [
-        '*' => ['auth' => true, 'permsAny' => ['AI_DATASET_ANALYZE', 'AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'datasets' => ['auth' => true, 'permsAny' => ['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'dataset-form' => ['auth' => true, 'permsAny' => ['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'save-dataset' => ['auth' => true, 'permsAny' => ['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'import-columns' => ['auth' => true, 'permsAny' => ['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'save-columns' => ['auth' => true, 'permsAny' => ['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
-        'logs' => ['auth' => true, 'permsAny' => ['AI_DATASET_VIEW_LOGS', 'AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        '*' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ANALYZE', 'ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'datasets' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'dataset-form' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-dataset' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'import-columns' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'save-columns' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
+        'logs' => ['auth' => true, 'permsAny' => ['ANALYSIS_DATASET_VIEW_LOGS', 'ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN']],
     ];
 
     private AIDatasetAnalysisModel $model;
@@ -42,7 +42,7 @@ final class AIDatasetAnalysisController extends BaseController
     public function index(): void
     {
         $this->render('ai_dataset/Analyze', [
-            'title' => 'AI Dataset Analysis',
+            'title' => 'Dataset Analysis',
             'foundationInstalled' => $this->model->supportsDatasetAnalysis(),
             'installScriptPath' => $this->installScriptPath(),
             'summary' => $this->model->summary(),
@@ -130,7 +130,7 @@ final class AIDatasetAnalysisController extends BaseController
     public function datasets(): void
     {
         $this->render('ai_dataset/Datasets', [
-            'title' => 'AI Analysis Datasets',
+            'title' => 'Analysis Datasets',
             'foundationInstalled' => $this->model->supportsDatasetAnalysis(),
             'installScriptPath' => $this->installScriptPath(),
             'rows' => $this->model->supportsDatasetAnalysis() ? $this->model->listDatasets(false) : [],
@@ -142,7 +142,7 @@ final class AIDatasetAnalysisController extends BaseController
         $datasetId = (int) ($_GET['id'] ?? 0);
         $dataset = $datasetId > 0 ? $this->model->getDataset($datasetId) : null;
         $this->render('ai_dataset/DatasetForm', [
-            'title' => $dataset ? 'Edit AI Dataset' : 'Register AI Dataset',
+            'title' => $dataset ? 'Edit Analysis Dataset' : 'Register Analysis Dataset',
             'foundationInstalled' => $this->model->supportsDatasetAnalysis(),
             'installScriptPath' => $this->installScriptPath(),
             'dataset' => $dataset,
@@ -159,7 +159,7 @@ final class AIDatasetAnalysisController extends BaseController
             $payload['RequireContext'] = isset($_POST['RequireContext']) ? 1 : 0;
             $payload['IsActive'] = isset($_POST['IsActive']) ? 1 : 0;
             $id = $this->model->saveDataset($payload, (int) SessionHelper::get('auth.user_id', 0));
-            $this->flashSuccess('AI analysis dataset saved.');
+            $this->flashSuccess('Analysis dataset saved.');
             header('Location: index.php?route=ai-dataset/dataset-form&id=' . $id);
         } catch (\Throwable $e) {
             $this->flashError('Dataset save failed: ' . $e->getMessage());
@@ -210,7 +210,7 @@ final class AIDatasetAnalysisController extends BaseController
     public function logs(): void
     {
         $this->render('ai_dataset/Logs', [
-            'title' => 'AI Dataset Analysis Logs',
+            'title' => 'Analysis Dataset Logs',
             'foundationInstalled' => $this->model->supportsDatasetAnalysis(),
             'installScriptPath' => $this->installScriptPath(),
             'rows' => $this->model->recentQueries(50),
@@ -227,12 +227,12 @@ final class AIDatasetAnalysisController extends BaseController
 
     private function canUseDataset(array $dataset): bool
     {
-        if (Rbac::canAny(['AI_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN'])) {
+        if (Rbac::canAny(['ANALYSIS_DATASET_ADMIN', 'ADMIN_ALL', 'SYSADMIN'])) {
             return true;
         }
-        $codes = preg_split('/[,\s]+/', strtoupper((string) ($dataset['AllowedPermissionCodes'] ?? 'AI_DATASET_ANALYZE'))) ?: [];
+        $codes = preg_split('/[,\s]+/', strtoupper((string) ($dataset['AllowedPermissionCodes'] ?? 'ANALYSIS_DATASET_ANALYZE'))) ?: [];
         $codes = array_values(array_filter($codes, static fn (string $code): bool => trim($code) !== ''));
-        return $codes === [] ? Rbac::can('AI_DATASET_ANALYZE') : Rbac::canAny($codes);
+        return $codes === [] ? Rbac::can('ANALYSIS_DATASET_ANALYZE') : Rbac::canAny($codes);
     }
 
     private function buildProvider(): OpenAIProvider

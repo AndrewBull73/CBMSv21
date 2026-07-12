@@ -228,15 +228,15 @@ GROUP BY
 ');
 GO
 
-IF OBJECT_ID(N'dbo.tblAIDatasets', N'U') IS NOT NULL
+IF OBJECT_ID(N'dbo.tblAnalysisDatasets', N'U') IS NOT NULL
 BEGIN
-    UPDATE dbo.tblAIDatasets
+    UPDATE dbo.tblAnalysisDatasets
     SET DatasetName = N'Budget Ledger Versioned Analysis',
         [Description] = N'Budget ledger analysis rows enriched with version type and governed version role mapping.',
         SourceObjectName = N'dbo.vwAI_BudgetLedgerVersionedAnalysis',
         SourceType = N'VIEW',
         SensitivityLevel = N'RESTRICTED',
-        AllowedPermissionCodes = N'AI_DATASET_ANALYZE',
+        AllowedPermissionCodes = N'ANALYSIS_DATASET_ANALYZE',
         DefaultFiscalYearColumn = N'FiscalYearID',
         DefaultVersionColumn = N'BudgetVersionID',
         MaxRows = 250,
@@ -248,24 +248,24 @@ BEGIN
 
     IF @@ROWCOUNT = 0
     BEGIN
-        INSERT INTO dbo.tblAIDatasets
+        INSERT INTO dbo.tblAnalysisDatasets
             (DatasetCode, DatasetName, [Description], SourceObjectName, SourceType, SensitivityLevel, AllowedPermissionCodes,
              DefaultFiscalYearColumn, DefaultVersionColumn, MaxRows, RequireContext, IsActive, Notes)
         VALUES
             (N'BUDGET_LEDGER_VERSIONED_ANALYSIS', N'Budget Ledger Versioned Analysis',
              N'Budget ledger analysis rows enriched with version type and governed version role mapping.',
-             N'dbo.vwAI_BudgetLedgerVersionedAnalysis', N'VIEW', N'RESTRICTED', N'AI_DATASET_ANALYZE',
+             N'dbo.vwAI_BudgetLedgerVersionedAnalysis', N'VIEW', N'RESTRICTED', N'ANALYSIS_DATASET_ANALYZE',
              N'FiscalYearID', N'BudgetVersionID', 250, 1, 1,
              N'Use this when questions need explicit budget version role context.');
     END;
 
-    UPDATE dbo.tblAIDatasets
+    UPDATE dbo.tblAnalysisDatasets
     SET DatasetName = N'Budget Ledger Multi-Year Role Trend',
         [Description] = N'Multi-year trend view grouped by the same governed version role and semantic budget dimensions.',
         SourceObjectName = N'dbo.vwAI_BudgetLedgerMultiYearRoleTrend',
         SourceType = N'VIEW',
         SensitivityLevel = N'RESTRICTED',
-        AllowedPermissionCodes = N'AI_DATASET_ANALYZE',
+        AllowedPermissionCodes = N'ANALYSIS_DATASET_ANALYZE',
         DefaultFiscalYearColumn = N'FiscalYearID',
         DefaultVersionColumn = NULL,
         MaxRows = 250,
@@ -277,13 +277,13 @@ BEGIN
 
     IF @@ROWCOUNT = 0
     BEGIN
-        INSERT INTO dbo.tblAIDatasets
+        INSERT INTO dbo.tblAnalysisDatasets
             (DatasetCode, DatasetName, [Description], SourceObjectName, SourceType, SensitivityLevel, AllowedPermissionCodes,
              DefaultFiscalYearColumn, DefaultVersionColumn, MaxRows, RequireContext, IsActive, Notes)
         VALUES
             (N'BUDGET_LEDGER_MULTI_YEAR_ROLE_TREND', N'Budget Ledger Multi-Year Role Trend',
              N'Multi-year trend view grouped by the same governed version role and semantic budget dimensions.',
-             N'dbo.vwAI_BudgetLedgerMultiYearRoleTrend', N'VIEW', N'RESTRICTED', N'AI_DATASET_ANALYZE',
+             N'dbo.vwAI_BudgetLedgerMultiYearRoleTrend', N'VIEW', N'RESTRICTED', N'ANALYSIS_DATASET_ANALYZE',
              N'FiscalYearID', NULL, 250, 1, 1,
              N'Use this for cross-year comparisons where the same VersionTypeID or VersionRoleCode is required.');
     END;
@@ -305,4 +305,3 @@ SELECT
 FROM dbo.vwAI_BudgetLedgerVersionRoleCandidates
 ORDER BY FiscalYearID DESC, VersionTypeCode, BudgetVersionID;
 GO
-

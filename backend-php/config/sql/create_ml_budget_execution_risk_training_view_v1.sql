@@ -459,15 +459,15 @@ BEGIN
 END;
 GO
 
-IF OBJECT_ID(N'dbo.tblAIDatasets', N'U') IS NOT NULL
+IF OBJECT_ID(N'dbo.tblAnalysisDatasets', N'U') IS NOT NULL
 BEGIN
-    UPDATE dbo.tblAIDatasets
+    UPDATE dbo.tblAnalysisDatasets
     SET DatasetName = N'Budget Execution Risk Training',
         [Description] = N'Role-normalized budget execution risk and anomaly dataset comparing annual mapped budget baseline, execution actuals, spending spikes, prior-year changes, dormant-line activity, and negative balances by fiscal year.',
         SourceObjectName = N'dbo.vwML_BudgetExecutionRiskTraining',
         SourceType = N'VIEW',
         SensitivityLevel = N'RESTRICTED',
-        AllowedPermissionCodes = N'AI_DATASET_ANALYZE',
+        AllowedPermissionCodes = N'ANALYSIS_DATASET_ANALYZE',
         DefaultFiscalYearColumn = N'FiscalYearID',
         DefaultVersionColumn = NULL,
         MaxRows = 250,
@@ -479,13 +479,13 @@ BEGIN
 
     IF @@ROWCOUNT = 0
     BEGIN
-        INSERT INTO dbo.tblAIDatasets
+        INSERT INTO dbo.tblAnalysisDatasets
             (DatasetCode, DatasetName, [Description], SourceObjectName, SourceType, SensitivityLevel, AllowedPermissionCodes,
              DefaultFiscalYearColumn, DefaultVersionColumn, MaxRows, RequireContext, IsActive, Notes)
         VALUES
             (N'BUDGET_EXECUTION_RISK_TRAINING', N'Budget Execution Risk Training',
              N'Role-normalized budget execution risk and anomaly dataset comparing annual mapped budget baseline, execution actuals, spending spikes, prior-year changes, dormant-line activity, and negative balances by fiscal year.',
-             N'dbo.vwML_BudgetExecutionRiskTraining', N'VIEW', N'RESTRICTED', N'AI_DATASET_ANALYZE',
+             N'dbo.vwML_BudgetExecutionRiskTraining', N'VIEW', N'RESTRICTED', N'ANALYSIS_DATASET_ANALYZE',
              N'FiscalYearID', NULL, 250, 1, 1,
              N'Uses dbo.tblAIBudgetLedgerVersionRoleMap. BudgetAmount is annual baseline; ActualAmount is period actual. Risk rules include budget-vs-actual, spending spikes, prior-year changes, dormant-line activity, and negative balances.');
     END;

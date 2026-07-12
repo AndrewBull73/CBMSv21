@@ -6,7 +6,7 @@ $rows = array_values(is_array($rows ?? null) ? $rows : []);
 <div class="container mt-4">
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
-      <h3 class="mb-0"><i class="bi bi-clock-history me-2"></i>AI Dataset Analysis Logs</h3>
+      <h3 class="mb-0"><i class="bi bi-clock-history me-2"></i>Analysis Dataset Logs</h3>
       <a class="btn btn-sm btn-outline-secondary" href="index.php?route=ai-dataset/index">Analyze</a>
     </div>
     <div class="card-body">

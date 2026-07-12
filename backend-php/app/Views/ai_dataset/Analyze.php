@@ -9,7 +9,7 @@ $context = is_array($context ?? null) ? $context : [];
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
       <div>
-        <h3 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>AI Dataset Analysis</h3>
+        <h3 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Dataset Analysis</h3>
         <div class="small text-muted mt-1">Executive-only analysis of approved registered datasets.</div>
       </div>
       <div class="d-inline-flex gap-2">

@@ -8,7 +8,7 @@ $field = static fn (string $name, string $default = ''): string => (string) ($da
 <div class="container mt-4">
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
-      <h3 class="mb-0"><i class="bi bi-database-add me-2"></i><?= $dataset ? 'Edit AI Dataset' : 'Register AI Dataset' ?></h3>
+      <h3 class="mb-0"><i class="bi bi-database-add me-2"></i><?= $dataset ? 'Edit Analysis Dataset' : 'Register Analysis Dataset' ?></h3>
       <a class="btn btn-sm btn-outline-secondary" href="index.php?route=ai-dataset/datasets">Datasets</a>
     </div>
     <div class="card-body">
@@ -27,7 +27,7 @@ $field = static fn (string $name, string $default = ''): string => (string) ($da
             <div class="col-md-3"><label class="form-label">Fiscal Year Column</label><input class="form-control" name="DefaultFiscalYearColumn" value="<?= h($field('DefaultFiscalYearColumn')) ?>"></div>
             <div class="col-md-3"><label class="form-label">Version Column</label><input class="form-control" name="DefaultVersionColumn" value="<?= h($field('DefaultVersionColumn')) ?>"></div>
             <div class="col-md-3"><label class="form-label">Max Rows</label><input class="form-control" name="MaxRows" value="<?= h($field('MaxRows', '100')) ?>"></div>
-            <div class="col-md-9"><label class="form-label">Allowed Permission Codes</label><input class="form-control" name="AllowedPermissionCodes" value="<?= h($field('AllowedPermissionCodes', 'AI_DATASET_ANALYZE')) ?>"></div>
+            <div class="col-md-9"><label class="form-label">Allowed Permission Codes</label><input class="form-control" name="AllowedPermissionCodes" value="<?= h($field('AllowedPermissionCodes', 'ANALYSIS_DATASET_ANALYZE')) ?>"></div>
             <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" name="Description" rows="2"><?= h($field('Description')) ?></textarea></div>
             <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="Notes" rows="2"><?= h($field('Notes')) ?></textarea></div>
             <div class="col-md-3"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="RequireContext" value="1" id="RequireContext" <?= (int) ($dataset['RequireContext'] ?? 1) === 1 ? 'checked' : '' ?>><label class="form-check-label" for="RequireContext">Require fiscal context</label></div></div>
